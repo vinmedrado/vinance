@@ -1,0 +1,32 @@
+{
+  "name": "financeos-erp-react-premium",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "tsc -b && vite build",
+    "lint": "tsc -b --noEmit",
+    "preview": "vite preview --host 0.0.0.0 --port 3000"
+  },
+  "dependencies": {
+    "@sentry/react": "latest",
+    "@tanstack/react-query": "latest",
+    "axios": "latest",
+    "lucide-react": "latest",
+    "posthog-js": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-is": "^19.2.6",
+    "react-router-dom": "latest",
+    "recharts": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "latest",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13"
+  }
+}

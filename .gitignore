@@ -1,0 +1,96 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.env
+.env.*
+!.env.example
+!.env.production.example
+.venv/
+venv/
+env/
+ENV/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and runtime
+logs/
+*.log
+celerybeat-schedule
+
+# Local databases and generated data
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+mlruns/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+~$*
+
+# Backups created by refactor process
+_backup_before_refactor/
+_archive_review/
+# FinanceOS local/private data
+_archive_review/secrets/
+_archive_review/local_data/
+data/financas.db
+*.pyc
+*.temp
+*~
+
+storage/**/*.tmp
+# Frontend caches/build outputs
+frontend/dist/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+frontend/node_modules/
+
+# Python/runtime caches
+**/__pycache__/
+**/*.pyc
+.cache/
+
+# Enterprise cleanup
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.local
+.env.production
+!.env.example
+!.env.production.example
+frontend/tsconfig.tsbuildinfo
+frontend/dist/
+frontend/build/
+node_modules/

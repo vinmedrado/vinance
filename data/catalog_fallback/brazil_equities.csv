@@ -1,0 +1,104 @@
+ticker,name,asset_class,country,exchange,currency
+PETR4,Petrobras PN,equity,BR,B3,BRL
+VALE3,Vale ON,equity,BR,B3,BRL
+ITUB4,Itaú Unibanco PN,equity,BR,B3,BRL
+BBDC4,Bradesco PN,equity,BR,B3,BRL
+BBAS3,Banco do Brasil ON,equity,BR,B3,BRL
+ABEV3,Ambev ON,equity,BR,B3,BRL
+WEGE3,Weg ON,equity,BR,B3,BRL
+MGLU3,Magazine Luiza ON,equity,BR,B3,BRL
+RENT3,Localiza ON,equity,BR,B3,BRL
+LREN3,Lojas Renner ON,equity,BR,B3,BRL
+B3SA3,B3 ON,equity,BR,B3,BRL
+ELET3,Eletrobras ON,equity,BR,B3,BRL
+ELET6,Eletrobras PNB,equity,BR,B3,BRL
+SUZB3,Suzano ON,equity,BR,B3,BRL
+RAIL3,Rumo ON,equity,BR,B3,BRL
+JBSS3,JBS ON,equity,BR,B3,BRL
+BRFS3,BRF ON,equity,BR,B3,BRL
+GGBR4,Gerdau PN,equity,BR,B3,BRL
+GOAU4,Metalúrgica Gerdau PN,equity,BR,B3,BRL
+CSNA3,CSN ON,equity,BR,B3,BRL
+USIM5,Usiminas PNA,equity,BR,B3,BRL
+HAPV3,Hapvida ON,equity,BR,B3,BRL
+RADL3,Raia Drogasil ON,equity,BR,B3,BRL
+VIVT3,Vivo ON,equity,BR,B3,BRL
+TIMS3,Tim ON,equity,BR,B3,BRL
+EQTL3,Equatorial ON,equity,BR,B3,BRL
+CMIG4,Cemig PN,equity,BR,B3,BRL
+CPLE6,Copel PNB,equity,BR,B3,BRL
+TAEE11,Taesa UNIT,equity,BR,B3,BRL
+ENGI11,Energisa UNIT,equity,BR,B3,BRL
+ENEV3,Eneva ON,equity,BR,B3,BRL
+AESB3,AES Brasil ON,equity,BR,B3,BRL
+COGN3,Cogna ON,equity,BR,B3,BRL
+YDUQ3,Yduqs ON,equity,BR,B3,BRL
+CRFB3,Carrefour Brasil ON,equity,BR,B3,BRL
+ASAI3,Assaí ON,equity,BR,B3,BRL
+PCAR3,Pão de Açúcar ON,equity,BR,B3,BRL
+MRFG3,Marfrig ON,equity,BR,B3,BRL
+BEEF3,Minerva ON,equity,BR,B3,BRL
+PRIO3,Prio ON,equity,BR,B3,BRL
+RRRP3,3R Petroleum ON,equity,BR,B3,BRL
+RECV3,PetroReconcavo ON,equity,BR,B3,BRL
+UGPA3,Ultrapar ON,equity,BR,B3,BRL
+VBBR3,Vibra ON,equity,BR,B3,BRL
+CSAN3,Cosan ON,equity,BR,B3,BRL
+RAIZ4,Raízen PN,equity,BR,B3,BRL
+SLCE3,SLC Agrícola ON,equity,BR,B3,BRL
+SMTO3,São Martinho ON,equity,BR,B3,BRL
+ARZZ3,Arezzo ON,equity,BR,B3,BRL
+SOMA3,Grupo Soma ON,equity,BR,B3,BRL
+ALPA4,Alpargatas PN,equity,BR,B3,BRL
+CYRE3,Cyrela ON,equity,BR,B3,BRL
+EZTC3,Eztec ON,equity,BR,B3,BRL
+MRVE3,MRV ON,equity,BR,B3,BRL
+TEND3,Tenda ON,equity,BR,B3,BRL
+MULT3,Multiplan ON,equity,BR,B3,BRL
+IGTI11,Iguatemi UNIT,equity,BR,B3,BRL
+BRML3,BR Malls ON,equity,BR,B3,BRL
+CCRO3,CCR ON,equity,BR,B3,BRL
+ECOR3,Ecorodovias ON,equity,BR,B3,BRL
+STBP3,Santos Brasil ON,equity,BR,B3,BRL
+PORT3,Wilson Sons ON,equity,BR,B3,BRL
+EMBR3,Embraer ON,equity,BR,B3,BRL
+TOTS3,Totvs ON,equity,BR,B3,BRL
+LWSA3,Locaweb ON,equity,BR,B3,BRL
+CASH3,Méliuz ON,equity,BR,B3,BRL
+POSI3,Positivo ON,equity,BR,B3,BRL
+PSSA3,Porto Seguro ON,equity,BR,B3,BRL
+BBSE3,BB Seguridade ON,equity,BR,B3,BRL
+IRBR3,IRB Brasil ON,equity,BR,B3,BRL
+SANB11,Santander Brasil UNIT,equity,BR,B3,BRL
+BPAC11,BTG Pactual UNIT,equity,BR,B3,BRL
+BRSR6,Banrisul PNB,equity,BR,B3,BRL
+ITSA4,Itaúsa PN,equity,BR,B3,BRL
+KLBN11,Klabin UNIT,equity,BR,B3,BRL
+CMIN3,CSN Mineração ON,equity,BR,B3,BRL
+BRAP4,Bradespar PN,equity,BR,B3,BRL
+DXCO3,Dexco ON,equity,BR,B3,BRL
+EVEN3,Even ON,equity,BR,B3,BRL
+GFSA3,Gafisa ON,equity,BR,B3,BRL
+HBOR3,Helbor ON,equity,BR,B3,BRL
+JHSF3,JHSF ON,equity,BR,B3,BRL
+MILS3,Mills ON,equity,BR,B3,BRL
+OIBR3,Oi ON,equity,BR,B3,BRL
+PETZ3,Petz ON,equity,BR,B3,BRL
+QUAL3,Qualicorp ON,equity,BR,B3,BRL
+SBSP3,Sabesp ON,equity,BR,B3,BRL
+SAPR11,Sanepar UNIT,equity,BR,B3,BRL
+SBFG3,Grupo SBF ON,equity,BR,B3,BRL
+SEER3,Ser Educacional ON,equity,BR,B3,BRL
+TRPL4,ISA CTEEP PN,equity,BR,B3,BRL
+TUPY3,Tupy ON,equity,BR,B3,BRL
+VAMO3,Vamos ON,equity,BR,B3,BRL
+VLID3,Valid ON,equity,BR,B3,BRL
+WIZC3,Wiz ON,equity,BR,B3,BRL
+CEAB3,C&A Brasil ON,equity,BR,B3,BRL
+DIRR3,Direcional ON,equity,BR,B3,BRL
+FLRY3,Fleury ON,equity,BR,B3,BRL
+ODPV3,Odontoprev ON,equity,BR,B3,BRL
+POMO4,Marcopolo PN,equity,BR,B3,BRL
+RAPT4,Randoncorp PN,equity,BR,B3,BRL
+KEPL3,Kepler Weber ON,equity,BR,B3,BRL
+LEVE3,Metal Leve ON,equity,BR,B3,BRL

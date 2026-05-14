@@ -1,0 +1,17 @@
+{
+  "errors": [],
+  "checks": {
+    "portfolio_no_sqlite": true,
+    "investor_no_sqlite": true,
+    "alert_no_sqlite": true,
+    "portfolio_tenant": true,
+    "investor_tenant": true,
+    "alert_tenant": true,
+    "health_service": true,
+    "health_endpoint": true,
+    "health_page": true,
+    "readiness_script": true,
+    "smoke_script": true
+  },
+  "sqlite_hits_count": 41
+}

@@ -1,0 +1,8 @@
+ticker,name,asset_class,country,exchange,currency
+IBOV,Índice Bovespa,index,BR,B3,BRL
+IFIX,Índice de Fundos Imobiliários,index,BR,B3,BRL
+SMLL,Índice Small Caps,index,BR,B3,BRL
+IDIV,Índice Dividendos,index,BR,B3,BRL
+S&P500,S&P 500,index,US,NYSE,USD
+NASDAQ,Nasdaq Composite,index,US,NASDAQ,USD
+DOWJONES,Dow Jones Industrial Average,index,US,NYSE,USD

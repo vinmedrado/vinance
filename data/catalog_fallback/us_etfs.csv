@@ -1,0 +1,8 @@
+ticker,name,exchange,currency,asset_class
+SPY,SPDR S&P 500 ETF,NYSE,USD,etf
+QQQ,Invesco QQQ,NASDAQ,USD,etf
+IWM,iShares Russell 2000,NYSE,USD,etf
+VTI,Vanguard Total Stock Market,NYSE,USD,etf
+GLD,SPDR Gold Shares,NYSE,USD,etf
+SLV,iShares Silver Trust,NYSE,USD,etf
+USO,United States Oil Fund,NYSE,USD,etf

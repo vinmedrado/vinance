@@ -1,0 +1,6 @@
+ticker,name,asset_class,country,exchange,currency
+USD-BRL,Dólar Americano / Real,currency,BR,FX,BRL
+EUR-BRL,Euro / Real,currency,BR,FX,BRL
+GBP-BRL,Libra / Real,currency,BR,FX,BRL
+JPY-BRL,Iene / Real,currency,BR,FX,BRL
+DOLAR,Dólar Comercial,currency,BR,FX,BRL

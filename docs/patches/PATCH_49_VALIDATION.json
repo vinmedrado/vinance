@@ -1,0 +1,13 @@
+{
+  "patch": "49",
+  "compile_errors": [],
+  "checks": {
+    "compute_final_score": true,
+    "compute_ml_score": true,
+    "compute_backtest_score": true,
+    "compute_risk_score": true,
+    "get_ranked_assets_by_market": true,
+    "Top 3": true,
+    "Top 10 Ranking Final": true
+  }
+}

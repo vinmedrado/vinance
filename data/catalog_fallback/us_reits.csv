@@ -1,0 +1,7 @@
+ticker,name,exchange,currency,asset_class
+PLD,Prologis,NYSE,USD,reit
+AMT,American Tower,NYSE,USD,reit
+EQIX,Equinix,NASDAQ,USD,reit
+CCI,Crown Castle,NYSE,USD,reit
+O,Realty Income,NYSE,USD,reit
+SPG,Simon Property Group,NYSE,USD,reit

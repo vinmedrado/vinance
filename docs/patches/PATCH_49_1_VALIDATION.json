@@ -1,0 +1,14 @@
+{
+  "patch": "49.1",
+  "compile_errors": [],
+  "checks": {
+    "normalize_by_market": true,
+    "robust_score": true,
+    "DEFAULT_FINAL_RANKING_WEIGHTS": true,
+    "compute_data_completeness_score": true,
+    "include_ineligible": true,
+    "score_breakdown": true,
+    "Mostrar ativos incompletos": true,
+    "Detalhes técnicos do score": true
+  }
+}

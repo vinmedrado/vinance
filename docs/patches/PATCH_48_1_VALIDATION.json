@@ -1,0 +1,22 @@
+{
+  "patch": "48.1",
+  "base": "FinanceOS_PATCH_48_HARDENING.zip",
+  "pdf_prompt": "FinanceOS ANALISE PATCH39 47(2).pdf",
+  "validation_errors": [],
+  "checks": {
+    "auth middleware sem fallback prod": true,
+    "paginas com check_auth": true,
+    "plan_guard consulta tenants": true,
+    "refresh role plan": true,
+    "logout blacklist": true,
+    "dependencies blacklist": true,
+    "stripe webhook checkout": true,
+    "env_file .env": true,
+    "celery sync real": true,
+    "xgboost": true,
+    "lightgbm": true,
+    "mlflow": true,
+    "frankfurter": true,
+    "mlflow postgres": true
+  }
+}

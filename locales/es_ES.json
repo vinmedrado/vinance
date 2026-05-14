@@ -1,0 +1,28 @@
+{
+  "dashboard": {
+    "title": "Panel del Inversor",
+    "subtitle": "Oportunidades claras por mercado",
+    "total_assets": "Activos monitoreados",
+    "strong_opportunities": "Oportunidades fuertes"
+  },
+  "markets": {
+    "equities": "Acciones",
+    "reits": "REITs / FIIs",
+    "etfs": "ETFs",
+    "bdrs": "Internacional",
+    "crypto": "Cripto",
+    "fixed_income": "Renta fija",
+    "forex": "Divisas"
+  },
+  "classification": {
+    "strong": "Fuerte",
+    "good": "Buena",
+    "neutral": "Neutral",
+    "avoid": "Evitar"
+  },
+  "portfolio": {
+    "title": "Mi Cartera",
+    "total": "Patrimonio total",
+    "positions": "Posiciones"
+  }
+}

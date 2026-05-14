@@ -1,0 +1,7 @@
+ticker,name,asset_class,country,exchange,currency
+GC=F,Gold Futures,commodity,US,COMEX,USD
+SI=F,Silver Futures,commodity,US,COMEX,USD
+CL=F,WTI Crude Oil Futures,commodity,US,NYMEX,USD
+BZ=F,Brent Crude Oil Futures,commodity,US,NYMEX,USD
+KC=F,Coffee Futures,commodity,US,ICE,USD
+SB=F,Sugar Futures,commodity,US,ICE,USD

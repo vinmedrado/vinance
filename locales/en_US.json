@@ -1,0 +1,28 @@
+{
+  "dashboard": {
+    "title": "Investor Dashboard",
+    "subtitle": "Clear opportunities by market",
+    "total_assets": "Monitored Assets",
+    "strong_opportunities": "Strong Opportunities"
+  },
+  "markets": {
+    "equities": "Equities",
+    "reits": "REITs",
+    "etfs": "ETFs",
+    "bdrs": "International",
+    "crypto": "Crypto",
+    "fixed_income": "Fixed Income",
+    "forex": "Forex"
+  },
+  "classification": {
+    "strong": "Strong",
+    "good": "Good",
+    "neutral": "Neutral",
+    "avoid": "Avoid"
+  },
+  "portfolio": {
+    "title": "My Portfolio",
+    "total": "Total net worth",
+    "positions": "Positions"
+  }
+}

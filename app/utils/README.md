@@ -1,0 +1,1 @@
+Utilitários futuros da aplicação.

@@ -1,0 +1,11 @@
+ticker,name,asset_class,country,exchange,currency
+AAPL,Apple Inc.,equity,US,NASDAQ,USD
+MSFT,Microsoft Corporation,equity,US,NASDAQ,USD
+GOOGL,Alphabet Inc.,equity,US,NASDAQ,USD
+AMZN,Amazon.com Inc.,equity,US,NASDAQ,USD
+TSLA,Tesla Inc.,equity,US,NASDAQ,USD
+NVDA,NVIDIA Corporation,equity,US,NASDAQ,USD
+META,Meta Platforms Inc.,equity,US,NASDAQ,USD
+BRK-B,Berkshire Hathaway Inc.,equity,US,NYSE,USD
+JPM,JPMorgan Chase & Co.,equity,US,NYSE,USD
+V,Visa Inc.,equity,US,NYSE,USD

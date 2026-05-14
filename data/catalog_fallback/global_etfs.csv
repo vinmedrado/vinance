@@ -1,0 +1,6 @@
+ticker,name,asset_class,country,exchange,currency
+SPY,SPDR S&P 500 ETF,etf,US,NYSE,USD
+QQQ,Invesco QQQ Trust,etf,US,NASDAQ,USD
+VTI,Vanguard Total Stock Market ETF,etf,US,NYSE,USD
+VOO,Vanguard S&P 500 ETF,etf,US,NYSE,USD
+VEA,Vanguard FTSE Developed Markets ETF,etf,US,NYSE,USD

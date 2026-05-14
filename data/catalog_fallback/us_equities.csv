@@ -1,0 +1,8 @@
+ticker,name,exchange,currency,asset_class
+AAPL,Apple,NASDAQ,USD,equity
+MSFT,Microsoft,NASDAQ,USD,equity
+GOOGL,Alphabet,NASDAQ,USD,equity
+AMZN,Amazon,NASDAQ,USD,equity
+NVDA,NVIDIA,NASDAQ,USD,equity
+META,Meta,NASDAQ,USD,equity
+TSLA,Tesla,NASDAQ,USD,equity

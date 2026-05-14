@@ -1,0 +1,28 @@
+{
+  "dashboard": {
+    "title": "Dashboard do Investidor",
+    "subtitle": "Oportunidades claras por mercado",
+    "total_assets": "Ativos Monitorados",
+    "strong_opportunities": "Oportunidades Fortes"
+  },
+  "markets": {
+    "equities": "Ações",
+    "reits": "FIIs",
+    "etfs": "ETFs",
+    "bdrs": "BDRs",
+    "crypto": "Cripto",
+    "fixed_income": "Renda Fixa",
+    "forex": "Câmbio"
+  },
+  "classification": {
+    "strong": "Forte",
+    "good": "Boa",
+    "neutral": "Neutra",
+    "avoid": "Evitar"
+  },
+  "portfolio": {
+    "title": "Minha Carteira",
+    "total": "Patrimônio total",
+    "positions": "Posições"
+  }
+}

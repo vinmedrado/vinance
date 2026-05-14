@@ -1,0 +1,4 @@
+ticker,name,exchange,currency,asset_class
+USDBRL,USD/BRL,FOREX,BRL,forex
+EURBRL,EUR/BRL,FOREX,BRL,forex
+BTCUSD,BTC/USD,BINANCE,USD,crypto

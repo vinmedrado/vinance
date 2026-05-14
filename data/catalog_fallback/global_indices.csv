@@ -1,0 +1,8 @@
+ticker,name,exchange,currency,asset_class
+^GSPC,S&P 500,NYSE,USD,index
+^DJI,Dow Jones,NYSE,USD,index
+^IXIC,Nasdaq Composite,NASDAQ,USD,index
+^FTSE,FTSE 100,LSE,GBP,index
+^N225,Nikkei 225,TSE,JPY,index
+^HSI,Hang Seng,HKEX,HKD,index
+DAX,DAX,XETRA,EUR,index

@@ -1,0 +1,17 @@
+{
+  "patch": "48.3",
+  "sqlite_hits_count": 0,
+  "sqlite_hits": [],
+  "compile_errors": [],
+  "checks": {
+    "database_blocks_sqlite_production": true,
+    "db_session_exists": true,
+    "ui_helpers_no_sqlite": true,
+    "asset_catalog_db_no_sqlite": true,
+    "background_jobs_no_sqlite": true,
+    "automation_service_no_sqlite": true,
+    "ml_common_no_sqlite": true,
+    "readiness_has_sqlite_scan": true,
+    "health_has_sqlite_disabled": true
+  }
+}
