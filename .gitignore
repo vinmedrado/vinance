@@ -94,3 +94,10 @@ frontend/tsconfig.tsbuildinfo
 frontend/dist/
 frontend/build/
 node_modules/
+data/
+mlruns/
+*.parquet
+*.csv
+*.joblib
+*.pkl
+*.ipynb_checkpoints
