@@ -16,10 +16,21 @@ if ENV == "production" and not DATABASE_URL:
 if not DATABASE_URL:
     DATABASE_URL = "postgresql+asyncpg://financeos:financeos@localhost:5432/financeos"
 
+# Render/Heroku costumam entregar postgresql://. O backend async precisa de
+# postgresql+asyncpg://, enquanto a sessão síncrona usa postgresql+psycopg2://.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 if ENV == "production" and "sqlite" in DATABASE_URL.lower():
     raise RuntimeError("SQLite não permitido em produção.")
 
 SYNC_DATABASE_URL = os.getenv("SYNC_DATABASE_URL") or DATABASE_URL.replace("+asyncpg", "+psycopg2")
+if SYNC_DATABASE_URL.startswith("postgres://"):
+    SYNC_DATABASE_URL = SYNC_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if SYNC_DATABASE_URL.startswith("postgresql://"):
+    SYNC_DATABASE_URL = SYNC_DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 if ENV == "production" and "sqlite" in SYNC_DATABASE_URL.lower():
     raise RuntimeError("SQLite não permitido em produção.")
 

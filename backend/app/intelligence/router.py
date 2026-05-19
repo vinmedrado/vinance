@@ -383,7 +383,7 @@ def get_decision_advisor(decision_type: str = "debt_vs_invest", year: int | None
     return FinancialDecisionAdvisor.advise(decision_type, health=health, memory=memory, behavior=behavior, context=context)
 
 
-@router.get("/ai-financial-advisor", response_model=AIFinancialAdvisorDashboardOut)
+@router.get("/ai-financial-advisor")
 def get_ai_financial_advisor(request: Request, year: int | None = None, month: int | None = None, save_snapshot: bool = True, db: Session = Depends(get_db), ctx: TenantContext = Depends(require_permission("diagnosis.view"))):
     from datetime import date
     today = date.today(); year = year or today.year; month = month or today.month
@@ -400,6 +400,16 @@ def get_ai_financial_advisor(request: Request, year: int | None = None, month: i
     rows = db.query(FinancialGoalEngine).filter(FinancialGoalEngine.organization_id == ctx.organization_id, FinancialGoalEngine.user_id == ctx.user_id, FinancialGoalEngine.deleted_at.is_(None)).all()
     goals = [{"goal_type": r.goal_type, "target_amount": r.target_amount, "current_amount": r.current_amount, "target_date": r.target_date} for r in rows]
     dynamic_goals = DynamicGoalsService.recalculate(goals, monthly_capacity=advisor["investment_capacity"], behavior=behavior)
+    
+    from backend.app.intelligence.allocation_method_engine import AllocationMethodEngine
+    allocation_plan = AllocationMethodEngine.build(collected)
+    dynamic_goals = {
+        **dynamic_goals,
+        "allocation_plan": allocation_plan,
+        "allocation_method": allocation_plan.get("method"),
+        "allocation_method_label": allocation_plan.get("method_label"),
+        "suggested_limits": allocation_plan.get("limits", {}),
+    }
     coaching = AdvancedFinancialCoachingService.generate(health=health, memory=memory, behavior=behavior, forecast=forecast)
     decision = FinancialDecisionAdvisor.advise("debt_vs_invest", health=health, memory=memory, behavior=behavior, context={"investment_capacity": advisor["investment_capacity"], "debt_ratio": advisor["input_summary"].get("debt_ratio", 0), "reserve_months": health.get("metrics", {}).get("reserve_months", 0)})
     retention = RetentionEngagementService.build(history, health, memory)

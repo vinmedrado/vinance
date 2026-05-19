@@ -61,6 +61,7 @@ def get_or_create_budget(db: Session, user_id: int | str, year: int, month: int)
 def total_income(db: Session, user_id: int | str, year: int, month: int) -> float:
     return float(db.query(func.coalesce(func.sum(ERPIncome.amount), 0)).filter(
         _scope_filter(ERPIncome, user_id),
+        ERPIncome.deleted_at.is_(None),
         extract("year", ERPIncome.received_at) == year,
         extract("month", ERPIncome.received_at) == month,
     ).scalar() or 0)
@@ -69,6 +70,7 @@ def total_income(db: Session, user_id: int | str, year: int, month: int) -> floa
 def total_expenses(db: Session, user_id: int | str, year: int, month: int) -> float:
     return float(db.query(func.coalesce(func.sum(ERPExpense.amount), 0)).filter(
         _scope_filter(ERPExpense, user_id),
+        ERPExpense.deleted_at.is_(None),
         extract("year", ERPExpense.due_date) == year,
         extract("month", ERPExpense.due_date) == month,
     ).scalar() or 0)
@@ -77,6 +79,7 @@ def total_expenses(db: Session, user_id: int | str, year: int, month: int) -> fl
 def category_breakdown(db: Session, user_id: int | str, year: int, month: int) -> list[dict[str, Any]]:
     rows = db.query(ERPExpense.category, func.coalesce(func.sum(ERPExpense.amount), 0)).filter(
         _scope_filter(ERPExpense, user_id),
+        ERPExpense.deleted_at.is_(None),
         extract("year", ERPExpense.due_date) == year,
         extract("month", ERPExpense.due_date) == month,
     ).group_by(ERPExpense.category).all()
@@ -96,6 +99,161 @@ def monthly_evolution(db: Session, user_id: int | str) -> list[dict[str, Any]]:
     return data
 
 
+
+# -----------------------------
+# Vinance Intelligent Allocation Engine
+# -----------------------------
+
+CATEGORY_GROUPS = {
+    "needs": {"moradia", "aluguel", "condominio", "condomínio", "mercado", "supermercado", "alimentação", "alimentacao", "transporte", "saúde", "saude", "educação", "educacao", "contas", "luz", "água", "agua", "internet", "telefone", "farmácia", "farmacia", "seguro", "imposto", "financiamento"},
+    "wants": {"lazer", "delivery", "restaurante", "assinaturas", "streaming", "viagem", "compras", "roupas", "beleza", "academia", "hobby", "presente"},
+    "investment": {"investimento", "investimentos", "reserva", "tesouro", "cdb", "ações", "acoes", "etf", "fiis", "fii", "bdr", "crypto", "cripto"},
+}
+
+
+def _norm_category(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def classify_expense_group(category: str | None, subcategory: str | None = None, description: str | None = None) -> str:
+    blob = " ".join([_norm_category(category), _norm_category(subcategory), _norm_category(description)])
+    for group, keys in CATEGORY_GROUPS.items():
+        if any(k in blob for k in keys):
+            return group
+    return "needs"
+
+
+def expense_groups_breakdown(db: Session, user_id: int | str, year: int, month: int) -> dict[str, float]:
+    rows = db.query(ERPExpense).filter(
+        _scope_filter(ERPExpense, user_id),
+        ERPExpense.deleted_at.is_(None),
+        extract("year", ERPExpense.due_date) == year,
+        extract("month", ERPExpense.due_date) == month,
+    ).all()
+    out = {"needs": 0.0, "wants": 0.0, "investment": 0.0}
+    for row in rows:
+        group = classify_expense_group(row.category, row.subcategory, row.description)
+        out[group] = out.get(group, 0.0) + float(row.amount or 0)
+    return {k: round(v, 2) for k, v in out.items()}
+
+
+def choose_budget_method(income: float, expenses: float, groups: dict[str, float]) -> dict[str, Any]:
+    if income <= 0:
+        return {"id": "aguardando_receita", "name": "Cadastre sua receita", "needs_pct": 0, "wants_pct": 0, "investments_pct": 0, "reason": "A renda mensal é necessária para calcular o método ideal."}
+    expense_ratio = expenses / income
+    needs_ratio = groups.get("needs", 0) / income
+    if expense_ratio >= 0.92:
+        return {"id": "recovery", "name": "Modo Recuperação", "needs_pct": 85, "wants_pct": 10, "investments_pct": 5, "reason": "As despesas consomem quase toda a renda. O foco é recuperar caixa antes de buscar risco."}
+    if expense_ratio >= 0.72 or needs_ratio >= 0.65:
+        return {"id": "70_20_10", "name": "70/20/10", "needs_pct": 70, "wants_pct": 20, "investments_pct": 10, "reason": "Seu orçamento está pressionado. O método prioriza estabilidade e reserva sem travar evolução."}
+    if expense_ratio >= 0.58:
+        return {"id": "60_30_10", "name": "60/30/10", "needs_pct": 60, "wants_pct": 30, "investments_pct": 10, "reason": "Existe sobra, mas ainda é melhor fortalecer caixa antes de acelerar investimentos."}
+    return {"id": "50_30_20", "name": "50/30/20", "needs_pct": 50, "wants_pct": 30, "investments_pct": 20, "reason": "A relação renda/despesa permite uma distribuição equilibrada entre vida atual e construção patrimonial."}
+
+
+def infer_risk_profile(income: float, expenses: float, balance: float, emergency_gap: float) -> str:
+    if income <= 0 or balance <= 0:
+        return "defensivo"
+    free_ratio = balance / income
+    expense_ratio = expenses / income
+    if emergency_gap > balance * 6 or expense_ratio > 0.75:
+        return "conservador"
+    if free_ratio >= 0.35 and expense_ratio <= 0.55:
+        return "arrojado"
+    return "moderado"
+
+
+def build_market_recommendations(profile: str, investable: float, emergency_gap: float) -> list[dict[str, Any]]:
+    if investable <= 0:
+        return []
+    if emergency_gap > 0:
+        template = [
+            ("Tesouro Selic", "Renda fixa pública", 45, "baixo", "liquidez e segurança para formar reserva"),
+            ("CDB liquidez diária", "Renda fixa bancária", 35, "baixo", "caixa remunerado para emergências"),
+            ("ETF amplo", "ETF", 20, "médio", "pequena diversificação sem comprometer liquidez"),
+        ]
+    elif profile in {"defensivo", "conservador"}:
+        template = [
+            ("Tesouro Selic", "Renda fixa pública", 35, "baixo", "proteção de caixa e liquidez"),
+            ("CDB/LCI/LCA", "Renda fixa", 35, "baixo", "previsibilidade e baixo risco"),
+            ("ETF amplo", "ETF", 20, "médio", "diversificação gradual"),
+            ("FIIs de qualidade", "FIIs", 10, "médio", "renda recorrente com exposição controlada"),
+        ]
+    elif profile == "moderado":
+        template = [
+            ("Tesouro IPCA", "Renda fixa inflação", 25, "baixo-médio", "proteção de poder de compra"),
+            ("ETFs Brasil/Exterior", "ETF", 35, "médio", "diversificação simples entre mercados"),
+            ("FIIs", "Fundos imobiliários", 20, "médio", "renda recorrente e diversificação"),
+            ("Ações líderes", "Ações", 15, "médio-alto", "crescimento patrimonial controlado"),
+            ("BDRs/ETF internacional", "Exterior", 5, "médio-alto", "exposição global limitada"),
+        ]
+    else:
+        template = [
+            ("ETFs globais", "ETF internacional", 30, "médio", "base diversificada para crescimento"),
+            ("Ações", "Renda variável", 25, "alto", "maior potencial de retorno com oscilação"),
+            ("FIIs", "Fundos imobiliários", 15, "médio", "renda recorrente"),
+            ("Tesouro IPCA/CDB", "Renda fixa", 20, "baixo-médio", "contrapeso de estabilidade"),
+            ("BDRs", "Exterior", 7, "alto", "diversificação internacional"),
+            ("Cripto", "Alternativos", 3, "muito alto", "exposição pequena e controlada"),
+        ]
+    return [
+        {"name": name, "market": market, "allocation_pct": pct, "amount": round(investable * pct / 100, 2), "risk": risk, "reason": reason}
+        for name, market, pct, risk, reason in template
+    ]
+
+
+def build_intelligent_allocation(db: Session, user_id: int | str, year: int, month: int, income: float, expenses: float, realized_investment: float) -> dict[str, Any]:
+    groups = expense_groups_breakdown(db, user_id, year, month)
+    balance = round(income - expenses, 2)
+    method = choose_budget_method(income, expenses, groups)
+    emergency_target = round(max(expenses, 0) * 6, 2)
+    # Sem campo dedicado de reserva nesta tela, usa investimentos realizados como proxy conservadora.
+    current_reserve_proxy = max(realized_investment, 0)
+    emergency_gap = round(max(emergency_target - current_reserve_proxy, 0), 2)
+    if income <= 0 or balance <= 0:
+        investable = 0.0
+    else:
+        method_target = income * (method.get("investments_pct", 0) / 100)
+        # Se ainda há reserva a construir, evita recomendar todo o saldo para risco.
+        reserve_floor = min(balance, max(0, balance * 0.30)) if emergency_gap > 0 else 0
+        investable = max(0.0, min(balance - reserve_floor, method_target if method_target > 0 else balance * 0.20))
+        if method["id"] == "recovery":
+            investable = min(investable, balance * 0.10)
+    investable = round(investable, 2)
+    risk_profile = infer_risk_profile(income, expenses, balance, emergency_gap)
+    markets = build_market_recommendations(risk_profile, investable, emergency_gap)
+    can_invest = investable > 0
+    if not can_invest:
+        decision = "Ainda não é recomendado investir agora."
+        next_action = "Priorize cadastrar todas as despesas, reduzir custos variáveis e recuperar saldo positivo."
+    elif emergency_gap > 0:
+        decision = f"Você pode começar investindo R$ {investable:,.2f}/mês, priorizando reserva e liquidez."
+        next_action = "Forme reserva antes de aumentar renda variável."
+    else:
+        decision = f"Você pode investir R$ {investable:,.2f}/mês com perfil {risk_profile}."
+        next_action = "Distribua o aporte conforme os mercados sugeridos e revise mensalmente."
+    return {
+        "can_invest": can_invest,
+        "decision": decision.replace(',', 'X').replace('.', ',').replace('X', '.'),
+        "next_action": next_action,
+        "method": method,
+        "risk_profile": risk_profile,
+        "income": round(income, 2),
+        "expenses": round(expenses, 2),
+        "balance": balance,
+        "expense_ratio_pct": round((expenses / income * 100) if income else 0, 2),
+        "investable_amount": investable,
+        "emergency_reserve_target": emergency_target,
+        "emergency_reserve_gap": emergency_gap,
+        "groups": groups,
+        "markets": markets,
+        "advisor_notes": [
+            method["reason"],
+            "O valor recomendado considera renda, despesas do mês, orçamento e necessidade de reserva.",
+            "A alocação sugerida é educativa e deve ser revisada antes de qualquer decisão real de investimento.",
+        ],
+    }
+
 def build_dashboard(db: Session, user_id: int | str, year: int | None = None, month: int | None = None) -> dict[str, Any]:
     today = date.today()
     year = year or today.year
@@ -110,6 +268,7 @@ def build_dashboard(db: Session, user_id: int | str, year: int | None = None, mo
     invested_pct = (realized_investment / income * 100) if income else 0
     budget_used = (expenses / max(income, budget.monthly_income, 1)) * 100
     alerts = generate_alerts(income, expenses, budget, realized_investment)
+    intelligence = build_intelligent_allocation(db, user_id, year, month, income, expenses, realized_investment)
     return {
         "period": {"year": year, "month": month},
         "metrics": {
@@ -128,6 +287,7 @@ def build_dashboard(db: Session, user_id: int | str, year: int | None = None, mo
         "charts": {"by_category": category_breakdown(db, user_id, year, month), "evolution": monthly_evolution(db, user_id)},
         "recommendation": main_recommendation(income, expenses, investment_target, realized_investment),
         "alerts": alerts,
+        "intelligent_allocation": intelligence,
     }
 
 

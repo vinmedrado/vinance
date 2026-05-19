@@ -10,9 +10,13 @@ export default function FinancialPlan(){
   if(isLoading)return <section className="page"><div className="premium-card"><p>Atualizando seu assistente financeiro inteligente...</p></div></section>;
   if(error)return <section className="page"><div className="premium-card"><h2>Meu Plano Financeiro</h2><p>Não foi possível carregar seu plano agora. Verifique login, renda e despesas cadastradas.</p></div></section>;
   const advisor=data.decision_advisor||{};
-  const budgetAdvisor=data.adaptive_model?.advisor||{};
-  const summary=budgetAdvisor.input_summary||{};
-  const limits=budgetAdvisor.suggested_limits||{};
+  const summary=data.health?.input_summary||{};
+  const budgetAdvisor={
+    investment_capacity: summary.investment_capacity || 0
+  };
+  const allocationPlan = data.dynamic_goals?.allocation_plan || {};
+  const limits = allocationPlan.limits || data.dynamic_goals?.suggested_limits || {};
+  const allocationMethodLabel=data.dynamic_goals?.allocation_method_label||data.dynamic_goals?.allocation_method||'Modelo adaptativo';
   const health=data.health||{};
   const coaching=data.coaching||{messages:[],tips:[],alerts:[]};
   const forecast=data.forecast||{scenarios:[]};
@@ -26,7 +30,7 @@ export default function FinancialPlan(){
       <span className="eyebrow">Meu Plano Financeiro Evolutivo</span>
       <h1>{data.advisor_main_message}</h1>
       <p>{advisor.recommendation}</p>
-      <div className="hero-actions"><span className="pill">Advisor: {advisor.title}</span><span className="pill">Fase: {health.financial_phase}</span><span className="pill">Memória: {memory.trend}</span></div>
+      <div className="hero-actions"><span className="pill">Advisor: {advisor.title}</span><span className="pill">Fase: {health.financial_phase}</span><span className="pill">Memória: {memory.trend}</span><span className="pill">Método: {allocationPlan.label || data.dynamic_goals?.allocation_method || 'Modelo adaptativo'}</span></div>
     </div>
 
     <div className="kpi-grid metrics-grid">
@@ -56,7 +60,7 @@ export default function FinancialPlan(){
           <li>Desejos/lazer: <strong>{money(limits.wants)}</strong></li>
           <li>Dívidas/contas: <strong>{money(limits.debts)}</strong></li>
           <li>Reserva: <strong>{money(limits.emergency_reserve)}</strong></li>
-          <li>Investimentos: <strong>{money(budgetAdvisor.investment_capacity)}</strong></li>
+          <li>Investimentos: <strong>{money(limits.investments || summary.investment_capacity)}</strong></li>
         </ul>
       </div>
       <div className="premium-card">

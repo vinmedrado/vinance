@@ -73,3 +73,45 @@ def run_backtest_async(tenant_id: str, strategy_params: dict):
         return {"status": "skipped", "reason": "scripts/run_strategy_backtest.py não encontrado", "params": strategy_params}
     except Exception as e:
         return {"status": "error", "error": str(e), "params": strategy_params}
+
+
+@app.task
+def run_quant_backtest(job_id: str, payload: dict):
+    from backend.app.quant_intelligence.schemas import BacktestRequest
+    from backend.app.quant_intelligence.service import run_backtest, update_job
+    try:
+        update_job(job_id, status="running")
+        result = run_backtest(BacktestRequest(**(payload or {})))
+        update_job(job_id, status="completed", result=result)
+        return {"status": "completed", "job_id": job_id, "result": result}
+    except Exception as exc:
+        update_job(job_id, status="failed", error=str(exc))
+        return {"status": "failed", "job_id": job_id, "error": str(exc)}
+
+
+@app.task
+def run_quant_training(job_id: str, payload: dict):
+    from backend.app.quant_intelligence.schemas import TrainModelRequest
+    from backend.app.quant_intelligence.service import train_model, update_job
+    try:
+        update_job(job_id, status="running")
+        result = train_model(TrainModelRequest(**(payload or {})))
+        update_job(job_id, status="completed", result=result)
+        return {"status": "completed", "job_id": job_id, "result": result}
+    except Exception as exc:
+        update_job(job_id, status="failed", error=str(exc))
+        return {"status": "failed", "job_id": job_id, "error": str(exc)}
+
+
+@app.task
+def sync_quant_market_data(job_id: str | None = None):
+    from backend.app.quant_intelligence.service import sync_market_snapshots, update_job
+    try:
+        result = sync_market_snapshots(source="celery_schedule")
+        if job_id:
+            update_job(job_id, status="completed", result=result)
+        return result
+    except Exception as exc:
+        if job_id:
+            update_job(job_id, status="failed", error=str(exc))
+        return {"status": "failed", "error": str(exc)}

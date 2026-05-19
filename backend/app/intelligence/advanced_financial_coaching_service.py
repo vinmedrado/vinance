@@ -4,7 +4,7 @@ from typing import Any
 
 
 class AdvancedFinancialCoachingService:
-    """Coaching premium baseado em memória, saúde, comportamento e metas."""
+    """Coaching  baseado em memória, saúde, comportamento e metas."""
 
     @classmethod
     def generate(cls, *, health: dict[str, Any], memory: dict[str, Any], behavior: dict[str, Any], forecast: dict[str, Any] | None = None) -> dict[str, Any]:

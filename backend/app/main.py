@@ -22,6 +22,7 @@ from backend.app.analytics.router import router as analytics_router
 from backend.app.demo.router import router as demo_router
 from backend.app.enterprise.router import router as enterprise_router
 from backend.app.intelligence.router import router as intelligence_router
+from backend.app.quant_intelligence.router import router as quant_router
 
 settings = get_settings()
 settings.validate_for_runtime()
@@ -47,6 +48,12 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    try:
+        from db.database import SessionLocal
+        with SessionLocal() as db:
+            ensure_auth_schema(db)
+    except Exception:
+        pass
     try:
         with operational_db_connect() as conn:
             ensure_indexes(conn)
@@ -79,10 +86,8 @@ app.include_router(investment.router)
 # PATCH 11 - Operational API
 app.include_router(operational_api_router)
 
-try:
-    from backend.app.auth.router import router as auth_router
-except ModuleNotFoundError:
-    from backend.app.auth import router as auth_router
+from backend.app.auth.router import router as auth_router
+from backend.app.auth.schema import ensure_auth_schema
 app.include_router(auth_router)
 app.include_router(auth_router, prefix="/api")
 app.include_router(erp_router)
@@ -92,6 +97,8 @@ app.include_router(demo_router)
 app.include_router(demo_router, prefix="/api")
 app.include_router(enterprise_router)
 app.include_router(intelligence_router)
+app.include_router(quant_router)
+app.include_router(quant_router, prefix="/api")
 
 from backend.app.billing.stripe_router import router as billing_router
 app.include_router(billing_router)

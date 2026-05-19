@@ -8,10 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from db.database import get_sync_session
-try:
-    from backend.app.auth.dependencies import get_current_user
-except ModuleNotFoundError:
-    from backend.app.auth import get_current_user
+from backend.app.auth.dependencies import get_current_user
 from backend.app.enterprise.rbac import has_permission
 
 @dataclass(frozen=True)

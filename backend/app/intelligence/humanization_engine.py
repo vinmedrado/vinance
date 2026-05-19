@@ -4,7 +4,7 @@ from typing import Any
 
 
 class HumanizationEngine:
-    """Normaliza mensagens para tom premium, simples, empático e não agressivo."""
+    """Normaliza mensagens para tom simples, empático e não agressivo."""
 
     @staticmethod
     def refine(message: str, *, phase: str | None = None, tone: str = "consultive", detail_level: str = "short") -> str:

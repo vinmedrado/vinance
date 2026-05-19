@@ -48,65 +48,179 @@ class BudgetModelAdvisorService:
         return round(max(float(value or 0), 0), 2)
 
     @classmethod
-    def collect_from_erp(cls, db: "Session", organization_id: str, year: int | None = None, month: int | None = None) -> BudgetAdvisorInput:
-        from sqlalchemy import extract, func
+    def collect_from_erp(
+        cls,
+        db: "Session",
+        organization_id: str,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> BudgetAdvisorInput:
+        from datetime import date
+        from sqlalchemy import func, or_
+
         from backend.app.erp.models import ERPAccount, ERPCard, ERPExpense, ERPIncome
         from backend.app.financial.models import FinancialGoal
+
         today = date.today()
         year = year or today.year
         month = month or today.month
 
-        income = float(db.query(func.coalesce(func.sum(ERPIncome.amount), 0)).filter(
-            ERPIncome.organization_id == organization_id,
-            ERPIncome.deleted_at.is_(None),
-            extract("year", ERPIncome.received_at) == year,
-            extract("month", ERPIncome.received_at) == month,
-        ).scalar() or 0)
+        start_date = date(year, month, 1)
 
-        expenses_query = db.query(ERPExpense).filter(
-            ERPExpense.organization_id == organization_id,
-            ERPExpense.deleted_at.is_(None),
-            extract("year", ERPExpense.due_date) == year,
-            extract("month", ERPExpense.due_date) == month,
+        if month == 12:
+            end_date = date(year + 1, 1, 1)
+        else:
+            end_date = date(year, month + 1, 1)
+
+        org_filter_income = or_(
+            ERPIncome.organization_id == organization_id,
+            ERPIncome.organization_id.is_(None),
         )
-        expenses = expenses_query.all()
+
+        org_filter_expense = or_(
+            ERPExpense.organization_id == organization_id,
+            ERPExpense.organization_id.is_(None),
+        )
+
+        org_filter_account = or_(
+            ERPAccount.organization_id == organization_id,
+            ERPAccount.organization_id.is_(None),
+        )
+
+        income = float(
+            db.query(func.coalesce(func.sum(ERPIncome.amount), 0))
+            .filter(
+                ERPIncome.deleted_at.is_(None),
+                ERPIncome.received_at >= start_date,
+                ERPIncome.received_at < end_date,
+                org_filter_income,
+            )
+            .scalar()
+            or 0
+        )
+
+        expenses = (
+            db.query(ERPExpense)
+            .filter(
+                ERPExpense.deleted_at.is_(None),
+                ERPExpense.due_date >= start_date,
+                ERPExpense.due_date < end_date,
+                org_filter_expense,
+            )
+            .all()
+        )
+
         total_expenses = sum(float(e.amount or 0) for e in expenses)
 
-        fixed_markers = {"fixed", "fixa", "fixo", "rent", "aluguel", "financiamento", "loan", "divida", "dívida"}
-        debt_markers = {"debt", "loan", "cartao", "cartão", "divida", "dívida", "financiamento", "parcela", "atras"}
+        fixed_markers = {
+            "fixed",
+            "fixa",
+            "fixo",
+            "rent",
+            "aluguel",
+            "financiamento",
+            "loan",
+            "divida",
+            "dívida",
+            "mensal",
+            "recorrente",
+        }
+
+        debt_markers = {
+            "debt",
+            "loan",
+            "cartao",
+            "cartão",
+            "divida",
+            "dívida",
+            "financiamento",
+            "parcela",
+            "atras",
+            "empréstimo",
+        }
+
         fixed_expenses = 0.0
         variable_expenses = 0.0
         debt_payments = 0.0
         overdue_bills = 0.0
+
         for item in expenses:
-            text = " ".join(str(x or "").lower() for x in [item.category, item.subcategory, item.description, item.tags, item.notes])
+            text = " ".join(
+                str(x or "").lower()
+                for x in [
+                    item.category,
+                    item.subcategory,
+                    item.description,
+                    item.tags,
+                    item.notes,
+                ]
+            )
+
             amount = float(item.amount or 0)
-            if item.recurrence and item.recurrence != "none" or any(marker in text for marker in fixed_markers):
+
+            is_fixed = (
+                bool(item.recurrence and item.recurrence != "none")
+                or any(marker in text for marker in fixed_markers)
+            )
+
+            if is_fixed:
                 fixed_expenses += amount
             else:
                 variable_expenses += amount
+
             if any(marker in text for marker in debt_markers):
                 debt_payments += amount
-            if item.status in {"overdue", "late", "atrasada", "atrasado"} or (item.due_date and item.due_date < today and item.status != "paid"):
+
+            if item.status in {"overdue", "late", "atrasada", "atrasado"} or (
+                item.due_date and item.due_date < today and item.status != "paid"
+            ):
                 overdue_bills += amount
 
-        # Usa limites cadastrados como um proxy conservador de passivos possíveis, sem assumir dívida real.
-        card_limit = float(db.query(func.coalesce(func.sum(ERPCard.limit_amount), 0)).filter(
-            ERPCard.organization_id == organization_id, ERPCard.deleted_at.is_(None), ERPCard.is_active.is_(True)
-        ).scalar() or 0)
-        account_balance = float(db.query(func.coalesce(func.sum(ERPAccount.initial_balance), 0)).filter(
-            ERPAccount.organization_id == organization_id, ERPAccount.deleted_at.is_(None), ERPAccount.is_active.is_(True)
-        ).scalar() or 0)
+        try:
+            card_limit = float(
+                db.query(func.coalesce(func.sum(ERPCard.limit_amount), 0))
+                .filter(
+                    or_(
+                        ERPCard.organization_id == organization_id,
+                        ERPCard.organization_id.is_(None),
+                    ),
+                    ERPCard.deleted_at.is_(None),
+                )
+                .scalar()
+                or 0
+            )
+        except Exception:
+            card_limit = 0.0
+
+        account_balance = float(
+            db.query(func.coalesce(func.sum(ERPAccount.balance), 0))
+            .filter(
+                ERPAccount.deleted_at.is_(None),
+                org_filter_account,
+            )
+            .scalar()
+            or 0
+        )
+
         emergency_reserve = max(account_balance, 0)
         available_balance = income - total_expenses
-        expense_ratio = (total_expenses / income) if income > 0 else 1.0
+
+        expense_ratio = (total_expenses / income) if income > 0 else 0.0
         debt_ratio = (debt_payments / income) if income > 0 else 0.0
         savings_rate = (available_balance / income) if income > 0 else 0.0
 
-        goal = db.query(FinancialGoal).filter(
-            FinancialGoal.organization_id == organization_id,
-            FinancialGoal.deleted_at.is_(None),
-        ).order_by(FinancialGoal.created_at.desc()).first()
+        goal = (
+            db.query(FinancialGoal)
+            .filter(
+                or_(
+                    FinancialGoal.organization_id == organization_id,
+                    FinancialGoal.organization_id.is_(None),
+                ),
+                FinancialGoal.deleted_at.is_(None),
+            )
+            .order_by(FinancialGoal.created_at.desc())
+            .first()
+        )
 
         return BudgetAdvisorInput(
             monthly_income=income,
@@ -120,7 +234,12 @@ class BudgetModelAdvisorService:
             savings_rate=savings_rate,
             expense_ratio=expense_ratio,
             debt_ratio=debt_ratio,
-            goal_priority=getattr(goal, "name", None) or getattr(goal, "title", None) if goal else None,
+            goal_priority=(
+                getattr(goal, "name", None)
+                or getattr(goal, "title", None)
+                if goal
+                else None
+            ),
             risk_profile="moderate",
         )
 

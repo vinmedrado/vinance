@@ -66,6 +66,12 @@ def diagnosis(year: int | None = None, month: int | None = None, db: Session = D
     return build_diagnosis(db, _tenant(ctx), year, month)
 
 
+@router.get("/intelligent-allocation")
+def intelligent_allocation(year: int | None = None, month: int | None = None, db: Session = Depends(get_db), ctx: TenantContext = Depends(require_permission("expenses.view"))):
+    dashboard_payload = build_dashboard(db, _tenant(ctx), year, month)
+    return dashboard_payload.get("intelligent_allocation", {})
+
+
 @router.get("/expenses", response_model=list[ExpenseOut])
 def list_expenses(year: int | None = None, month: int | None = None, status: str | None = None, category: str | None = None, db: Session = Depends(get_db), ctx: TenantContext = Depends(require_permission("expenses.view"))):
     q = db.query(ERPExpense).filter(ERPExpense.organization_id == _tenant(ctx), ERPExpense.deleted_at.is_(None))
@@ -83,6 +89,7 @@ def list_expenses(year: int | None = None, month: int | None = None, status: str
 
 
 @router.post("/expenses", response_model=ExpenseOut)
+@router.post("/api/expenses", response_model=ExpenseOut)
 def create_expense(payload: ExpenseIn, request: Request, db: Session = Depends(get_db), ctx: TenantContext = Depends(require_permission("expenses.create"))):
     _enforce_limit(db, ctx, "expenses_per_month")
     row = ERPExpense(organization_id=_tenant(ctx), created_by=ctx.user_id, **payload.model_dump())
@@ -132,6 +139,7 @@ def list_incomes(db: Session = Depends(get_db), ctx: TenantContext = Depends(req
 
 
 @router.post("/incomes", response_model=IncomeOut)
+@router.post("/api/incomes", response_model=IncomeOut)
 def create_income(payload: IncomeIn, request: Request, db: Session = Depends(get_db), ctx: TenantContext = Depends(require_permission("incomes.create"))):
     row = ERPIncome(organization_id=_tenant(ctx), created_by=ctx.user_id, **payload.model_dump())
     db.add(row); db.flush()
@@ -182,6 +190,31 @@ def create_card(payload: CardIn, request: Request, db: Session = Depends(get_db)
     row = ERPCard(organization_id=_tenant(ctx), created_by=ctx.user_id, **payload.model_dump())
     db.add(row); db.flush(); _audit(db, request, ctx, "card.created", "card", str(row.id), after=payload.model_dump())
     db.commit(); db.refresh(row); return row
+
+
+
+
+@router.put("/cards/{card_id}", response_model=CardOut)
+def update_card(card_id: int, payload: CardIn, request: Request, db: Session = Depends(get_db), ctx: TenantContext = Depends(require_permission("cards.manage"))):
+    row = _get_owned(db, ERPCard, card_id, _tenant(ctx))
+    before = {"id": row.id, "name": row.name, "limit_amount": row.limit_amount}
+    for key, value in payload.model_dump().items():
+        setattr(row, key, value)
+    row.updated_by = ctx.user_id
+    _audit(db, request, ctx, "card.updated", "card", str(row.id), before=before, after=payload.model_dump())
+    db.commit(); db.refresh(row)
+    return row
+
+
+@router.delete("/cards/{card_id}")
+def delete_card(card_id: int, request: Request, db: Session = Depends(get_db), ctx: TenantContext = Depends(require_permission("cards.manage"))):
+    row = _get_owned(db, ERPCard, card_id, _tenant(ctx))
+    row.deleted_at = date.today()
+    row.is_active = False
+    row.updated_by = ctx.user_id
+    _audit(db, request, ctx, "card.deleted", "card", str(card_id), before={"id": card_id})
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/categories", response_model=list[CategoryOut])

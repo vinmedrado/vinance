@@ -6,7 +6,7 @@ from backend.app.intelligence.financial_safety_guardrails import FinancialSafety
 
 
 class PremiumAdvisorMode:
-    """Estrutura consultiva premium: diagnóstico, decisão, riscos e próximos passos."""
+    """Estrutura consultiva: diagnóstico, decisão, riscos e próximos passos."""
 
     @staticmethod
     def build(response: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:

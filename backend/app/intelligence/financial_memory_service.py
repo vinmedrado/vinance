@@ -34,6 +34,7 @@ class FinancialMemoryService:
         avg_ratio = mean(ratios)
         ratio_std = pstdev(ratios) if len(ratios) > 1 else 0.0
         critical = []
+        seen_critical = set()
         seasonality: dict[str, dict[str, float]] = {}
         by_month: dict[int, list[float]] = defaultdict(list)
         for item, ratio in zip(ordered, ratios):
@@ -41,7 +42,20 @@ class FinancialMemoryService:
             if month:
                 by_month[month].append(ratio)
             if ratio >= 0.9 or float(item.get("overdue_bills", 0) or 0) > 0:
-                critical.append({"year": item.get("year"), "month": item.get("month"), "reason": "comprometimento elevado ou contas atrasadas"})
+                critical_key = (
+                    item.get("year"),
+                    item.get("month"),
+                    "comprometimento elevado ou contas atrasadas",
+                )
+
+                if critical_key not in seen_critical:
+                    seen_critical.add(critical_key)
+
+                    critical.append({
+                        "year": item.get("year"),
+                        "month": item.get("month"),
+                        "reason": "comprometimento elevado ou contas atrasadas",
+                    })
         for month, values in by_month.items():
             seasonality[f"{month:02d}"] = {"avg_expense_ratio": round(mean(values), 3)}
         patterns: list[str] = []

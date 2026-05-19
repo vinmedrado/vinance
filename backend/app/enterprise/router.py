@@ -7,10 +7,7 @@ from sqlalchemy.orm import Session
 from db.database import get_sync_session
 from backend.app.enterprise.context import TenantContext, get_tenant_context, require_permission
 from backend.app.services.plan_limits_service import PLAN_LIMITS, PlanLimitExceeded, ensure_feature_allowed
-try:
-    from backend.app.auth.password import hash_password
-except ModuleNotFoundError:
-    from backend.app.auth import hash_password
+from backend.app.auth.password import hash_password
 from backend.app.enterprise.security import new_id
 from backend.app.enterprise.audit import record_event
 

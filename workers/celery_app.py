@@ -12,6 +12,6 @@ app = Celery("financeos", broker=broker, backend=backend)
 app.conf.timezone = "UTC"
 app.conf.beat_schedule = {
     "sync-prices-daily": {"task": "workers.tasks.sync_all_prices", "schedule": crontab(hour=6, minute=0)},
-    "run-predictions-daily": {"task": "workers.tasks.run_ml_predictions", "schedule": crontab(hour=7, minute=0)},
     "drift-check-weekly": {"task": "workers.tasks.check_drift", "schedule": crontab(day_of_week=1, hour=8, minute=0)},
+    "quant-market-sync-daily": {"task": "workers.tasks.sync_quant_market_data", "schedule": crontab(hour=5, minute=30)},
 }

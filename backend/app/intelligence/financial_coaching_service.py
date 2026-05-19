@@ -41,4 +41,4 @@ class FinancialCoachingService:
             messages.append("Sua reserva está evoluindo, isso aumenta sua segurança para decisões futuras.")
 
         next_steps.extend(advisor.get("action_plan", [])[:3])
-        return {"messages": messages, "alerts": alerts, "next_steps": list(dict.fromkeys(next_steps)), "tone": "consultor financeiro premium"}
+        return {"messages": messages, "alerts": alerts, "next_steps": list(dict.fromkeys(next_steps)), "tone": "consultor financeiro"}

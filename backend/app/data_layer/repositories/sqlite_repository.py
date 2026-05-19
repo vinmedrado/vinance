@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from sqlalchemy import text
+
 from db.database import SessionLocal
 
 
@@ -25,7 +27,15 @@ def connect():
     return SessionLocal()
 
 
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def ensure_patch6_schema(*args, **kwargs):
+    return None
+
+
+def add_column_if_missing(*args, **kwargs):
     return None
 
 
@@ -34,6 +44,10 @@ def start_log(*args, **kwargs):
 
 
 def finish_log(*args, **kwargs):
+    return None
+
+
+def write_sync_log(*args, **kwargs):
     return None
 
 
@@ -49,8 +63,13 @@ def insert_dividend_rows(*args, **kwargs):
     return 0
 
 
-def write_sync_log(*args, **kwargs):
+def fetch_dividend_rows(*args, **kwargs):
+    return []
+
+
+def get_last_price_date(*args, **kwargs):
     return None
+
 
 def insert_price_rows(*args, **kwargs):
     return 0
@@ -64,12 +83,6 @@ def fetch_price_rows(*args, **kwargs):
     return []
 
 
-def fetch_dividend_rows(*args, **kwargs):
-    return []
-
-def get_last_price_date(*args, **kwargs):
-    return None
-
 def get_last_index_date(*args, **kwargs):
     return None
 
@@ -77,8 +90,10 @@ def get_last_index_date(*args, **kwargs):
 def insert_index_rows(*args, **kwargs):
     return 0
 
+
 def insert_macro_rows(*args, **kwargs):
     return 0
+
 
 LegacyRepository = PostgresRepository
 SQLiteRepository = PostgresRepository

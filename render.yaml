@@ -1,0 +1,133 @@
+services:
+  - type: web
+    name: vinance-backend
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: Vinance
+      - key: FINANCEOS_ENV
+        value: production
+      - key: DEMO_MODE_ENABLED
+        value: true
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vinance-postgres
+          property: connectionString
+      - key: SYNC_DATABASE_URL
+        fromDatabase:
+          name: vinance-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: vinance-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: vinance-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: vinance-redis
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: https://vinance-frontend.onrender.com
+      - key: VINANCE_ENABLE_YFINANCE
+        value: false
+
+  - type: web
+    name: vinance-frontend
+    env: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://vinance-backend.onrender.com/api
+
+  - type: worker
+    name: vinance-worker
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    startCommand: celery -A workers.celery_app worker --loglevel=info
+    envVars:
+      - key: FINANCEOS_ENV
+        value: production
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vinance-postgres
+          property: connectionString
+      - key: SYNC_DATABASE_URL
+        fromDatabase:
+          name: vinance-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: vinance-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: vinance-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: vinance-redis
+          property: connectionString
+
+  - type: worker
+    name: vinance-beat
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    startCommand: celery -A workers.celery_app beat --loglevel=info
+    envVars:
+      - key: FINANCEOS_ENV
+        value: production
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vinance-postgres
+          property: connectionString
+      - key: SYNC_DATABASE_URL
+        fromDatabase:
+          name: vinance-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: vinance-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: vinance-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: vinance-redis
+          property: connectionString
+
+  - type: redis
+    name: vinance-redis
+    plan: free
+    ipAllowList: []
+
+databases:
+  - name: vinance-postgres
+    plan: free
