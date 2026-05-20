@@ -12,6 +12,51 @@ const demoUser = {
   organization_id: 'demo-org',
 };
 
+const demoLimits = {
+  needs: 1000,
+  wants: 500,
+  debts: 100,
+  emergency_reserve: 100,
+  investments: 300,
+};
+
+const demoActualBudget = {
+  expenses: 700,
+  needs: 700,
+  wants: 180,
+  debts: 400,
+  emergency_reserve: 100,
+  investments: 300,
+};
+
+const demoBudget = {
+  monthly_income: 2000,
+  monthly_expenses: 700,
+  monthly_balance: 1300,
+  available_to_invest: 360,
+  limits: demoLimits,
+  actual: demoActualBudget,
+  suggested_limits: demoLimits,
+  recommended_limits: demoLimits,
+  allocation_limits: demoLimits,
+  suggested: demoLimits,
+  recommended: demoLimits,
+  plan: demoLimits,
+  difference: {
+    needs: 300,
+    wants: 320,
+    debts: -300,
+    emergency_reserve: 0,
+    investments: 60,
+  },
+  allocation_plan: {
+    method: '50_30_20',
+    method_label: '50/30/20 adaptativo',
+    limits: demoLimits,
+    safe_to_invest: 360,
+  },
+};
+
 const demoDashboard = {
   metrics: {
     total_income: 2000,
@@ -22,10 +67,24 @@ const demoDashboard = {
     realized_investment: 360,
     financial_score: 82,
   },
-  budget: {
+  kpis: {
     monthly_income: 2000,
-    actual: { expenses: 700 },
+    monthly_expenses: 700,
+    monthly_balance: 1300,
+    investment_capacity: 360,
+    health_score: 82,
   },
+  summary: {
+    monthly_income: 2000,
+    monthly_expenses: 700,
+    monthly_balance: 1300,
+    investment_capacity: 360,
+    health_score: 82,
+  },
+  budget: demoBudget,
+  limits: demoLimits,
+  actual: demoActualBudget,
+  suggested_limits: demoLimits,
   intelligent_allocation: {
     decision: 'Você possui margem para investir mantendo equilíbrio financeiro.',
     can_invest: true,
@@ -111,11 +170,11 @@ const demoAdvisor = {
     behavior_adjustment: 1,
     allocation_method: '50_30_20',
     allocation_method_label: '50/30/20',
-    suggested_limits: { needs: 1000, wants: 500, debts: 100, emergency_reserve: 100, investments: 300 },
+    suggested_limits: demoLimits,
     allocation_plan: {
       method: '50_30_20',
       method_label: '50/30/20',
-      limits: { needs: 1000, wants: 500, debts: 100, emergency_reserve: 100, investments: 300 },
+      limits: demoLimits,
       safe_to_invest: 360,
       income: 2000,
       expenses: 700,
@@ -163,28 +222,36 @@ const demoAdvisor = {
   disclaimer: 'Demo visual com dados simulados para apresentação de portfólio. Isso não constitui recomendação financeira.',
 };
 
+const demoIncomes = [
+  { id: 1, description: 'Salário', amount: 2000, received_at: '2026-05-15', status: 'received' },
+];
+
+const demoExpenses = [
+  { id: 1, description: 'Mercado', amount: 300, due_date: '2026-05-18', status: 'paid' },
+  { id: 2, description: 'Cartão', amount: 400, due_date: '2026-05-20', status: 'pending' },
+];
+
+const demoAccounts = [
+  { id: 1, name: 'Conta Principal', type: 'checking', institution: 'Nubank', balance: 1300, status: 'active' },
+];
+
+const demoCards = [
+  { id: 1, name: 'Cartão Casas Bahia', brand: 'Visa', limit_amount: 2500, closing_day: 10, due_day: 20, is_active: true, status: 'active' },
+];
+
 const demoResponses: Record<string, any> = {
   '/dashboard': demoDashboard,
   '/api/dashboard': demoDashboard,
-
-  '/incomes': [{ id: 1, description: 'Salário', amount: 2000, received_at: '2026-05-15', status: 'received' }],
-  '/api/incomes': [{ id: 1, description: 'Salário', amount: 2000, received_at: '2026-05-15', status: 'received' }],
-
-  '/expenses': [
-    { id: 1, description: 'Mercado', amount: 300, due_date: '2026-05-18', status: 'paid' },
-    { id: 2, description: 'Cartão', amount: 400, due_date: '2026-05-20', status: 'pending' },
-  ],
-  '/api/expenses': [
-    { id: 1, description: 'Mercado', amount: 300, due_date: '2026-05-18', status: 'paid' },
-    { id: 2, description: 'Cartão', amount: 400, due_date: '2026-05-20', status: 'pending' },
-  ],
-
-  '/accounts': [{ id: 1, name: 'Conta Principal', type: 'checking', institution: 'Nubank', balance: 1300, status: 'active' }],
-  '/api/accounts': [{ id: 1, name: 'Conta Principal', type: 'checking', institution: 'Nubank', balance: 1300, status: 'active' }],
-
-  '/cards': [{ id: 1, name: 'Cartão Casas Bahia', brand: 'Visa', limit_amount: 2500, closing_day: 10, due_day: 20, is_active: true, status: 'active' }],
-  '/api/cards': [{ id: 1, name: 'Cartão Casas Bahia', brand: 'Visa', limit_amount: 2500, closing_day: 10, due_day: 20, is_active: true, status: 'active' }],
-
+  '/budget': demoBudget,
+  '/api/budget': demoBudget,
+  '/incomes': demoIncomes,
+  '/api/incomes': demoIncomes,
+  '/expenses': demoExpenses,
+  '/api/expenses': demoExpenses,
+  '/accounts': demoAccounts,
+  '/api/accounts': demoAccounts,
+  '/cards': demoCards,
+  '/api/cards': demoCards,
   '/investments': [],
   '/api/investments': [],
   '/goals': [],
@@ -193,10 +260,8 @@ const demoResponses: Record<string, any> = {
   '/api/alerts': [{ id: 1, title: 'Reserva em construção', message: 'Continue fortalecendo sua reserva antes de aumentar risco.', status: 'info' }],
   '/portfolio': { positions: [] },
   '/api/portfolio': { positions: [] },
-
   '/intelligence/ai-financial-advisor': demoAdvisor,
   '/api/intelligence/ai-financial-advisor': demoAdvisor,
-
   '/quant/runs': [],
   '/api/quant/runs': [],
   '/quant/health': { status: 'ok', mode: 'demo' },
@@ -218,13 +283,8 @@ function persistDemoMutation(config: any) {
   const cleanUrl = rawUrl.replace(/^\/api/, '');
   const normalizedUrl = `/api${cleanUrl}`;
 
-  if (!DEMO_MODE || !['post', 'put', 'patch', 'delete'].includes(method)) {
-    return null;
-  }
-
-  if (method === 'delete') {
-    return { ok: true };
-  }
+  if (!DEMO_MODE || !['post', 'put', 'patch', 'delete'].includes(method)) return null;
+  if (method === 'delete') return { ok: true };
 
   let body: any = {};
   try {
@@ -233,11 +293,7 @@ function persistDemoMutation(config: any) {
     body = {};
   }
 
-  const created = {
-    id: Date.now(),
-    status: 'active',
-    ...body,
-  };
+  const created = { id: Date.now(), status: 'active', ...body };
 
   if (normalizedUrl.includes('/incomes')) return created;
   if (normalizedUrl.includes('/expenses')) return created;
@@ -254,10 +310,7 @@ export async function login(email: string, password: string) {
     return persistSession({
       access_token: 'demo-token',
       refresh_token: 'demo-refresh-token',
-      user: {
-        ...demoUser,
-        email: email || demoUser.email,
-      },
+      user: { ...demoUser, email: email || demoUser.email },
     });
   }
 
@@ -265,12 +318,7 @@ export async function login(email: string, password: string) {
   return persistSession(data);
 }
 
-export async function register(input: {
-  email: string;
-  password: string;
-  full_name?: string;
-  organization_name?: string;
-}) {
+export async function register(input: { email: string; password: string; full_name?: string; organization_name?: string }) {
   if (DEMO_MODE) {
     return persistSession({
       access_token: 'demo-token',
@@ -289,7 +337,6 @@ export async function register(input: {
 
 export async function me() {
   if (DEMO_MODE) return demoUser;
-
   const { data } = await api.get('/auth/me');
   return data;
 }
@@ -300,7 +347,6 @@ export async function logoutRemote() {
       await api.post('/auth/logout');
     } catch {}
   }
-
   logout();
 }
 
@@ -326,51 +372,26 @@ let refreshing: Promise<string | null> | null = null;
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('financeos_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
 
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  if (!DEMO_MODE) {
-    return config;
-  }
+  if (!DEMO_MODE) return config;
 
   const rawUrl = String(config.url || '');
   const cleanUrl = rawUrl.replace(/^\/api/, '');
   const normalizedUrl = `/api${cleanUrl}`;
 
   const mutationData = persistDemoMutation(config);
-
   if (mutationData !== null) {
-    config.adapter = async () => ({
-      data: mutationData,
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config,
-    });
-
+    config.adapter = async () => ({ data: mutationData, status: 200, statusText: 'OK', headers: {}, config });
     return config;
   }
 
   const data = demoResponses[rawUrl] ?? demoResponses[normalizedUrl] ?? demoResponses[cleanUrl];
 
-  console.log('[DEMO API]', {
-    method: config.method,
-    rawUrl,
-    cleanUrl,
-    normalizedUrl,
-    found: data !== undefined,
-  });
+  console.log('[DEMO API]', { method: config.method, rawUrl, cleanUrl, normalizedUrl, found: data !== undefined });
 
   if (data !== undefined) {
-    config.adapter = async () => ({
-      data,
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config,
-    });
+    config.adapter = async () => ({ data, status: 200, statusText: 'OK', headers: {}, config });
   }
 
   return config;
@@ -379,9 +400,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (DEMO_MODE) {
-      return Promise.reject(error);
-    }
+    if (DEMO_MODE) return Promise.reject(error);
 
     const original = error.config || {};
     const status = error.response?.status;
@@ -393,13 +412,7 @@ api.interceptors.response.use(
 
     if (status === 401 && !original._retry && !isAuthCall) {
       original._retry = true;
-
-      refreshing =
-        refreshing ||
-        refreshToken().finally(() => {
-          refreshing = null;
-        });
-
+      refreshing = refreshing || refreshToken().finally(() => { refreshing = null; });
       const token = await refreshing;
 
       if (token) {
