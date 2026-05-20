@@ -67,9 +67,48 @@ export default function AppLayout() {
         <header className="topbar">
           <div className="topbar-search"><Search size={17} /><span>Buscar receita, despesa, ativo ou decisão...</span></div>
           <div className="topbar-actions">
-            <button className="topbar-icon magic-hover"><Bell size={17} /></button>
-            <button className="topbar-icon magic-hover"><Landmark size={17} /></button>
-            <button className="profile-chip magic-hover"><UserRound size={17} /><span>Vinance</span><ChevronDown size={15} /></button>
+            <button
+              className="topbar-icon magic-hover"
+              title="Notificações"
+              onClick={() => {
+                if (import.meta.env.VITE_DEMO_MODE === 'true') {
+                  alert('Central de notificações premium em desenvolvimento.');
+                  return;
+                }
+
+                navigate('/alertas');
+              }}
+            >
+              <Bell size={17} />
+            </button>
+
+            <button
+              className="topbar-icon magic-hover"
+              title="Instituições financeiras"
+              onClick={() => {
+                if (import.meta.env.VITE_DEMO_MODE === 'true') {
+                  alert('Integrações bancárias premium em desenvolvimento.');
+                  return;
+                }
+
+                navigate('/contas');
+              }}
+            >
+              <Landmark size={17} />
+            </button>
+            <button
+              type="button"
+              className="profile-chip magic-hover"
+              title="Sair"
+              onClick={() => {
+                logout();
+                navigate('/login');
+              }}
+            >
+  <UserRound size={17} />
+  <span>Sair</span>
+  <LogOut size={15} />
+</button>
           </div>
         </header>
         <main className="content">
