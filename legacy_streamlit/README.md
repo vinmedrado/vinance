@@ -1,19 +1,22 @@
-# Legacy Streamlit Admin
+# Legacy Streamlit
 
-Este diretório preserva a interface Streamlit histórica do FinanceOS apenas como console legado/admin interno.
+Interface histórica preservada por compatibilidade.
 
-O frontend oficial do produto SaaS é o React/Vite em `frontend/`.
+## Contexto
 
-Uso opcional local:
+Este diretório mantém telas antigas de suporte, diagnóstico e prova de conceito.
+
+## Execução local
 
 ```bash
 streamlit run legacy_streamlit/app.py
 ```
 
-Uso opcional via Docker Compose local:
+## Observações
 
-```bash
-docker compose --profile admin up admin_streamlit
-```
+- o caminho oficial de produto é `frontend/`;
+- este diretório existe apenas para manutenção e referência.
 
-Não use Streamlit como frontend principal em produção pública.
+## TODO
+
+- avaliar o que pode ser removido sem perder rastreabilidade histórica.

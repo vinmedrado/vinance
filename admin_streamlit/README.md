@@ -1,13 +1,25 @@
-# Admin Streamlit legado
+# Admin Streamlit
 
-O frontend oficial do FinanceOS agora é React em `frontend/` e abre em `http://localhost:3000`.
+Console interno e legado do FinanceOS / Vinance.
 
-O Streamlit foi mantido apenas como console interno/admin legado para telas operacionais históricas, ML, jobs, backtests e diagnóstico técnico.
+## Papel
 
-Para abrir opcionalmente:
+- apoiar diagnóstico técnico;
+- manter telas históricas de operação;
+- servir como ponte para relatórios e rotinas internas.
+
+## Execução
 
 ```bash
-streamlit run legacy_streamlit/app.py
-# ou
- docker compose --profile admin up admin_streamlit
+streamlit run admin_streamlit/app.py
 ```
+
+## Observações
+
+- o frontend principal do produto é o React/Vite em `frontend/`;
+- este diretório não deve ser tratado como experiência pública principal.
+
+## TODO
+
+- revisar quais telas ainda têm uso real;
+- remover código legado que não agrega ao fluxo atual.
