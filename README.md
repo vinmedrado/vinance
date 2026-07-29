@@ -37,6 +37,8 @@ legacy_streamlit/ admin legado
 
 ## Screenshots
 
+![Vinance demo](assets/demo/demo.gif)
+
 ![Portfolio screenshot](https://raw.githubusercontent.com/vinmedrado/portfolio/main/images/vinance.png)
 
 ## Funcionalidades
