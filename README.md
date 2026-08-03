@@ -1,436 +1,229 @@
-# FinanceOS — ERP financeiro inteligente premium
+# Vinance v2
 
-FinanceOS é um ERP financeiro inteligente para controle de despesas, receitas, contas, cartões, orçamento, metas, investimentos e diagnóstico financeiro em uma experiência SaaS premium.
+Vinance v2 é uma plataforma de inteligência financeira pessoal para o mercado brasileiro. O produto combina diagnóstico financeiro, organização de receitas e despesas, fundamentos de mercado, alocação educacional por perfil, ranking heurístico de ativos e um Advisor IA com contexto do usuário.
 
-O frontend oficial agora é React + Vite + TypeScript em `frontend/`. O Streamlit foi preservado apenas como admin legado/operação técnica.
+O foco do projeto é demonstrar uma arquitetura fullstack: backend FastAPI modular, frontend React, integração real entre camadas, documentação operacional e preparação segura para GitHub/deploy.
 
-## O que o produto resolve
+## Visão do produto
 
-- Centraliza vida financeira em uma única plataforma.
-- Conecta gastos reais com orçamento e metas.
-- Calcula saldo mensal, sobra disponível e valor sugerido para investir.
-- Entrega diagnóstico financeiro simples para usuário comum.
-- Mantém módulos avançados de investimentos, ranking, backtest, ML, jobs e orquestração como diferenciais de bastidor.
+O Vinance ajuda o usuário a entender sua situação financeira antes de falar sobre investimentos. A jornada atual permite:
+
+- criar conta e autenticar com JWT;
+- cadastrar perfil financeiro inicial;
+- registrar receitas e despesas;
+- gerar diagnóstico financeiro;
+- visualizar capacidade de investimento e alertas;
+- consultar dados de mercado e fundamentos cadastrados;
+- receber sugestões educacionais por classe de ativo;
+- conversar com um Advisor IA educacional usando Groq, sem promessa de lucro ou recomendação definitiva de compra.
 
 ## Stack
 
-- Frontend: React, Vite, TypeScript, React Router, TanStack Query, Axios, Recharts, CSS premium responsivo.
-- Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Redis.
-- Operacional: Celery, MLflow, Docker Compose.
-- Admin legado: Streamlit opcional.
+### Backend
 
-## Arquitetura
+- Python 3.11+
+- FastAPI
+- SQLAlchemy Async
+- Alembic
+- PostgreSQL
+- Redis
+- Celery + Celery Beat
+- Pydantic Settings
+- httpx async para Groq
+- Pytest
+
+### Frontend
+
+- React
+- TypeScript
+- Vite
+- React Router
+- TanStack Query
+- Axios
+- Design system próprio
+- Identidade visual dark, com base inicial para light theme
+
+## Módulos implementados
+
+- `backend/app/auth`: autenticação, JWT e usuário autenticado.
+- `backend/app/financial`: perfil financeiro, receitas, despesas, orçamento e diagnóstico.
+- `backend/app/catalog`: catálogo base de ativos.
+- `backend/app/market`: indicadores e fundamentos disponíveis por mercado.
+- `backend/app/intelligence`: alocação por perfil, restrições de risco, scoring heurístico e ranking educacional.
+- `backend/app/advisor`: Advisor IA educacional com Groq, memória curta em Redis e proteção básica contra prompt injection.
+- `frontend/src/design-system`: tokens visuais, tema, tipografia, espaçamentos, radius e sombras.
+- `frontend/src/features`: domínios conectados ao backend real: auth, financial, market, intelligence e advisor.
+- `frontend/src/pages`: telas funcionais com onboarding, estados vazios, loading, error e UX de demo.
+
+## Arquitetura resumida
 
 ```text
-frontend/                 # frontend principal SaaS React
-backend/app/main.py        # API FastAPI
-backend/app/erp/           # ERP financeiro premium
-backend/app/financial/     # diagnóstico e consultor financeiro existente
-backend/app/market/        # mercado, ranking e oportunidades
-backend/app/backtest/      # backtests
-legacy_streamlit/          # Streamlit legado/admin opcional
+frontend/ React + Vite + TanStack Query
+    ↓ HTTP /api/v1
+backend/app FastAPI modular
+    ↓
+PostgreSQL — dados transacionais e fundamentos
+Redis — cache, Celery broker/result backend e memória curta do Advisor
+Celery Worker/Beat — jobs assíncronos preparados
+Groq API — geração controlada do Advisor IA
 ```
 
-## Rodar com Docker
+## Status atual do projeto
+
+Fases 0 a 14 concluídas:
+
+- Fase 0: saneamento arquitetural.
+- Fase 1: core backend.
+- Fase 2: módulo financeiro.
+- Fase 3: catálogo de ativos.
+- Fase 4: market data.
+- Fase 5: fundamentos de mercado.
+- Fase 6: intelligence base heurística.
+- Fase 7: Advisor IA com Groq.
+- Fase 8: limpeza técnica e hardening.
+- Fase 9: frontend base e identidade visual.
+- Fase 10: integração frontend/backend real.
+- Fase 11: onboarding financeiro e estados vazios.
+- Fase 12: refinamento funcional das páginas.
+- Fase 13: polimento final para demo.
+- Fase 14: preparação GitHub + deploy.
+
+O Vinance v2 está preparado para publicação no GitHub e para deploy futuro. Ainda não é uma versão comercial final.
+
+## Como rodar o backend localmente
+
+1. Copie o exemplo de ambiente:
+
+```bash
+cp .env.example .env
+```
+
+2. Ajuste pelo menos:
+
+```env
+DATABASE_URL=postgresql+asyncpg://vinance:vinance-local-only@postgres:5432/vinance
+REDIS_URL=redis://redis:6379/0
+SECRET_KEY=gere-uma-chave-real-forte-com-openssl-rand-hex-32
+GROQ_API_KEY=
+```
+
+3. Suba os serviços:
 
 ```bash
 docker compose up --build
 ```
 
-Acessos:
+4. Rode as migrations:
 
-- Frontend React: http://localhost:3000
-- Backend FastAPI: http://localhost:8000
-- Healthcheck: http://localhost:8000/health
-- Admin Streamlit opcional: `docker compose --profile admin up admin_streamlit`
+```bash
+docker compose exec backend alembic upgrade head
+```
 
-## Rodar localmente
+5. Valide o healthcheck:
+
+```bash
+curl http://localhost:8000/health
+```
+
+## Como rodar o frontend localmente
+
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Por padrão, o frontend espera o backend em:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_API_PREFIX=/api/v1
+```
+
+## Celery worker e beat
+
+Com Docker Compose:
+
+```bash
+docker compose up celery_worker celery_beat
+```
+
+Manual:
+
+```bash
+celery -A backend.app.core.celery.celery_app worker --loglevel=info -Q default,market,intelligence
+celery -A backend.app.core.celery.celery_app beat --loglevel=info
+```
+
+## Variáveis de ambiente principais
 
 Backend:
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
-pip install -r requirements.txt
-alembic upgrade head
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-```
+- `ENVIRONMENT`
+- `DATABASE_URL`
+- `REDIS_URL`
+- `CELERY_BROKER_URL`
+- `CELERY_RESULT_BACKEND`
+- `SECRET_KEY`
+- `CORS_ORIGINS`
+- `LOG_LEVEL`
+- `GROQ_API_KEY`
+- `GROQ_MODEL`
 
 Frontend:
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+- `VITE_API_BASE_URL`
+- `VITE_API_PREFIX`
 
-## Variáveis principais
+## Endpoints principais
 
-Use `.env.example` como base:
+- `GET /health`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
+- `GET/POST /api/v1/financial/...`
+- `GET /api/v1/catalog/...`
+- `GET /api/v1/market/...`
+- `GET /api/v1/intelligence/recommendations`
+- `POST /api/v1/advisor/chat`
 
-```env
-FINANCEOS_ENV=development
-DATABASE_URL=postgresql+asyncpg://financeos:financeos@postgres:5432/financeos
-SYNC_DATABASE_URL=postgresql+psycopg2://financeos:financeos@postgres:5432/financeos
-REDIS_URL=redis://redis:6379/0
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8000
-```
+## Limitações atuais
 
-## Endpoints SaaS principais
+- O Advisor é educacional e não substitui consultoria financeira profissional.
+- Não há recomendação definitiva de compra/venda.
+- Não há embeddings, vector database, LangChain, CrewAI, AutoGen ou Ollama.
+- Não há backtest, LSTM, Prophet ou ML treinado.
+- O frontend ainda não possui CRUD financeiro avançado.
+- O mercado ainda não possui screener avançado ou gráficos complexos.
+- Observabilidade e CI/CD ainda devem ser evoluídos antes de produção real.
 
-- `/api/auth/login`
-- `/api/auth/register`
-- `/api/me`
-- `/api/dashboard`
-- `/api/expenses`
-- `/api/incomes`
-- `/api/accounts`
-- `/api/cards`
-- `/api/budgets`
-- `/api/goals`
-- `/api/financial-diagnosis`
-- `/api/investments`
-- `/api/portfolio`
-- `/api/alerts`
-- `/api/plans`
-- `/api/health`
+## Próximos passos sugeridos
 
-## Validação
+- Deploy frontend no Netlify.
+- Deploy backend no Railway.
+- Provisionar Postgres e Redis gerenciados.
+- Configurar migrations em produção.
+- Criar pipeline CI/CD.
+- Adicionar observabilidade, logs estruturados e alertas.
+- Evoluir telas com screenshots reais para portfólio.
 
-```bash
-python -m compileall .
-python scripts/production_readiness_check.py
-cd frontend && npm install && npm run build
-docker compose config
-```
+## Segurança
 
-## Aviso legal
+- Nunca versionar `.env` real.
+- Nunca versionar `GROQ_API_KEY`.
+- Nunca usar a `SECRET_KEY` dos exemplos em produção.
+- Gere `SECRET_KEY` forte com `openssl rand -hex 32` ou equivalente.
+- Em `ENVIRONMENT=production`, o backend bloqueia `SECRET_KEY` vazia, curta ou com marcadores inseguros em inglês/português.
 
-O FinanceOS é uma plataforma analítica, educacional e de apoio à decisão. Não é recomendação financeira, consultoria de investimentos, corretora, banco ou instituição regulada.
+## Correção Fase 14 — limpeza de legado e planilhas locais
 
----
+A pasta `services/` da raiz foi arquivada em `_archived/fase14_legacy_services/services/` por conter código legado fora do backend oficial `backend/app`. Essa arquitetura antiga não faz parte do Vinance v2 aprovado e podia conter referências a Ollama e variáveis antigas como `OPENAI_API_KEY`.
 
-## Ultra Premium UX Patch
+O Vinance v2 aprovado utiliza o backend oficial em `backend/app` e o advisor IA isolado via Groq. Ollama não faz parte da arquitetura atual do Vinance v2.
 
-O frontend oficial do FinanceOS é React/Vite com TypeScript. Este patch adicionou uma camada de design system premium, componentes reutilizáveis, dark mode refinado, responsividade, lazy loading e melhorias visuais nas telas principais do ERP financeiro.
+Arquivos locais de planilha, como entradas financeiras ou importações B3 (`.xlsm`/`.xlsx`), não são versionados. As pastas `data/input/` e `data/imports/` permanecem apenas com `.gitkeep`.
 
-Telas refinadas:
-- Login
-- Onboarding
-- Dashboard Financeiro
-- Despesas
-- Orçamento
-- Metas/CRUDs financeiros
-- Diagnóstico Financeiro
-- Investimentos/Carteira/Alertas
-- Planos
-- Landing page
+## Licença
 
-Comandos principais:
-
-```bash
-cd frontend
-npm install
-npm run build
-npm run dev
-```
-
-Backend:
-
-```bash
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Docker:
-
-```bash
-docker compose up --build
-```
-
----
-
-## Startup Grade UX Final
-
-Este pacote posiciona o FinanceOS como um ERP financeiro inteligente premium com frontend oficial em React/Vite. O foco do último patch foi polish visual, branding, motion, onboarding, mobile polish, charts premium e percepção de produto SaaS moderno.
-
-### Rodar frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Build frontend
-```bash
-cd frontend
-npm run build
-npm run lint
-```
-
-### Rodar backend
-```bash
-alembic upgrade head
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### Docker
-```bash
-docker compose up --build
-```
-
-O Streamlit permanece como ferramenta legado/admin. O frontend principal do produto é React.
-
----
-
-## Production / SaaS Ready
-
-Este ZIP inclui patch incremental de produção com:
-
-- Docker Compose de produção (`docker-compose.production.yml`)
-- `.env.production.example`
-- healthcheck `/health` e readiness `/ready`
-- Sentry opcional no frontend/backend
-- PostHog opcional
-- Stripe-ready para Free/Pro/Premium
-- demo pública em `/demo`
-- Nginx para frontend SPA e proxy
-- documentação em `docs/DEPLOY_PRODUCTION.md`
-- apresentação de portfólio em `docs/PORTFOLIO_PRESENTATION.md`
-
-### Rodar produção local/VPS
-
-```bash
-cp .env.production.example .env.production
-# edite secrets e URLs
-./scripts/deploy/start_production.sh
-```
-
-### Validação
-
-```bash
-python -m compileall backend services db scripts
-docker compose -f docker-compose.production.yml config
-cd frontend && npm install && npm run build && npm run lint
-```
-
-## Backend Enterprise Multi-Tenant
-
-O Vinance agora possui fundação backend SaaS enterprise-ready por organização:
-
-- isolamento por `organization_id`
-- RBAC com roles `owner`, `admin`, `finance_manager`, `analyst`, `member`, `viewer`
-- dependency FastAPI `require_permission("permission")`
-- audit logs por organização
-- billing por organização com planos `free`, `pro`, `premium`, `enterprise`
-- limites centralizados por plano
-- refresh token rotation com hash de tokens
-- sessões, reset de senha e verificação de email preparados
-- health/readiness/liveness/metrics
-- CI com compile, testes, frontend build e validação Docker
-
-Documentação técnica:
-
-- `docs/ENTERPRISE_BACKEND.md`
-- `docs/MULTI_TENANCY.md`
-- `docs/RBAC.md`
-- `docs/SECURITY.md`
-- `docs/BILLING_LIMITS.md`
-- `docs/AUDIT_LOGS.md`
-- `docs/OPERATIONS.md`
-
-### Comandos backend
-
-```bash
-python -m compileall .
-pytest
-alembic upgrade head
-```
-
-### Comandos Docker
-
-```bash
-docker compose config
-docker compose -f docker-compose.production.yml config
-```
-
-## Enterprise Backend V2 — Multi-tenant
-
-O backend enterprise do Vinance usa o modelo oficial:
-
-- `organizations`
-- `users`
-- `organization_members`
-- `roles`
-- `permissions`
-- `subscriptions`
-- `tenant_settings`
-
-O modelo legado `tenants` não é mais a fonte principal de autenticação/billing. A autenticação, RBAC e billing usam `organizations` como tenant oficial.
-
-### Segurança e isolamento
-
-- Todas as rotas financeiras principais filtram dados por `organization_id`.
-- Permissões são aplicadas com `require_permission("permission.name")`.
-- Audit logs registram ações sensíveis com `organization_id`, `user_id` e `request_id`.
-- Plan limits são validados no backend antes de criar recursos limitados.
-
-### Validação local
-
-```bash
-python -m compileall .
-pytest -q tests
-alembic upgrade head
-docker compose config
-docker compose -f docker-compose.production.yml config
-cd frontend && npm install && npm run build
-```
-
-## Intelligent Investing — ERP + Backtest + ML Contextual
-
-O Vinance agora inclui uma camada backend de inteligência financeira personalizada. O objetivo é transformar os dados do ERP financeiro em recomendações simples para planejamento de investimentos, sem exigir que o usuário entenda métricas quantitativas.
-
-### O que o motor faz
-
-- calcula quanto o usuário pode investir com segurança;
-- sugere alocação percentual por classe: ações, FIIs, ETFs, BDRs, cripto, renda fixa/CDI e caixa/reserva;
-- executa simulação/backtest personalizado com aporte mensal e cenários;
-- ranqueia ativos por qualidade e aderência ao perfil, sem prometer previsão de preço;
-- gera recomendação final com explicação humana, risco, meta e benchmarks.
-
-### Endpoints principais
-
-- `POST /api/intelligence/profile`
-- `GET /api/intelligence/profile`
-- `GET /api/intelligence/capacity`
-- `GET /api/intelligence/allocation`
-- `GET /api/intelligence/backtest`
-- `POST /api/intelligence/asset-scoring`
-- `POST /api/intelligence/recommendation`
-
-### Disclaimer financeiro
-
-O Vinance fornece simulações e análises educacionais baseadas em dados históricos e modelos estatísticos. Isso não constitui recomendação financeira.
-
-Documentação complementar:
-
-- `docs/INTELLIGENT_INVESTING.md`
-- `docs/BACKTEST_ENGINE.md`
-- `docs/ML_SCORING.md`
-- `docs/FINANCIAL_PROFILES.md`
-- `docs/RECOMMENDATION_ENGINE.md`
-
-
-## Inteligência Quantitativa Personalizada
-
-O Vinance evoluiu para um assistente financeiro inteligente: usa perfil financeiro, metas, capacidade de aporte, portfolio engine, backtest avançado, ML contextual, cenários e risk engine para traduzir análises quantitativas em recomendações simples.
-
-A proposta não é day trade nem promessa de rentabilidade. O sistema usa modelos educacionais para apoiar planejamento: quanto aportar, risco estimado, chance de atingir meta, cenários e explicações humanas.
-
-Documentação complementar: `docs/GOALS_ENGINE.md`, `docs/ADVANCED_BACKTEST.md`, `docs/PORTFOLIO_ENGINE.md`, `docs/ML_CONTEXTUAL.md`, `docs/RISK_ENGINE.md`, `docs/SCENARIO_SIMULATION.md` e `docs/HUMANIZED_RECOMMENDATIONS.md`.
-
-> Disclaimer: O Vinance fornece análises e simulações educacionais baseadas em dados históricos e modelos quantitativos. Isso não constitui recomendação financeira.
-
-
-## Fluxo financeiro principal
-
-O Vinance agora calcula automaticamente o modelo financeiro ideal antes de sugerir investimentos. O fluxo oficial é: renda cadastrada, despesas e dívidas, diagnóstico financeiro, recomendação do modelo mensal, plano de ação e somente depois investimentos com ML/backtest.
-
-A tela **Meu Plano Financeiro** usa o `BudgetModelAdvisorService` para escolher entre Recuperação Financeira, Base Zero, 70/20/10, 60/30/10, 50/30/20 ou Personalizado. As recomendações são educativas e não constituem recomendação financeira.
-
-
-## Vinance Financial Coach
-
-O Vinance evoluiu para um assistente financeiro inteligente e contínuo. O fluxo principal agora acompanha o usuário além do diagnóstico inicial:
-
-1. entende renda, despesas, dívidas, reserva e metas;
-2. recomenda automaticamente o modelo financeiro ideal;
-3. calcula score de saúde financeira;
-4. identifica a fase atual da jornada financeira;
-5. adapta o modelo conforme o usuário melhora ou piora;
-6. gera coaching contextual, alertas e próximos passos;
-7. projeta cenários pessimista, base e otimista;
-8. ajusta a relação com investimentos conforme a capacidade financeira.
-
-### Serviços adicionados
-
-- `financial_health_engine.py`
-- `adaptive_budget_model_service.py`
-- `financial_coaching_service.py`
-- `behavioral_finance_service.py`
-- `financial_forecast_service.py`
-- `financial_timeline_service.py`
-
-### Endpoint principal
-
-`GET /api/intelligence/financial-coach/dashboard`
-
-Retorna score, fase financeira, modelo adaptativo, coaching, alertas, forecast, timeline e próximo passo recomendado.
-
-### Disclaimer
-
-O Vinance fornece análises e simulações educacionais baseadas em dados históricos e modelos quantitativos. Isso não constitui recomendação financeira.
-
-
-## AI Financial Advisor Evolution
-
-O Vinance agora possui uma camada evolutiva de advisor financeiro:
-
-- Memória financeira por organização e usuário
-- Coaching contextual avançado
-- Inteligência comportamental
-- Metas dinâmicas
-- Forecast financeiro avançado
-- Advisor para decisões como quitar dívida vs investir
-- Marcos de evolução financeira premium
-- Comunicação humanizada e não técnica
-
-Endpoint principal: `GET /api/intelligence/ai-financial-advisor`.
-
-Disclaimer: o Vinance fornece análises e simulações educacionais baseadas em dados históricos e modelos quantitativos. Isso não constitui recomendação financeira.
-
-
-## Advisor conversacional seguro
-
-O Vinance agora possui um advisor financeiro conversacional baseado nos dados reais do ERP: receitas, despesas, orçamento, metas, reserva, investimentos, forecast, memória financeira e comportamento. O fluxo preserva o isolamento multi-tenant por `organization_id` e `user_id`.
-
-Endpoints principais:
-
-- `GET /api/intelligence/advisor-context`
-- `POST /api/intelligence/advisor/chat`
-- `GET /api/intelligence/copilot/events`
-- `GET /api/intelligence/user-learning-profile`
-- `GET /api/intelligence/conversational-advisor/dashboard`
-
-O advisor não promete retorno, não emite ordem de compra/venda e prioriza organização financeira quando a saúde do usuário está crítica.
-
-
-## Vinance AI Copilot
-
-O Vinance agora possui uma camada de advisor financeiro conversacional e contextual. O usuário pode perguntar livremente sobre orçamento, dívidas, metas, investimentos, carteira, capacidade de aporte e próximos passos. O motor `financial_ai_orchestrator.py` consolida dados reais do ERP, memória financeira, comportamento, forecast, metas e alertas antes de responder.
-
-A resposta passa por guardrails financeiros: sem promessa de retorno, sem ordem de compra/venda, sem incentivo a risco incompatível e com disclaimer educacional. O foco é consultoria financeira personalizada e segura, não trading agressivo.
-
-
-## Advisor Financeiro — Refinamento Pré-Testes
-
-Esta versão adiciona o último refinamento antes da fase de testes reais:
-
-- UX premium do Advisor Financeiro.
-- Memória conversacional longa por organização/usuário.
-- RAG financeiro interno com fallback semântico local.
-- Modo Advisor Premium com diagnóstico, decisão, riscos e alternativas.
-- Analytics de IA sem persistir prompt sensível.
-- Cache/compactação de contexto para melhorar performance.
-- Guardrails antes e depois da resposta.
-
-Documentação relacionada:
-
-- `docs/ADVISOR_PREMIUM.md`
-- `docs/CONVERSATIONAL_MEMORY.md`
-- `docs/FINANCIAL_RAG_ENGINE.md`
-- `docs/PROACTIVE_COPILOT.md`
-- `docs/AI_ANALYTICS.md`
-- `docs/AI_SAFETY.md`
-- `docs/VALIDATION_CHECKLIST.md`
-
-Disclaimer: o Vinance fornece análises educacionais baseadas em dados e simulações. Isso não constitui recomendação financeira individualizada.
+MIT.
