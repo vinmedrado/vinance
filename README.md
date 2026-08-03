@@ -94,9 +94,9 @@ workers/        jobs
 ## Roadmap
 
 - Reduzir redundancias de documentacao antiga.
-- Consolidar a experiencia premium do frontend.
+- Consolidar a experiencia do frontend.
 - Refinar a narrativa da area de investimentos e advisor.
 
 ## Licenca
 
-TODO.
+MIT.
