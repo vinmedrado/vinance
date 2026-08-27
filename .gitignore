@@ -1,9 +1,18 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
+**/*.pyc
 *$py.class
-*.so
-.Python
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -11,20 +20,47 @@ __pycache__/
 htmlcov/
 
 # Virtual environments
-.env
-.env.*
-!.env.example
-!.env.production.example
 .venv/
 venv/
 env/
 ENV/
 
-# Build artifacts
-build/
+# Node / frontend
+node_modules/
+frontend/node_modules/
 dist/
-*.egg-info/
-.eggs/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Logs / runtime
+logs/
+*.log
+celerybeat-schedule
+*.pid
+
+# Local databases / dumps / backups
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.bak
+*.backup
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Caches / temp files
+.cache/
+*.tmp
+*.temp
+*.swp
+*~
+~$*
+storage/**/*.tmp
+tmp_*.py
 
 # IDE / OS
 .vscode/
@@ -32,72 +68,15 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Logs and runtime
-logs/
-*.log
-celerybeat-schedule
-
-# Local databases and generated data
-*.db
-*.sqlite
-*.sqlite3
-data/*.db
-data/*.sqlite
-data/*.sqlite3
-mlruns/
-
-# Temporary files
-*.tmp
-*.bak
-*.swp
-~$*
-
-# Backups created by refactor process
+# Historical local refactor folders
 _backup_before_refactor/
-_archive_review/
-# FinanceOS local/private data
 _archive_review/secrets/
 _archive_review/local_data/
-data/financas.db
-*.pyc
-*.temp
-*~
 
-storage/**/*.tmp
-# Frontend caches/build outputs
-frontend/dist/
-frontend/.vite/
-frontend/tsconfig.tsbuildinfo
-frontend/node_modules/
-
-# Python/runtime caches
-**/__pycache__/
-**/*.pyc
-.cache/
-
-# Enterprise cleanup
-__pycache__/
-*.pyc
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-*.log
-*.db
-*.sqlite
-*.sqlite3
-.env
-.env.local
-.env.production
-!.env.example
-!.env.production.example
-frontend/tsconfig.tsbuildinfo
-frontend/dist/
-frontend/build/
-node_modules/
-data/
-mlruns/
-*.parquet
-*.csv
-*.joblib
-*.pkl
-*.ipynb_checkpoints
+# Fase 14 - local spreadsheet inputs are never versioned
+data/input/*
+!data/input/.gitkeep
+data/imports/*
+!data/imports/.gitkeep
+*.xlsm
+*.xlsx

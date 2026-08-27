@@ -33,9 +33,9 @@ def ctx(org="org-a", user="u1"):
 
 
 def test_conversational_memory_is_isolated_by_tenant():
-    ConversationalMemoryService.add_turn(organization_id="org-a", user_id="u1", question="posso investir?", answer="Sim, com limite seguro", intent="investment_capacity")
-    a = ConversationalMemoryService.get_summary(organization_id="org-a", user_id="u1")
-    b = ConversationalMemoryService.get_summary(organization_id="org-b", user_id="u1")
+    ConversationalMemoryService.add_turn(organization_id="org-isolation-a", user_id="u1", question="posso investir?", answer="Sim, com limite seguro", intent="investment_capacity")
+    a = ConversationalMemoryService.get_summary(organization_id="org-isolation-a", user_id="u1")
+    b = ConversationalMemoryService.get_summary(organization_id="org-isolation-b", user_id="u1")
     assert a["turns"] == 1
     assert b["turns"] == 0
     assert a["memory_hash"] != b["memory_hash"]

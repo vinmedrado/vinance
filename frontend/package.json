@@ -1,5 +1,5 @@
 {
-  "name": "financeos-erp-react-premium",
+  "name": "vinance-v2-frontend",
   "private": true,
   "version": "2.0.0",
   "type": "module",
@@ -7,26 +7,39 @@
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "tsc -b && vite build",
     "lint": "tsc -b --noEmit",
+    "typecheck": "npm run lint && npm run typecheck:tests",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json",
+    "test": "npm run test:frontend",
+    "test:frontend": "npm run test:investment-decision && npm run test:unit",
+    "test:investment-decision": "node --test tests/investmentDecision.test.mjs",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:e2e": "playwright test",
     "preview": "vite preview --host 0.0.0.0 --port 3000"
   },
   "dependencies": {
-    "@sentry/react": "latest",
-    "@tanstack/react-query": "latest",
-    "axios": "latest",
-    "lucide-react": "latest",
-    "posthog-js": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "react-is": "^19.2.6",
-    "react-router-dom": "latest",
-    "recharts": "latest"
+    "@sentry/react": "^10.63.0",
+    "@tanstack/react-query": "^5.40.0",
+    "axios": "^1.20.0",
+    "lucide-react": "^0.400.0",
+    "posthog-js": "^1.396.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.2",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@vitejs/plugin-react": "^6.0.1",
-    "eslint": "latest",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.13"
+    "@playwright/test": "^1.62.1",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^6.1.0",
+    "eslint": "^9.5.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.5.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   }
 }

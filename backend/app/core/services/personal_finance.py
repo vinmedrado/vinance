@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from db import pg_compat as dbcompat
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -8,13 +8,19 @@ BASE_DIR = Path(__file__).resolve().parents[4]
 CORE_ROOT_DIR = BASE_DIR / "data" / "POSTGRES_RUNTIME_DISABLED"
 
 
-def _connect() -> dbcompat.Connection:
-    conn = dbcompat.connect(CORE_ROOT_DIR)
-    conn.row_factory = dbcompat.Row
+def _connect() -> sqlite3.Connection:
+    """Open the optional legacy core database in read-only mode.
+
+    This integration reads SQLite-specific metadata (``sqlite_master`` and
+    ``PRAGMA``), so routing it through the PostgreSQL compatibility layer was
+    both incorrect and coupled collection to a removed synchronous session.
+    """
+    conn = sqlite3.connect(f"file:{CORE_ROOT_DIR}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
     return conn
 
 
-def _table_exists(conn: dbcompat.Connection, table: str) -> bool:
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
     return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
 
 

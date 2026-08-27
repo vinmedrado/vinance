@@ -1,112 +1,75 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.database import init_db
-from backend.app.core.routers import core
-from backend.app.financing.routers import financing
-from backend.app.financial.routers import financial
-from backend.app.market.routers import market, investments
-from backend.app.investment.routers import investment
-from backend.app.api_operational.router import router as operational_api_router
-from backend.app.erp.router import router as erp_router
-
-from backend.app.api_operational.db import connect as operational_db_connect
-from backend.app.api_operational.indexes import ensure_indexes
-from backend.app.core.hardening import install_hardening
-from backend.app.core.observability import configure_logging
-from backend.app.core.settings import get_settings
-from backend.app.core.sentry import init_sentry
-from backend.app.analytics.router import router as analytics_router
-from backend.app.demo.router import router as demo_router
-from backend.app.enterprise.router import router as enterprise_router
+from backend.app.api.v1.router import api_router
+from backend.app.auth.router import router as auth_router
 from backend.app.intelligence.router import router as intelligence_router
-from backend.app.quant_intelligence.router import router as quant_router
+from backend.app.core.config import settings
+from backend.app.core.database import close_database, validate_database_connection
+from backend.app.core.errors import register_exception_handlers
+from backend.app.core.logging import configure_logging, get_logger
+from backend.app.core.redis import close_redis, validate_redis_connection
 
-settings = get_settings()
-settings.validate_for_runtime()
 configure_logging()
-init_sentry()
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting %s %s", settings.app_name, settings.app_version)
+    yield
+    logger.info("Shutting down %s", settings.app_name)
+    await close_redis()
+    await close_database()
+
 
 app = FastAPI(
-    title="FinanceOS Unified API",
+    title=settings.app_name,
     version=settings.app_version,
-    docs_url=None if settings.is_production else "/docs",
-    redoc_url=None if settings.is_production else "/redoc",
+    debug=settings.debug,
+    lifespan=lifespan,
 )
-install_hardening(app)
+register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Decision-ID", "X-Correlation-ID"],
 )
 
-@app.on_event("startup")
-def on_startup() -> None:
-    init_db()
-    try:
-        from db.database import SessionLocal
-        with SessionLocal() as db:
-            ensure_auth_schema(db)
-    except Exception:
-        pass
-    try:
-        with operational_db_connect() as conn:
-            ensure_indexes(conn)
-    except Exception:
-        pass
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+    return response
+
 
 @app.get("/health")
-def health():
-    return {"status": "ok", "environment": settings.environment, "version": app.version}
+async def health(response: Response) -> dict[str, str]:
+    database_ok = await validate_database_connection()
+    redis_ok = await validate_redis_connection()
+    status = "healthy" if database_ok and redis_ok else "unhealthy"
+    if status == "unhealthy":
+        response.status_code = 503
+    return {
+        "status": status,
+        "api": "ok",
+        "database": "ok" if database_ok else "error",
+        "redis": "ok" if redis_ok else "error",
+    }
 
-@app.get("/ready")
-def ready():
-    return {"status": "ready", "checks": {"api": "ok"}, "environment": settings.environment}
 
-@app.get("/live")
-def live():
-    return {"status": "live", "service": settings.app_name}
-
-@app.get("/metrics")
-def metrics():
-    return {"service": settings.app_name, "environment": settings.environment, "status": "ok"}
-
-app.include_router(core.router)
-app.include_router(financing.router)
-app.include_router(financial.router)
-app.include_router(market.router)
-app.include_router(investments.router)
-app.include_router(investment.router)
-
-# PATCH 11 - Operational API
-app.include_router(operational_api_router)
-
-from backend.app.auth.router import router as auth_router
-from backend.app.auth.schema import ensure_auth_schema
+app.include_router(api_router, prefix="/api/v1")
+app.include_router(intelligence_router, prefix="/api")
 app.include_router(auth_router)
-app.include_router(auth_router, prefix="/api")
-app.include_router(erp_router)
-app.include_router(analytics_router)
-app.include_router(analytics_router, prefix="/api")
-app.include_router(demo_router)
-app.include_router(demo_router, prefix="/api")
-app.include_router(enterprise_router)
-app.include_router(intelligence_router)
-app.include_router(quant_router)
-app.include_router(quant_router, prefix="/api")
-
-from backend.app.billing.stripe_router import router as billing_router
-app.include_router(billing_router)
-app.include_router(billing_router, prefix="/api")
-
-
-from services.production_health_service import run_full_healthcheck
-
-@app.get("/health/full")
-def health_full():
-    return run_full_healthcheck()

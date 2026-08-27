@@ -5,28 +5,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from backend.app.financial.health import classify_financial_health as _classify
 from backend.app.financial.models import (
-    FinancialDecisionHistory,
     FinancialGoal,
     FinancialMonthlyReport,
     FinancialUserProfile,
     MonthlyFinancialTarget,
 )
 from backend.app.financial.services.financial_analysis import get_financial_summary
-
-
-def _classify(commitment: float | None, reserve_months: float, balance: float, income: float) -> tuple[str, str]:
-    balance_ratio = balance / income if income > 0 else 0
-    if income <= 0:
-        return "arriscado", "Cadastre sua renda mensal para o FinanceOS calcular sua saúde financeira real."
-    if balance < 0 or (commitment is not None and commitment > 0.75):
-        return "arriscado", "Seu orçamento está pressionado: despesas consomem grande parte da renda e reduzem sua margem de segurança."
-    if reserve_months >= 6 and balance_ratio >= 0.20 and (commitment is None or commitment <= 0.60):
-        return "seguro", "Sua base financeira está saudável: existe sobra mensal e reserva próxima do nível recomendado."
-    if reserve_months >= 3 and balance_ratio > 0:
-        return "moderado", "Você tem alguma margem, mas ainda precisa fortalecer reserva e controlar novas parcelas."
-    return "arriscado", "A principal fragilidade está na baixa reserva de emergência e/ou pouca sobra mensal."
-
 
 def ensure_profile(db: Session, user_id: int) -> FinancialUserProfile:
     profile = db.query(FinancialUserProfile).filter(FinancialUserProfile.user_id == user_id).one_or_none()

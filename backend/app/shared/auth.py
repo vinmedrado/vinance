@@ -5,13 +5,7 @@ from typing import Any
 
 from fastapi import Depends, HTTPException, status
 
-try:
-    from backend.app.auth import get_current_user  # type: ignore
-except ImportError as exc:  # pragma: no cover
-    raise RuntimeError(
-        "Não foi possível importar app.auth.get_current_user. "
-        "Aponte app/shared/auth.py para a dependência JWT real do FinanceOS."
-    ) from exc
+from backend.app.auth.dependencies import get_current_user
 
 
 @dataclass(frozen=True)
