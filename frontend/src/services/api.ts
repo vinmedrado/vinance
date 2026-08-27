@@ -1,430 +1,203 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
-const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-const baseURL = import.meta.env.VITE_API_URL || '/api';
+const RAW_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+export const API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
+const API_PREFIX = import.meta.env.VITE_API_PREFIX ?? '/api/v1';
 
-export const api = axios.create({ baseURL });
+const ACCESS_TOKEN_KEY = 'vinance_access_token';
+const USER_KEY = 'vinance_user';
+const SESSION_CHANGE_EVENT = 'vinance:session-change';
 
-const demoUser = {
-  id: 'demo-user',
-  email: 'demo@vinance.local',
-  full_name: 'Demo Vinance',
-  organization_id: 'demo-org',
+export type SessionChangeReason = 'login' | 'logout' | 'expired' | 'invalid' | 'storage';
+
+let lastSessionChangeReason: SessionChangeReason | null = null;
+
+export type ApiErrorShape = {
+  status: number;
+  message: string;
+  code?: string;
+  correlationId?: string;
 };
 
-const demoLimits = {
-  needs: 1000,
-  wants: 500,
-  debts: 100,
-  emergency_reserve: 100,
-  investments: 300,
-};
+export class ApiRequestError extends Error implements ApiErrorShape {
+  status: number;
+  code?: string;
+  correlationId?: string;
 
-const demoActualBudget = {
-  expenses: 700,
-  needs: 700,
-  wants: 180,
-  debts: 400,
-  emergency_reserve: 100,
-  investments: 300,
-};
-
-const demoBudget = {
-  monthly_income: 2000,
-  monthly_expenses: 700,
-  monthly_balance: 1300,
-  available_to_invest: 360,
-  limits: demoLimits,
-  actual: demoActualBudget,
-  suggested_limits: demoLimits,
-  recommended_limits: demoLimits,
-  allocation_limits: demoLimits,
-  suggested: demoLimits,
-  recommended: demoLimits,
-  plan: demoLimits,
-  difference: {
-    needs: 300,
-    wants: 320,
-    debts: -300,
-    emergency_reserve: 0,
-    investments: 60,
-  },
-  allocation_plan: {
-    method: '50_30_20',
-    method_label: '50/30/20 adaptativo',
-    limits: demoLimits,
-    safe_to_invest: 360,
-  },
-};
-
-const demoDashboard = {
-  metrics: {
-    total_income: 2000,
-    total_expenses: 700,
-    monthly_balance: 1300,
-    available_to_invest: 360,
-    invested_pct: 18,
-    realized_investment: 360,
-    financial_score: 82,
-  },
-  kpis: {
-    monthly_income: 2000,
-    monthly_expenses: 700,
-    monthly_balance: 1300,
-    investment_capacity: 360,
-    health_score: 82,
-  },
-  summary: {
-    monthly_income: 2000,
-    monthly_expenses: 700,
-    monthly_balance: 1300,
-    investment_capacity: 360,
-    health_score: 82,
-  },
-  budget: demoBudget,
-  limits: demoLimits,
-  actual: demoActualBudget,
-  suggested_limits: demoLimits,
-  intelligent_allocation: {
-    decision: 'Você possui margem para investir mantendo equilíbrio financeiro.',
-    can_invest: true,
-    investable_amount: 360,
-    method: {
-      name: '50/30/20 adaptativo',
-      reason: 'Modelo ajustado ao perfil financeiro.',
-      needs_pct: 50,
-      wants_pct: 30,
-      investments_pct: 20,
-    },
-    risk_profile: 'moderado',
-    emergency_reserve_target: 6000,
-    emergency_reserve_gap: 4700,
-    next_action: 'Continue construindo reserva e mantendo aportes.',
-    expense_ratio_pct: 35,
-    markets: [
-      { name: 'Tesouro Selic', market: 'Renda fixa', risk: 'baixo', reason: 'Liquidez e segurança', allocation_pct: 60, amount: 216 },
-      { name: 'ETF Global', market: 'Renda variável', risk: 'moderado', reason: 'Crescimento de longo prazo', allocation_pct: 40, amount: 144 },
-    ],
-    advisor_notes: ['Modo demonstração', 'Dados simulados', 'Portfolio preview'],
-  },
-  recommendation: {
-    title: 'Plano financeiro recomendado',
-    message: 'O Vinance identificou margem saudável para evolução financeira.',
-    amount: 360,
-  },
-  charts: {
-    evolution: [
-      { month: 'Jan', receitas: 1800, despesas: 900 },
-      { month: 'Fev', receitas: 1900, despesas: 850 },
-      { month: 'Mar', receitas: 2000, despesas: 780 },
-      { month: 'Abr', receitas: 2000, despesas: 730 },
-      { month: 'Mai', receitas: 2000, despesas: 700 },
-    ],
-    by_category: [
-      { name: 'Mercado', value: 300 },
-      { name: 'Cartão', value: 250 },
-      { name: 'Transporte', value: 150 },
-    ],
-  },
-  alerts: [
-    { title: 'Reserva em evolução', message: 'Continue fortalecendo sua reserva financeira.', severity: 'info' },
-    { title: 'Boa margem mensal', message: 'Seu fluxo financeiro demonstra estabilidade.', severity: 'success' },
-  ],
-};
-
-const demoAdvisor = {
-  year: 2026,
-  month: 5,
-  health: {
-    health_score: 82,
-    risk_level: 'baixo',
-    financial_phase: 'construção patrimonial',
-    evolution_trend: 'estável',
-    metrics: { expense_ratio_pct: 35, debt_ratio_pct: 20, reserve_months: 0, savings_rate_pct: 65 },
-    input_summary: { monthly_income: 2000, total_expenses: 700, debt_payments: 400, overdue_bills: 0, emergency_reserve: 0, investment_capacity: 360 },
-  },
-  memory: {
-    memory_strength: 'boa',
-    patterns: ['rotina financeira estável', 'consistência de aportes'],
-    critical_months: [],
-    insights: ['Sua rotina está relativamente estável; o próximo ganho vem de consistência e pequenos ajustes.'],
-  },
-  behavioral_intelligence: {
-    behavioral_score: 78,
-    stability_score: 86,
-    discipline_score: 74,
-    risk_behavior_score: 69,
-    signals: ['consistência de investimentos'],
-  },
-  coaching: {
-    messages: [
-      'Você está na fase de construção patrimonial. O Vinance vai acompanhar sua evolução e ajustar o plano conforme seus dados melhorarem.',
-      'Seu fluxo financeiro mostra espaço para planejamento e fortalecimento de reserva.',
-    ],
-    tips: ['Automatize parte do aporte para manter consistência.'],
-    alerts: [{ severity: 'info', message: 'Dados simulados para apresentação de portfólio.' }],
-  },
-  dynamic_goals: {
-    goals: [],
-    available_goal_capacity: 360,
-    behavior_adjustment: 1,
-    allocation_method: '50_30_20',
-    allocation_method_label: '50/30/20',
-    suggested_limits: demoLimits,
-    allocation_plan: {
-      method: '50_30_20',
-      method_label: '50/30/20',
-      limits: demoLimits,
-      safe_to_invest: 360,
-      income: 2000,
-      expenses: 700,
-      surplus: 1300,
-      rationale: 'Seu comprometimento está saudável para equilibrar gastos, reserva e investimentos.',
-      action_plan: ['Manter gastos essenciais sob controle.', 'Separar parte da sobra para reserva.', 'Direcionar aporte mensal para investimentos.'],
-      warnings: [],
-      investment_gate: { status: 'enabled', message: 'Você possui margem segura para investir aproximadamente R$ 360,00 neste mês.', safe_amount: 360 },
-    },
-  },
-  forecast: {
-    months: 24,
-    scenarios: [
-      { name: 'pessimista', projected_net_worth: 10560.36 },
-      { name: 'base', projected_net_worth: 15467.96 },
-      { name: 'otimista', projected_net_worth: 20338.96 },
-      { name: 'conservador', projected_net_worth: 15066.22 },
-      { name: 'moderado', projected_net_worth: 16285.09 },
-      { name: 'agressivo', projected_net_worth: 19720.91 },
-    ],
-    plain_language_summary: 'A projeção mostra como renda, gastos e constância de aporte podem afetar sua evolução financeira.',
-  },
-  decision_advisor: {
-    decision_type: 'debt_vs_invest',
-    title: 'Quitar dívida ou investir?',
-    recommendation: 'Mantenha reserva e aporte com controle de risco.',
-    reasons: ['Existe margem positiva no mês demonstrativo.'],
-    next_steps: ['Manter orçamento mensal atualizado.', 'Priorizar reserva antes de aumentar risco.'],
-    confidence: 0.86,
-  },
-  retention: {
-    milestones: [{ type: 'consistency', title: 'Consistência de aportes', description: 'Você manteve margem para aportes no cenário demonstrativo.' }],
-    progress_summary: 'Sua evolução começou a aparecer; mantenha o plano por mais alguns ciclos.',
-    recurring_insights: ['Pequenos aportes recorrentes fortalecem metas de médio e longo prazo.'],
-  },
-  timeline: {
-    events: [
-      { period: '05/2026', type: 'model_change', title: 'Modelo financeiro ajustado', description: 'O plano passou para 50/30/20 adaptativo para acompanhar sua realidade.' },
-      { period: '05/2026', type: 'investment_capacity', title: 'Margem para investir', description: 'Foi identificada uma sobra segura para aporte mensal.' },
-    ],
-    summary: 'Linha do tempo da sua jornada financeira pessoal.',
-  },
-  advisor_main_message: 'Você está na fase de construção patrimonial. O Vinance vai acompanhar sua evolução e ajustar o plano conforme seus dados melhorarem.',
-  next_best_action: 'Monte sua reserva e mantenha aportes consistentes.',
-  disclaimer: 'Demo visual com dados simulados para apresentação de portfólio. Isso não constitui recomendação financeira.',
-};
-
-const demoIncomes = [
-  { id: 1, description: 'Salário', amount: 2000, received_at: '2026-05-15', status: 'received' },
-];
-
-const demoExpenses = [
-  { id: 1, description: 'Mercado', amount: 300, due_date: '2026-05-18', status: 'paid' },
-  { id: 2, description: 'Cartão', amount: 400, due_date: '2026-05-20', status: 'pending' },
-];
-
-const demoAccounts = [
-  { id: 1, name: 'Conta Principal', type: 'checking', institution: 'Nubank', balance: 1300, status: 'active' },
-];
-
-const demoCards = [
-  { id: 1, name: 'Cartão Casas Bahia', brand: 'Visa', limit_amount: 2500, closing_day: 10, due_day: 20, is_active: true, status: 'active' },
-];
-
-const demoResponses: Record<string, any> = {
-  '/dashboard': demoDashboard,
-  '/api/dashboard': demoDashboard,
-  '/budget': demoBudget,
-  '/api/budget': demoBudget,
-  '/incomes': demoIncomes,
-  '/api/incomes': demoIncomes,
-  '/expenses': demoExpenses,
-  '/api/expenses': demoExpenses,
-  '/accounts': demoAccounts,
-  '/api/accounts': demoAccounts,
-  '/cards': demoCards,
-  '/api/cards': demoCards,
-  '/investments': [],
-  '/api/investments': [],
-  '/goals': [],
-  '/api/goals': [],
-  '/alerts': [{ id: 1, title: 'Reserva em construção', message: 'Continue fortalecendo sua reserva antes de aumentar risco.', status: 'info' }],
-  '/api/alerts': [{ id: 1, title: 'Reserva em construção', message: 'Continue fortalecendo sua reserva antes de aumentar risco.', status: 'info' }],
-  '/portfolio': { positions: [] },
-  '/api/portfolio': { positions: [] },
-  '/intelligence/ai-financial-advisor': demoAdvisor,
-  '/api/intelligence/ai-financial-advisor': demoAdvisor,
-  '/quant/runs': [],
-  '/api/quant/runs': [],
-  '/quant/health': { status: 'ok', mode: 'demo' },
-  '/api/quant/health': { status: 'ok', mode: 'demo' },
-  '/quant/markets': [],
-  '/api/quant/markets': [],
-};
-
-function persistSession(data: any) {
-  if (data.access_token) localStorage.setItem('financeos_token', data.access_token);
-  if (data.refresh_token) localStorage.setItem('financeos_refresh_token', data.refresh_token);
-  if (data.user) localStorage.setItem('financeos_user', JSON.stringify(data.user));
-  return data;
+  constructor(status: number, message: string, code?: string, correlationId?: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = code;
+    this.correlationId = correlationId;
+  }
 }
 
-function persistDemoMutation(config: any) {
-  const method = String(config.method || '').toLowerCase();
-  const rawUrl = String(config.url || '');
-  const cleanUrl = rawUrl.replace(/^\/api/, '');
-  const normalizedUrl = `/api${cleanUrl}`;
+function emitSessionChange(reason: SessionChangeReason) {
+  lastSessionChangeReason = reason;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SESSION_CHANGE_EVENT, { detail: { reason } }));
+  }
+}
 
-  if (!DEMO_MODE || !['post', 'put', 'patch', 'delete'].includes(method)) return null;
-  if (method === 'delete') return { ok: true };
+function requestBearerToken(error: AxiosError) {
+  const authorization = error.config?.headers?.Authorization;
+  if (typeof authorization !== 'string') return null;
+  return authorization.replace(/^Bearer\s+/i, '').trim() || null;
+}
 
-  let body: any = {};
-  try {
-    body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {};
-  } catch {
-    body = {};
+function errorDetail(error: AxiosError<{ detail?: string | Array<{ msg?: string }>; error?: string }>) {
+  const detail = error.response?.data?.detail;
+  if (Array.isArray(detail)) return detail.map((item) => item.msg).filter(Boolean).join(' | ');
+  if (typeof detail === 'string') return detail;
+  return typeof error.response?.data?.error === 'string' ? error.response.data.error : '';
+}
+
+function correlationId(error: AxiosError) {
+  const value = error.response?.headers?.['x-correlation-id'] ?? error.config?.headers?.['X-Correlation-ID'];
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)
+    ? normalized
+    : undefined;
+}
+
+export function normalizeApiError(error: unknown): ApiRequestError {
+  if (error instanceof ApiRequestError) return error;
+  if (!axios.isAxiosError(error)) {
+    return new ApiRequestError(0, error instanceof Error ? error.message : 'Falha inesperada na integração.', 'UNKNOWN');
   }
 
-  const created = { id: Date.now(), status: 'active', ...body };
+  const typedError = error as AxiosError<{ detail?: string | Array<{ msg?: string }>; error?: string }>;
+  const status = typedError.response?.status ?? 0;
+  const canceled = axios.isCancel(typedError) || typedError.code === 'ERR_CANCELED';
+  const timedOut = typedError.code === 'ECONNABORTED' || typedError.code === 'ETIMEDOUT';
+  const detail = errorDetail(typedError);
+  const message = canceled
+    ? 'A solicitação foi cancelada.'
+    : timedOut
+    ? 'A solicitação excedeu o tempo limite. Tente novamente.'
+    : status === 0
+      ? 'API offline ou indisponível no momento.'
+      : detail || typedError.message || 'Não foi possível se comunicar com a API.';
+  const code = canceled ? 'REQUEST_CANCELED' : timedOut ? 'TIMEOUT' : status === 401 ? 'AUTH_EXPIRED' : status === 0 ? 'NETWORK_ERROR' : undefined;
 
-  if (normalizedUrl.includes('/incomes')) return created;
-  if (normalizedUrl.includes('/expenses')) return created;
-  if (normalizedUrl.includes('/accounts')) return created;
-  if (normalizedUrl.includes('/cards')) return created;
-  if (normalizedUrl.includes('/goals')) return created;
-  if (normalizedUrl.includes('/investments')) return created;
-
-  return { ok: true };
+  return new ApiRequestError(status, message, code, correlationId(typedError));
 }
 
-export async function login(email: string, password: string) {
-  if (DEMO_MODE) {
-    return persistSession({
-      access_token: 'demo-token',
-      refresh_token: 'demo-refresh-token',
-      user: { ...demoUser, email: email || demoUser.email },
-    });
-  }
-
-  const { data } = await api.post('/auth/login', { email, password });
-  return persistSession(data);
-}
-
-export async function register(input: { email: string; password: string; full_name?: string; organization_name?: string }) {
-  if (DEMO_MODE) {
-    return persistSession({
-      access_token: 'demo-token',
-      refresh_token: 'demo-refresh-token',
-      user: {
-        ...demoUser,
-        email: input.email,
-        full_name: input.full_name || 'Usuário Demo',
-      },
-    });
-  }
-
-  const { data } = await api.post('/auth/register', input);
-  return persistSession(data);
-}
-
-export async function me() {
-  if (DEMO_MODE) return demoUser;
-  const { data } = await api.get('/auth/me');
-  return data;
-}
-
-export async function logoutRemote() {
-  if (!DEMO_MODE) {
-    try {
-      await api.post('/auth/logout');
-    } catch {}
-  }
-  logout();
-}
-
-export function logout() {
-  localStorage.removeItem('financeos_token');
-  localStorage.removeItem('financeos_refresh_token');
-  localStorage.removeItem('financeos_user');
-}
-
-async function refreshToken() {
-  if (DEMO_MODE) return 'demo-token';
-
-  const refresh_token = localStorage.getItem('financeos_refresh_token');
-  if (!refresh_token) return null;
-
-  const { data } = await axios.post(`${baseURL}/auth/refresh`, { refresh_token });
-  persistSession(data);
-
-  return data.access_token as string;
-}
-
-let refreshing: Promise<string | null> | null = null;
+export const api = axios.create({
+  baseURL: `${API_BASE_URL}${API_PREFIX}`,
+  timeout: 15000,
+  headers: { 'Content-Type': 'application/json' },
+});
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('financeos_token');
+  const token = getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
-
-  if (!DEMO_MODE) return config;
-
-  const rawUrl = String(config.url || '');
-  const cleanUrl = rawUrl.replace(/^\/api/, '');
-  const normalizedUrl = `/api${cleanUrl}`;
-
-  const mutationData = persistDemoMutation(config);
-  if (mutationData !== null) {
-    config.adapter = async () => ({ data: mutationData, status: 200, statusText: 'OK', headers: {}, config });
-    return config;
-  }
-
-  const data = demoResponses[rawUrl] ?? demoResponses[normalizedUrl] ?? demoResponses[cleanUrl];
-
-  console.log('[DEMO API]', { method: config.method, rawUrl, cleanUrl, normalizedUrl, found: data !== undefined });
-
-  if (data !== undefined) {
-    config.adapter = async () => ({ data, status: 200, statusText: 'OK', headers: {}, config });
-  }
-
   return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    if (DEMO_MODE) return Promise.reject(error);
+  (error: AxiosError<{ detail?: string | Array<{ msg?: string }>; error?: string }>) => {
+    const normalized = normalizeApiError(error);
 
-    const original = error.config || {};
-    const status = error.response?.status;
-
-    const isAuthCall =
-      String(original.url || '').includes('/auth/login') ||
-      String(original.url || '').includes('/auth/register') ||
-      String(original.url || '').includes('/auth/refresh');
-
-    if (status === 401 && !original._retry && !isAuthCall) {
-      original._retry = true;
-      refreshing = refreshing || refreshToken().finally(() => { refreshing = null; });
-      const token = await refreshing;
-
-      if (token) {
-        original.headers = original.headers || {};
-        original.headers.Authorization = `Bearer ${token}`;
-        return api(original);
-      }
-
-      logout();
-      window.location.href = '/login';
+    if (normalized.status === 401) {
+      const requestToken = requestBearerToken(error);
+      const currentToken = getAccessToken();
+      if (requestToken && requestToken === currentToken) clearSession('invalid');
     }
-
-    return Promise.reject(error);
+    return Promise.reject(normalized);
   },
 );
+
+export function getAccessToken() {
+  return typeof window === 'undefined' ? null : window.localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function setSession(token: string, user: unknown) {
+  window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+  emitSessionChange('login');
+}
+
+export function getStoredUser<T>() {
+  if (typeof window === 'undefined') return null;
+  const value = window.localStorage.getItem(USER_KEY);
+  if (!value) return null;
+  try { return JSON.parse(value) as T; } catch { return null; }
+}
+
+export function clearSession(reason: SessionChangeReason = 'logout') {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+  window.localStorage.removeItem(USER_KEY);
+  emitSessionChange(reason);
+}
+
+export function subscribeToSession(onStoreChange: () => void) {
+  if (typeof window === 'undefined') return () => undefined;
+
+  const handleSessionChange = (event: Event) => {
+    const reason = (event as CustomEvent<{ reason?: SessionChangeReason }>).detail?.reason;
+    if (reason) lastSessionChangeReason = reason;
+    onStoreChange();
+  };
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key !== ACCESS_TOKEN_KEY && event.key !== USER_KEY) return;
+    lastSessionChangeReason = 'storage';
+    onStoreChange();
+  };
+
+  window.addEventListener(SESSION_CHANGE_EVENT, handleSessionChange);
+  window.addEventListener('storage', handleStorage);
+  return () => {
+    window.removeEventListener(SESSION_CHANGE_EVENT, handleSessionChange);
+    window.removeEventListener('storage', handleStorage);
+  };
+}
+
+export function getLastSessionChangeReason() {
+  return lastSessionChangeReason;
+}
+
+function decodeTokenPayload(token: string) {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payload.length / 4) * 4, '=');
+    return JSON.parse(atob(normalized)) as { exp?: unknown };
+  } catch {
+    return null;
+  }
+}
+
+export function getAccessTokenExpiration(token = getAccessToken()) {
+  if (!token) return null;
+  const expiration = decodeTokenPayload(token)?.exp;
+  return typeof expiration === 'number' && Number.isFinite(expiration) ? expiration * 1000 : null;
+}
+
+export function isAccessTokenExpired(token = getAccessToken(), now = Date.now()) {
+  const expiration = getAccessTokenExpiration(token);
+  return expiration !== null && expiration <= now;
+}
+
+export function isAuthenticated() {
+  const token = getAccessToken();
+  return Boolean(token && !isAccessTokenExpired(token));
+}
+
+// Legacy compatibility helpers kept for archived pages still compiled by TypeScript.
+export async function login(email: string, password: string) {
+  const { data } = await api.post('/auth/login', { email, password });
+  const token = data?.access_token ?? data?.token;
+  if (token) setSession(token, data?.user ?? { email });
+  return data;
+}
+
+export async function register(payload: { email: string; password: string; full_name?: string; organization_name?: string }) {
+  const { data } = await api.post('/auth/register', payload);
+  const token = data?.access_token ?? data?.token;
+  if (token) setSession(token, data?.user ?? { email: payload.email });
+  return data;
+}
