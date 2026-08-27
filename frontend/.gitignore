@@ -1,0 +1,15 @@
+# Frontend local artifacts
+node_modules/
+dist/
+build/
+.vite/
+.cache/
+coverage/
+test-results/
+playwright-report/
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+*.log
+.env.local
+.env.production
+.DS_Store

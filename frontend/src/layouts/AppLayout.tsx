@@ -1,124 +1,57 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Brain, BriefcaseBusiness, ChartNoAxesCombined, CreditCard, Gauge, Goal, LayoutDashboard, LogOut, ReceiptText, Settings, ShieldCheck, Sparkles, WalletCards, FlaskConical, Search, Bell, UserRound, ChevronDown, Landmark, PiggyBank } from 'lucide-react';
-import { logout } from '../services/api';
-import vinanceLogo from '../assets/brand/vinance-logo-dark.png';
+import { BarChart3, Brain, Landmark, LayoutDashboard, LogOut, MessageCircle, ShieldCheck, WalletCards, TrendingUp } from 'lucide-react';
+import { Button } from '../components';
+import { useLogout, useCurrentUser } from '../features/auth/hooks/useAuth';
+import { useThemeMode } from '../hooks/useThemeMode';
 
-const groups = [
-  { title: 'Financeiro', items: [['Dashboard','/',LayoutDashboard],['Receitas','/receitas',WalletCards],['Despesas','/despesas',ReceiptText],['Contas','/contas',BriefcaseBusiness],['Cartões','/cartoes',CreditCard],['Orçamento','/orcamento',Gauge],['Meu Plano','/plano-financeiro',Sparkles],['Advisor','/advisor',Brain],['Metas','/metas',Goal],['Diagnóstico','/diagnostico',Brain]] },
-  { title: 'Investimentos', items: [['Investimentos','/investimentos',ChartNoAxesCombined],['Quant Lab','/quant-lab',FlaskConical],['Carteira','/carteira',WalletCards],['Alertas','/alertas',ShieldCheck]] },
-  { title: 'Conta', items: [['Planos','/planos',Sparkles],['Configurações','/configuracoes',Settings]] },
+const navItems = [
+  { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { label: 'Financeiro', path: '/financial', icon: WalletCards },
+  { label: 'Mercado', path: '/market', icon: BarChart3 },
+  { label: 'Inteligência', path: '/intelligence', icon: Brain },
+  { label: 'Investir', path: '/investir', icon: TrendingUp },
+  { label: 'Advisor IA', path: '/advisor', icon: MessageCircle },
 ];
 
-const railItems = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/receitas', icon: WalletCards, label: 'Receitas' },
-  { path: '/despesas', icon: ReceiptText, label: 'Despesas' },
-  { path: '/orcamento', icon: Gauge, label: 'Orçamento' },
-  { path: '/quant-lab', icon: FlaskConical, label: 'Quant Lab' },
-  { path: '/advisor', icon: Brain, label: 'Advisor' },
-  { path: '/configuracoes', icon: Settings, label: 'Configurações' },
-];
-
-export default function AppLayout() {
+export function AppLayout() {
   const navigate = useNavigate();
+  const signOut = useLogout();
+  const { data: user } = useCurrentUser();
+  const { mode, setMode } = useThemeMode();
+
+  async function handleLogout() {
+    await signOut();
+    navigate('/login', { replace: true });
+  }
+
   return (
-    <div className="fintech-shell">
-      <aside className="icon-rail" aria-label="Navegação rápida">
-        <div className="rail-logo"><img src={vinanceLogo} alt="Vinance" /></div>
-        <div className="rail-nav">
-          {railItems.map(({ path, icon: Icon, label }) => (
-            <NavLink key={path} to={path} end={path === '/'} title={label} className={({ isActive }) => isActive ? 'active' : ''}>
-              <Icon size={19} />
-            </NavLink>
-          ))}
+    <div className="vn-shell">
+      <aside className="vn-sidebar">
+        <div className="vn-brand" aria-label="Vinance">
+          <div className="vn-brand__mark"><Landmark size={22} /></div>
+          <div><strong>Vinance</strong><span>Inteligência financeira brasileira</span></div>
         </div>
-        <button className="rail-action" title="Sair" onClick={() => { logout(); navigate('/login'); }}><LogOut size={18} /></button>
+        <nav className="vn-nav" aria-label="Navegação principal">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return <NavLink key={item.path} to={item.path} className={({ isActive }) => isActive ? 'active' : ''}><Icon size={18} /><span>{item.label}</span></NavLink>;
+          })}
+        </nav>
+        <div className="vn-sidebar__note">
+          <ShieldCheck size={18} />
+          <p>Base educacional. Sem promessa de retorno e sem recomendação definitiva de compra.</p>
+        </div>
       </aside>
-
-      <aside className="sidebar app-panel-sidebar">
-        <div className="brand compact-brand">
-          <img className="brand-logo" src={vinanceLogo} alt="Vinance" />
-          <div>
-            <strong>Vinance</strong>
-            <span>Capital Intelligence</span>
-          </div>
-        </div>
-
-        <div className="finance-score-card">
-          <span>Centro financeiro</span>
-          <strong>Operação ativa</strong>
-          <small>Caixa, despesas, orçamento e alocação conectados.</small>
-        </div>
-
-        {groups.map((g) => (
-          <div className="nav-group" key={g.title}>
-            <p>{g.title}</p>
-            {g.items.map(([label, path, Icon]: any) => (
-              <NavLink key={path} to={path} end={path === '/'} className={({ isActive }) => isActive ? 'active' : ''}>
-                <Icon size={18} />
-                <span>{label}</span>
-              </NavLink>
-            ))}
-          </div>
-        ))}
-      </aside>
-
-      <section className="workspace">
-        <header className="topbar">
-          <div className="topbar-search"><Search size={17} /><span>Buscar receita, despesa, ativo ou decisão...</span></div>
-          <div className="topbar-actions">
-            <button
-              className="topbar-icon magic-hover"
-              title="Notificações"
-              onClick={() => {
-                if (import.meta.env.VITE_DEMO_MODE === 'true') {
-                  alert('Central de notificações premium em desenvolvimento.');
-                  return;
-                }
-
-                navigate('/alertas');
-              }}
-            >
-              <Bell size={17} />
-            </button>
-
-            <button
-              className="topbar-icon magic-hover"
-              title="Instituições financeiras"
-              onClick={() => {
-                if (import.meta.env.VITE_DEMO_MODE === 'true') {
-                  alert('Integrações bancárias premium em desenvolvimento.');
-                  return;
-                }
-
-                navigate('/contas');
-              }}
-            >
-              <Landmark size={17} />
-            </button>
-            <button
-              type="button"
-              className="profile-chip magic-hover"
-              title="Sair"
-              onClick={() => {
-                logout();
-                navigate('/login');
-              }}
-            >
-  <UserRound size={17} />
-  <span>Sair</span>
-  <LogOut size={15} />
-</button>
+      <main className="vn-main">
+        <header className="vn-topbar">
+          <div><span className="vn-kicker">Vinance v2</span><strong>{user?.full_name || user?.email || 'Sessão autenticada'}</strong></div>
+          <div className="vn-topbar__actions">
+            <Button variant="ghost" onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}>{mode === 'dark' ? 'Tema claro' : 'Tema escuro'}</Button>
+            <Button variant="secondary" onClick={handleLogout}><LogOut size={16} /> Sair</Button>
           </div>
         </header>
-        <main className="content">
-          <div className="workspace-ribbon">
-            <span><PiggyBank size={16}/> Sistema Financeiro Inteligente</span>
-            <small>Receita → Despesa → Capital investível → Alocação recomendada</small>
-          </div>
-          <Outlet />
-        </main>
-      </section>
+        <div className="vn-content"><Outlet /></div>
+      </main>
     </div>
   );
 }
