@@ -1,24 +1,51 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
+import asyncio
+from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from backend.app.database import Base
-import backend.app.models  # noqa: F401
+from backend.app.auth.models import User  # noqa: F401
+from backend.app.financial.models import Expense, FinancialProfile, Income  # noqa: F401
+from backend.app.catalog.models import AssetCatalog  # noqa: F401
+from backend.app.market.models.acoes import AcaoFundamental  # noqa
+from backend.app.market.models.bdr import BdrFundamental  # noqa
+from backend.app.market.models.cripto import CriptoFundamental  # noqa
+from backend.app.market.models.etf import EtfFundamental  # noqa
+from backend.app.market.models.fii import FiiFundamental  # noqa
+from backend.app.market.models.macro import MacroIndicator  # noqa: F401
+from backend.app.market.models.prices import AssetPrice  # noqa: F401
+from backend.app.market.models.renda_fixa import RendaFixaProduto  # noqa
+from backend.app.market.models.sync_log import SyncLog  # noqa: F401
+from backend.app.market.models.sync_error_log import SyncErrorLog  # noqa: F401
+from backend.app.intelligence.asset_score_model import AssetScore  # noqa: F401
+from backend.app.intelligence.investment_recommendation_model import InvestmentRecommendation  # noqa: F401
+from backend.app.intelligence.recommendation_guardrail_model import AssetRecommendationGuardrail  # noqa: F401
+from backend.app.intelligence.asset_trend_signal_model import AssetTrendSignal  # noqa: F401
+from backend.app.investment_decisions.models import InvestmentDecisionAudit  # noqa: F401
+from backend.app.investment_performance.models import InvestmentDecisionPerformance  # noqa: F401
+from backend.app.investment_alerts.models import (  # noqa: F401
+    InvestmentAlert,
+    InvestmentAlertState,
+    InvestmentAlertSubscription,
+)
+from backend.app.core.config import settings
+from backend.app.core.database import Base
 
+config = context.config
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 
+config.set_main_option("sqlalchemy.url", settings.database_url)
 target_metadata = Base.metadata
-project_root = Path(__file__).resolve().parents[2]
-default_url = f"sqlite:///{(project_root / 'data' / 'POSTGRES_RUNTIME_DISABLED').as_posix()}"
-context.config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL", default_url))
 
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=context.config.get_main_option("sqlalchemy.url"),
+        url=settings.database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         compare_type=True,
@@ -27,24 +54,24 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        context.config.get_section(context.config.config_ini_section, {}),
+def do_run_migrations(connection: Connection) -> None:
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_migrations_online() -> None:
+    connectable = async_engine_from_config(
+        config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-            render_as_batch=connection.dialect.name == "sqlite",
-        )
-        with context.begin_transaction():
-            context.run_migrations()
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+    await connectable.dispose()
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    asyncio.run(run_migrations_online())
