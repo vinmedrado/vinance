@@ -48,7 +48,7 @@ export function LoginPage() {
       <Card className="vn-auth__card" title={mode === 'login' ? 'Entrar' : 'Criar conta'} description="Autenticação real via backend aprovado. O token é salvo localmente e limpo no logout.">
         <form className="vn-form" onSubmit={handleSubmit}>
           {sessionNotice && <p className="vn-session-notice" role="status">{sessionNotice}</p>}
-          {mode === 'register' && <Input label="Nome" placeholder="Vinicius Medrado" value={fullName} onChange={(event) => setFullName(event.target.value)} />}
+          {mode === 'register' && <Input label="Nome" placeholder="Nome completo" value={fullName} onChange={(event) => setFullName(event.target.value)} />}
           <Input label="E-mail" placeholder="voce@email.com" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           <Input label="Senha" placeholder="••••••••" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required />
           {error && <p className="vn-error" role="alert">{error.message}</p>}

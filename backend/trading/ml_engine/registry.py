@@ -44,7 +44,7 @@ def model_registry(config: MLEngineConfig = DEFAULT_CONFIG) -> dict[str, ModelFa
             min_samples_leaf=5,
             class_weight="balanced_subsample",
             random_state=config.random_state,
-            n_jobs=-1,
+            n_jobs=1,
         ),
         "extra_trees": lambda: ExtraTreesClassifier(
             n_estimators=120,
@@ -52,7 +52,7 @@ def model_registry(config: MLEngineConfig = DEFAULT_CONFIG) -> dict[str, ModelFa
             min_samples_leaf=5,
             class_weight="balanced",
             random_state=config.random_state,
-            n_jobs=-1,
+            n_jobs=1,
         ),
         "hist_gradient_boosting": lambda: HistGradientBoostingClassifier(
             max_iter=120,

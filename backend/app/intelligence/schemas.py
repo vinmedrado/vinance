@@ -1,450 +1,147 @@
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Any, Literal
+from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+AssetClass = Literal["renda_fixa", "fii", "acoes", "etf", "bdr", "cripto"]
 RiskProfile = Literal["conservative", "moderate", "aggressive"]
-Experience = Literal["beginner", "intermediate", "advanced"]
-Preference = Literal["low", "medium", "high"]
-Horizon = Literal["short_term", "medium_term", "long_term"]
-Market = Literal["equities", "fiis", "etfs", "bdrs", "crypto", "fixed_income", "cash"]
-
-
-class FinancialProfileIn(BaseModel):
-    monthly_income: float = Field(ge=0)
-    monthly_expenses: float = Field(ge=0)
-    available_to_invest: float | None = Field(default=None, ge=0)
-    emergency_reserve_months: float = Field(default=0, ge=0)
-    risk_profile: RiskProfile = "moderate"
-    investment_experience: Experience = "beginner"
-    financial_goal: str | None = None
-    target_amount: float | None = Field(default=None, ge=0)
-    target_date: date | None = None
-    preferred_markets: list[Market] = Field(default_factory=lambda: ["etfs", "fiis", "fixed_income", "cash"])
-    liquidity_preference: Preference = "medium"
-    dividend_preference: Preference = "medium"
-    volatility_tolerance: Preference = "medium"
-    investment_horizon: Horizon = "medium_term"
-    monthly_investment_capacity: float | None = Field(default=None, ge=0)
-    onboarding_completed: bool = True
-
-
-class FinancialProfileOut(FinancialProfileIn):
-    id: int
-    organization_id: str
-    user_id: str
-    available_to_invest: float
-    monthly_investment_capacity: float
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-    model_config = {"from_attributes": True}
-
-
-class CapacityOut(BaseModel):
-    monthly_surplus: float
-    expenses_ratio_pct: float
-    investable_ratio_pct: float
-    recommended_emergency_reserve: float
-    healthy_investment_limit: float
-    financial_risk: str
-    safety_margin: float
-    monthly_contribution_capacity: float
-    plain_language_summary: str
-    alerts: list[str] = Field(default_factory=list)
 
 
 class AllocationItem(BaseModel):
-    market: str
-    percentage: float
-    rationale: str
+    asset_class: AssetClass
+    percentage: Decimal = Field(ge=0, le=100)
+    amount: Decimal = Field(ge=0)
 
 
-class AllocationOut(BaseModel):
-    risk_profile: str
-    suggested_allocation: list[AllocationItem]
-    estimated_risk: str
-    goal_compatibility: str
-    plain_language_summary: str
+class AssetScoreRead(BaseModel):
+    ticker: str
+    name: str | None = None
+    asset_class: AssetClass
+    score: int = Field(ge=0, le=100)
+    reasons: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+    methodology: str
 
 
-class BacktestScenario(BaseModel):
-    name: str
-    estimated_final_amount: float
-    estimated_gain: float
-    chance_to_reach_goal_pct: float | None = None
+class RecommendationClassRead(BaseModel):
+    asset_class: AssetClass
+    allocation_percentage: Decimal = Field(ge=0, le=100)
+    allocation_amount: Decimal = Field(ge=0)
+    assets: list[AssetScoreRead] = Field(default_factory=list)
+    message: str | None = None
 
 
-class PersonalizedBacktestOut(BaseModel):
-    monthly_contribution: float
-    horizon_months: int
-    simulated_historical_return: float
-    worst_simulated_drop_pct: float
-    estimated_goal_success_chance_pct: float | None = None
-    risk_label: str
-    benchmark_comparison: dict[str, float]
-    scenarios: list[BacktestScenario]
-    plain_language_summary: str
-    disclaimer: str
+class RecommendationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class AssetScoreIn(BaseModel):
-    symbol: str
-    market: Market
-    volatility: float | None = None
-    liquidity: float | None = None
-    trend: float | None = None
-    drawdown: float | None = None
-    dividend_yield: float | None = None
-    vacancy: float | None = None
-    quality: float | None = None
-    consistency: float | None = None
-    tracking_error: float | None = None
-
-
-class AssetScoreOut(BaseModel):
-    symbol: str
-    market: str
-    score: float
-    profile_compatibility: str
-    risk: str
-    recommendation_context: str
-
-
-class RecommendationOut(BaseModel):
-    recommendation: str
-    recommended_monthly_contribution: float
-    suggested_allocation: list[AllocationItem]
-    risk: str
-    goal_estimate: str
-    benchmark_comparison: dict[str, float]
-    scenarios: list[BacktestScenario]
-    explanations: list[str]
-    asset_scores: list[AssetScoreOut] = Field(default_factory=list)
-    disclaimer: str
-
-
-class RecommendationRequest(BaseModel):
-    assets: list[AssetScoreIn] = Field(default_factory=list)
-    save_snapshot: bool = False
-
-
-GoalType = Literal["emergency_reserve", "retirement", "home", "car", "travel", "financial_freedom", "passive_income", "education", "custom"]
-
-class FinancialGoalEngineIn(BaseModel):
-    goal_type: GoalType = "custom"
-    target_amount: float = Field(ge=0)
-    current_amount: float = Field(default=0, ge=0)
-    target_date: date | None = None
-    monthly_contribution: float = Field(default=0, ge=0)
-    risk_profile: RiskProfile = "moderate"
-    investment_horizon: Horizon = "medium_term"
-
-class FinancialGoalEngineOut(FinancialGoalEngineIn):
-    id: int | None = None
-    organization_id: str | None = None
-    user_id: str | None = None
-    inflation_adjusted_target: float
-    success_probability: float
-    estimated_completion_date: date | None = None
-    amount_remaining: float
-    required_monthly_contribution: float
-    months_to_goal: int
-    delay_months: int
-    scenarios: list[BacktestScenario]
-    plain_language_summary: str
-    explanations: list[str] = Field(default_factory=list)
-
-    model_config = {"from_attributes": True}
-
-class AdvancedBacktestRequest(BaseModel):
-    monthly_contribution: float | None = Field(default=None, ge=0)
-    horizon_months: int | None = Field(default=None, ge=1)
-    rebalance_frequency: Literal["monthly", "quarterly", "semiannual", "annual"] = "quarterly"
-    transaction_cost_bps: float = Field(default=10, ge=0)
-    tax_rate: float = Field(default=0.15, ge=0, le=1)
-    slippage_bps: float = Field(default=5, ge=0)
-    seed: int = 42
-
-class AdvancedBacktestOut(BaseModel):
-    internal_metrics: dict[str, float]
-    benchmark_comparison: dict[str, float]
-    walk_forward: dict[str, float]
-    rolling_windows: list[dict[str, float]]
-    scenarios: list[BacktestScenario]
-    user_summary: str
-    risk_label: str
-    disclaimer: str
-
-class PortfolioEngineOut(BaseModel):
+    financial_score: int = Field(ge=0, le=100)
+    investment_capacity: Decimal = Field(ge=0)
+    adjusted_risk_profile: RiskProfile
     allocation: list[AllocationItem]
-    risk_controls: dict[str, float | str]
-    rebalance_actions: list[str]
-    diversification_score: float
-    user_summary: str
+    recommendations_by_class: list[RecommendationClassRead]
+    warnings: list[str] = Field(default_factory=list)
+    methodology: list[str] = Field(default_factory=list)
 
-class ContextualMLAssetIn(BaseModel):
-    symbol: str
-    market: Market
-    returns: list[float] = Field(default_factory=list)
-    liquidity: float | None = None
-    quality: float | None = None
-    dividend_yield: float | None = None
+from datetime import date as _date
+from decimal import Decimal as _Decimal
+from typing import Any as _Any
 
-class ContextualMLAssetOut(BaseModel):
-    symbol: str
+from pydantic import BaseModel as _BaseModel, ConfigDict as _ConfigDict
+
+
+class AssetScoreRankingItem(_BaseModel):
+    model_config = _ConfigDict(from_attributes=True)
+
+    ticker: str
     market: str
-    contextual_score: float
-    regime: str
-    risk_adjusted_label: str
-    user_fit: str
-    explanation: str
+    date: _date
+    score_total: _Decimal
+    score_value: _Decimal | None = None
+    score_quality: _Decimal | None = None
+    score_dividend: _Decimal | None = None
+    score_liquidity: _Decimal | None = None
+    score_risk: _Decimal | None = None
+    price: _Decimal | None = None
+    metadata_json: dict[str, _Any]
 
-class RiskEngineOut(BaseModel):
-    risk_label: str
-    concentration_risk: str
-    liquidity_risk: str
-    expected_drawdown_pct: float
-    volatility_estimate_pct: float
-    alerts: list[str]
-    user_summary: str
 
-class ScenarioSimulationOut(BaseModel):
-    scenarios: list[BacktestScenario]
-    impacts: dict[str, str]
-    user_summary: str
-
-class HumanizedRecommendationOut(BaseModel):
-    main_recommendation: str
-    why: list[str]
-    risks: list[str]
-    goal_impact: str
-    contribution_impact: str
-    deadline_impact: str
-    simple_strategy_comparison: str
-    disclaimer: str
-
-class BudgetAdvisorInputSchema(BaseModel):
-    monthly_income: float = Field(default=0, ge=0)
-    total_expenses: float = Field(default=0, ge=0)
-    fixed_expenses: float = Field(default=0, ge=0)
-    variable_expenses: float = Field(default=0, ge=0)
-    debt_payments: float = Field(default=0, ge=0)
-    overdue_bills: float = Field(default=0, ge=0)
-    available_balance: float = 0
-    emergency_reserve: float = Field(default=0, ge=0)
-    savings_rate: float = 0
-    expense_ratio: float = 0
-    debt_ratio: float = 0
-    goal_priority: str | None = None
-    risk_profile: str = "moderate"
-
-class BudgetAdvisorOut(BaseModel):
-    recommended_model: str
-    model_label: str
-    confidence_score: float
-    financial_phase: str
-    reason: str
-    action_plan: list[str]
-    suggested_limits: dict[str, float]
-    warnings: list[str]
-    investment_capacity: float
-    health_score: int
-    investment_gate: dict[str, Any]
-    input_summary: dict[str, Any]
-    disclaimer: str
-
-class FinancialPlanOut(BaseModel):
-    year: int
-    month: int
-    model_advisor: BudgetAdvisorOut
-    monthly_plan: dict[str, Any]
-    next_steps: list[str]
-    investment_message: str
-
-class FinancialHealthOut(BaseModel):
-    health_score: int
+class BudgetAdvisorItem(_BaseModel):
+    ticker: str
+    market: str
+    score_total: _Decimal
+    price: _Decimal
+    quantity_possible: int
+    invested_amount: _Decimal
+    profile: str
+    profile_score: _Decimal | None = None
+    recommendation_score: _Decimal | None = None
+    recommendation_components_json: dict[str, _Any] | None = None
+    trend_label: str | None = None
+    momentum_score: _Decimal | None = None
+    trend_confidence: str | None = None
+    trend_method: str | None = None
+    status: str
     risk_level: str
-    financial_phase: str
-    evolution_trend: str
-    metrics: dict[str, Any]
-    plain_language_summary: str
-    input_summary: dict[str, Any] = Field(default_factory=dict)
-
-class AdaptiveBudgetModelOut(BaseModel):
-    recommended_model: str
-    model_label: str
-    changed: bool
-    change_reason: str
-    confidence_score: float
-    comparison: dict[str, Any]
-    health: FinancialHealthOut
-    advisor: BudgetAdvisorOut
-
-class BehavioralFinanceOut(BaseModel):
-    patterns: list[str]
-    discipline_score: int
-    stability: str
-    risk_of_slippage: str
-    insights: list[str]
-
-class FinancialCoachingOut(BaseModel):
-    messages: list[str]
-    alerts: list[dict[str, str]]
-    next_steps: list[str]
-    tone: str
-
-class FinancialForecastOut(BaseModel):
-    months: int
-    scenarios: list[dict[str, Any]]
-    plain_language_summary: str
-    disclaimer: str
-
-class FinancialTimelineOut(BaseModel):
-    events: list[dict[str, Any]]
-    summary: str
-
-class FinancialCoachDashboardOut(BaseModel):
-    year: int
-    month: int
-    health: FinancialHealthOut
-    adaptive_model: AdaptiveBudgetModelOut
-    behavior: BehavioralFinanceOut
-    coaching: FinancialCoachingOut
-    forecast: FinancialForecastOut
-    timeline: FinancialTimelineOut
-    main_recommendation: str
-    next_best_action: str
-    disclaimer: str
-
-class FinancialMemoryOut(BaseModel):
-    organization_id: str | None = None
-    user_id: str | None = None
-    memory_strength: str
-    patterns: list[str]
-    critical_months: list[dict[str, Any]]
-    seasonality: dict[str, Any]
-    critical_categories: list[dict[str, Any]]
-    trend: str
-    average_expense_ratio: float | None = None
-    stability_index: int | None = None
-    insights: list[str]
-    disclaimer: str
-
-class BehavioralIntelligenceOut(BaseModel):
-    behavioral_score: int
-    stability_score: int
-    discipline_score: int
-    risk_behavior_score: int
-    signals: list[str]
-    plain_language_summary: str
-
-class AdvancedFinancialCoachingOut(BaseModel):
-    messages: list[str]
-    tips: list[str]
-    alerts: list[dict[str, str]]
-    tone: str
-
-class DynamicGoalsOut(BaseModel):
-    goals: list[dict[str, Any]]
-    available_goal_capacity: float
-    behavior_adjustment: float
-
-class FinancialDecisionAdvisorOut(BaseModel):
-    decision_type: str
-    title: str
-    recommendation: str
-    reasons: list[str]
-    next_steps: list[str]
-    confidence: float
-    disclaimer: str
-
-class RetentionEngagementOut(BaseModel):
-    milestones: list[dict[str, str]]
-    progress_summary: str
-    recurring_insights: list[str]
-
-class AIFinancialAdvisorDashboardOut(BaseModel):
-    year: int
-    month: int
-    health: FinancialHealthOut
-    memory: FinancialMemoryOut
-    behavioral_intelligence: BehavioralIntelligenceOut
-    coaching: AdvancedFinancialCoachingOut
-    dynamic_goals: DynamicGoalsOut
-    forecast: FinancialForecastOut
-    decision_advisor: FinancialDecisionAdvisorOut
-    retention: RetentionEngagementOut
-    timeline: FinancialTimelineOut
-    advisor_main_message: str
-    next_best_action: str
-    disclaimer: str
+    reasons_json: dict[str, _Any]
 
 
-class AdvisorQuestionIn(BaseModel):
-    question: str = Field(min_length=2, max_length=600)
-    year: int | None = None
-    month: int | None = None
+class DiversifiedBudgetAllocationItem(_BaseModel):
+    allocation: str
+    market: str
+    ticker: str
+    quantity: int
+    price: _Decimal
+    invested_amount: _Decimal
+    score_total: _Decimal
+    profile: str
+    profile_score: _Decimal | None = None
+    recommendation_score: _Decimal | None = None
+    recommendation_components_json: dict[str, _Any] | None = None
+    trend_label: str | None = None
+    momentum_score: _Decimal | None = None
+    trend_confidence: str | None = None
+    trend_method: str | None = None
+    status: str
+    risk_level: str
+    reasons_json: dict[str, _Any]
 
-class AdvisorAnswerOut(BaseModel):
-    intent: str
-    answer: str
-    used_real_data: bool = True
-    confidence: float
-    recommended_action: str
-    context_cards: list[dict[str, Any]] = Field(default_factory=list)
-    quick_actions: list[str] = Field(default_factory=list)
-    safety_warnings: list[str] = Field(default_factory=list)
-    disclaimer: str
-    premium_advisor: dict[str, Any] = Field(default_factory=dict)
-    conversation_memory: dict[str, Any] = Field(default_factory=dict)
-    rag_context: list[dict[str, Any]] = Field(default_factory=list)
-    ai_analytics: dict[str, Any] = Field(default_factory=dict)
-    provider: str = "local_fallback"
 
-class FinancialContextOut(BaseModel):
-    organization_id: str
-    user_id: str
-    year: int
-    month: int
-    current_financial_situation: dict[str, Any]
-    recommended_model: str
-    health: dict[str, Any]
-    financial_phase: str | None = None
-    goals: list[dict[str, Any]] = Field(default_factory=list)
-    investment_capacity: float
-    alerts: list[Any] = Field(default_factory=list)
-    behavior: dict[str, Any] = Field(default_factory=dict)
-    memory: dict[str, Any] = Field(default_factory=dict)
-    forecast: dict[str, Any] = Field(default_factory=dict)
-    next_steps: list[str] = Field(default_factory=list)
+class DiversifiedBudgetAdvisorResponse(_BaseModel):
+    budget: _Decimal
+    profile: str
+    total_invested: _Decimal
+    remaining_budget: _Decimal
+    allocation: list[DiversifiedBudgetAllocationItem]
 
-class CopilotEventOut(BaseModel):
-    type: str
-    severity: str
-    message: str
-    impact: str
-    suggested_action: str
-    related_entity: str | None = None
-    created_at: str
 
-class UserLearningProfileOut(BaseModel):
-    organization_id: str
-    user_id: str
-    financial_literacy_level: str
-    preferred_tone: str
-    preferred_detail_level: str
-    observed_risk_behavior: str
-    recurring_challenges: list[str] = Field(default_factory=list)
-    engagement_score: int
-    last_updated_at: datetime | None = None
+class GuardrailItem(_BaseModel):
+    model_config = _ConfigDict(from_attributes=True)
 
-class ConversationalAdvisorDashboardOut(BaseModel):
-    context_summary: FinancialContextOut
-    copilot_events: list[CopilotEventOut]
-    suggested_questions: list[str]
-    main_message: str
-    next_step: str
-    disclaimer: str
+    ticker: str
+    market: str
+    date: _date
+    status: str
+    risk_level: str
+    penalty_score: _Decimal
+    reasons_json: dict[str, _Any]
+    source: str
+
+
+class TrendSignalItem(_BaseModel):
+    model_config = _ConfigDict(from_attributes=True)
+
+    ticker: str
+    market: str
+    date: _date
+    price: _Decimal | None = None
+    return_1d: _Decimal | None = None
+    return_7d: _Decimal | None = None
+    return_30d: _Decimal | None = None
+    return_90d: _Decimal | None = None
+    volatility_30d: _Decimal | None = None
+    momentum_score: _Decimal
+    trend_label: str
+    risk_label: str
+    metadata_json: dict[str, _Any]

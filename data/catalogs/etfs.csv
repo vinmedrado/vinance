@@ -1,0 +1,3 @@
+ticker,name,market,sector,segment,currency,exchange,source,is_active
+BOVA11,iShares Ibovespa Fundo de Índice,etf,Índice,ETF,BRL,B3,bootstrap_manual_partial,true
+IVVB11,iShares S&P 500 Fundo de Investimento,etf,Índice internacional,ETF,BRL,B3,bootstrap_manual_partial,true

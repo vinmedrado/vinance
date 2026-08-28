@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Activity, AlertTriangle, BrainCircuit, ChartNoAxesCombined, CircleDollarSign, LineChart as LineIcon, Play, Radar, ShieldCheck, Sparkles, Target } from 'lucide-react';
+import { Activity, AlertTriangle, BrainCircuit, BarChart3, CircleDollarSign, LineChart as LineIcon, Play, Radar, ShieldCheck, Sparkles, Target } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getQuantHealth, getQuantMarkets, getQuantRuns, runInvestmentDecision, runQuantBacktest, syncQuantMarketData, trainQuantModel, type RiskProfile } from '../services/quant';
 import { money } from '../utils/format';
@@ -164,7 +164,7 @@ export default function QuantLab() {
         </div>
 
         <div className="premium-card chart-card">
-          <div className="card-title"><div><h2>Mercados para alocar</h2><p>Ranking calculado por risco, liquidez, retorno esperado e cenário macro.</p></div><ChartNoAxesCombined color="var(--cyan)"/></div>
+          <div className="card-title"><div><h2>Mercados para alocar</h2><p>Ranking calculado por risco, liquidez, retorno esperado e cenário macro.</p></div><BarChart3 color="var(--cyan)"/></div>
           <div className="market-list">
             {topMarkets.slice(0, 8).map((m: any) => (
               <div className="market-row" key={m.ticker}>

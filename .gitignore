@@ -40,6 +40,12 @@ logs/
 *.log
 celerybeat-schedule
 *.pid
+backend/trading/output/
+backend/trading/auditoria_*/
+test-results/
+playwright-report/
+coverage/
+coverage.xml
 
 # Local databases / dumps / backups
 *.db
@@ -78,5 +84,7 @@ data/input/*
 !data/input/.gitkeep
 data/imports/*
 !data/imports/.gitkeep
+data/ml_artifacts/*
+!data/ml_artifacts/.gitkeep
 *.xlsm
 *.xlsx
