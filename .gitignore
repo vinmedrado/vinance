@@ -78,6 +78,11 @@ Thumbs.db
 _backup_before_refactor/
 _archive_review/secrets/
 _archive_review/local_data/
+_archived/
+frontend/_archived/
+
+# Optional diagnostic output (source scripts remain versioned)
+temp/
 
 # Fase 14 - local spreadsheet inputs are never versioned
 data/input/*
