@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 
+from fastapi import FastAPI
+
 from backend.app.intelligence.backtest.engine import FeaturePoint, PricePoint, run_ranking_backtest
 from backend.app.intelligence.backtest.metrics import max_drawdown, sharpe_ratio, total_return, volatility, win_rate
+from backend.app.intelligence.router import router as intelligence_router
 
 
 def test_metrics_with_valid_series():
@@ -85,3 +88,11 @@ def test_no_trained_ml_terms_in_methodology():
     )
     methodology = " ".join(result["methodology"]).lower()
     assert "não há ml treinado" in methodology
+
+
+def test_authenticated_backtest_routes_are_registered():
+    app = FastAPI()
+    app.include_router(intelligence_router)
+    paths = set(app.openapi()["paths"])
+    assert "/intelligence/backtest/run" in paths
+    assert "/intelligence/backtest/summary" in paths

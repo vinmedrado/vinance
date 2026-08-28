@@ -1,5 +1,9 @@
 from decimal import Decimal
 
+from fastapi import FastAPI
+
+from backend.app.core.celery import celery_app
+from backend.app.intelligence.router import router as intelligence_router
 from backend.app.intelligence.feature_pipeline.common import calculate_momentum, calculate_volatility, calculate_zscore
 from backend.app.intelligence.feature_scoring import score_acoes_features, score_cripto_features, score_fii_features
 
@@ -34,3 +38,14 @@ def test_feature_scores_always_between_0_and_100():
 def test_missing_data_gets_neutral_reduced_weight_without_breaking():
     score = score_fii_features()
     assert Decimal("0") <= score <= Decimal("100")
+
+
+def test_feature_status_and_daily_pipeline_are_registered():
+    app = FastAPI()
+    app.include_router(intelligence_router)
+    assert "/intelligence/features/status" in app.openapi()["paths"]
+    assert "backend.app.intelligence.scheduler.tasks" in celery_app.conf.include
+    item = celery_app.conf.beat_schedule["intelligence-compute-all-market-features-daily"]
+    assert item["task"] == "intelligence.compute_all_market_features"
+    assert item["schedule"]._orig_hour == 23
+    assert item["schedule"]._orig_minute == 30

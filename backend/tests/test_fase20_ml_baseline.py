@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fastapi import FastAPI
+
 from backend.app.intelligence.ml.evaluate import hit_rate_top_n, mae, regression_metrics, rmse, spearman_correlation
+from backend.app.intelligence.router import router as intelligence_router
 
 
 def test_regression_metrics_basic_values():
@@ -59,3 +62,12 @@ def test_no_deep_learning_imports_in_ml_baseline():
     content = "\n".join(path.read_text(encoding="utf-8") for path in ml_dir.glob("*.py"))
     forbidden_imports = ["import tensorflow", "import keras", "import torch", "from tensorflow", "from keras", "from torch", "from prophet", "import prophet"]
     assert not any(token in content.lower() for token in forbidden_imports)
+
+
+def test_authenticated_ml_routes_are_registered():
+    app = FastAPI()
+    app.include_router(intelligence_router)
+    paths = set(app.openapi()["paths"])
+    assert "/intelligence/ml/train" in paths
+    assert "/intelligence/ml/status" in paths
+    assert "/intelligence/ml/predict" in paths

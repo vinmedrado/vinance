@@ -34,6 +34,7 @@ celery_app = Celery(
     include=[
         "backend.app.market.scheduler.tasks",
         "backend.app.market.tasks",
+        "backend.app.intelligence.scheduler.tasks",
         "backend.app.investment_performance.tasks",
         "backend.app.investment_alerts.tasks",
     ],
@@ -66,6 +67,13 @@ celery_app.conf.update(
         "market.calculate_asset_scores": {"queue": "intelligence"},
         "market.calculate_recommendation_guardrails": {"queue": "intelligence"},
         "market.calculate_trend_signals": {"queue": "intelligence"},
+        "intelligence.compute_daily_fii_features": {"queue": "intelligence"},
+        "intelligence.compute_daily_acoes_features": {"queue": "intelligence"},
+        "intelligence.compute_daily_etf_features": {"queue": "intelligence"},
+        "intelligence.compute_daily_bdr_features": {"queue": "intelligence"},
+        "intelligence.compute_daily_cripto_features": {"queue": "intelligence"},
+        "intelligence.compute_all_market_features": {"queue": "intelligence"},
+        "intelligence.train_ml_baselines_weekly": {"queue": "intelligence"},
         "investment_performance.evaluate_due": {"queue": "intelligence"},
         "investment_alerts.evaluate_subscriptions": {"queue": "intelligence"},
     },
@@ -117,6 +125,11 @@ celery_app.conf.update(
         "investment-alerts-evaluate-daily-after-intelligence": {
             "task": "investment_alerts.evaluate_subscriptions",
             "schedule": crontab(hour=22, minute=10),
+            "options": {"queue": "intelligence"},
+        },
+        "intelligence-compute-all-market-features-daily": {
+            "task": "intelligence.compute_all_market_features",
+            "schedule": crontab(hour=23, minute=30),
             "options": {"queue": "intelligence"},
         },
     },

@@ -13,6 +13,9 @@ from backend.app.core.database import get_session
 from backend.app.core.logging import get_logger
 from backend.app.core.trace import decision_trace_context
 from backend.app.intelligence import service
+from backend.app.intelligence.backtest.router import router as backtest_router
+from backend.app.intelligence.feature_service import get_features_status
+from backend.app.intelligence.ml.router import router as ml_router
 from backend.app.intelligence.schemas import AssetScoreRankingItem, BudgetAdvisorItem, DiversifiedBudgetAdvisorResponse, GuardrailItem, RecommendationResponse, TrendSignalItem
 from backend.app.intelligence.services.asset_score_service import list_rankings
 from backend.app.intelligence.services.budget_advisor_service import build_diversified_budget_advisor, build_explained_budget_recommendations, list_budget_recommendations
@@ -28,11 +31,21 @@ from backend.app.investment_decisions.service import (
 )
 
 router = APIRouter(prefix="/intelligence", tags=["intelligence"])
+router.include_router(backtest_router)
+router.include_router(ml_router)
 logger = get_logger(__name__)
 MAX_BUDGET = Decimal("1000000000000")
 MARKET_PATTERN = r"^[A-Za-z0-9_-]+$"
 PROFILE_PATTERN = r"^[A-Za-z_-]+$"
 TICKER_PATTERN = r"^[A-Za-z0-9.\-]+$"
+
+
+@router.get("/features/status")
+async def get_intelligence_features_status(
+    current_user: User = Depends(get_current_user),  # noqa: ARG001 - auth guard
+    session: AsyncSession = Depends(get_session),
+):
+    return await get_features_status(session)
 
 
 @router.get("/recommendations", response_model=RecommendationResponse)
