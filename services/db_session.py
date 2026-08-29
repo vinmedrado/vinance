@@ -2,21 +2,15 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from db.database import SessionLocal
+
+from backend.app.core.sync_database import get_sync_session, sync_session
 
 
 @contextmanager
 def db_session():
-    db = SessionLocal()
-    try:
+    with sync_session() as db:
         yield db
-    finally:
-        db.close()
 
 
 def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    yield from get_sync_session()

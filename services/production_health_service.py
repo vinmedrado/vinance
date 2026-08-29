@@ -18,8 +18,8 @@ def _check(name: str, status: str, message: str, details: dict[str, Any] | None 
 
 def check_postgres() -> dict[str, Any]:
     try:
-        from db.database import SessionLocal
-        with SessionLocal() as db:
+        from backend.app.core.sync_database import sync_session
+        with sync_session() as db:
             db.execute(text("SELECT 1"))
         return _check("postgres", "pass", "Conexão PostgreSQL OK")
     except Exception as exc:
@@ -121,8 +121,8 @@ def check_stripe() -> dict[str, Any]:
 
 def check_jobs() -> dict[str, Any]:
     try:
-        from db.database import SessionLocal
-        with SessionLocal() as db:
+        from backend.app.core.sync_database import sync_session
+        with sync_session() as db:
             try:
                 row = db.execute(text("SELECT COUNT(*) AS total FROM background_jobs WHERE status='running'")).mappings().first()
                 return _check("jobs", "pass", "Tabela de jobs acessível", {"running": int(row["total"] or 0)})
