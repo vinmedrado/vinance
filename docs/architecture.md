@@ -4,14 +4,16 @@
 
 O FinanceOS é organizado como uma plataforma modular com backend FastAPI, frontend React/Vite, serviços de domínio, pipelines de dados, backtests, ranking de ativos e módulos de inteligência.
 
-A refatoração preserva a compatibilidade dos imports existentes e evita reescrever regras de negócio. A pasta `legacy_streamlit/` preserva a interface Streamlit histórica apenas como admin legado; `frontend/` é o produto SaaS oficial.
+A interface oficial é o React/Vite em `frontend/`. O antigo console Streamlit foi
+aposentado na Onda A da limpeza SQLite porque não fazia parte do runtime oficial
+e dependia de contratos de persistência legados.
 
 ## Camadas
 
 ### Interface
 
-- `legacy_streamlit/main_streamlit.py`: entrada principal do Streamlit.
-- `legacy_streamlit/pages/`: páginas históricas do admin Streamlit.
+- `frontend/`: aplicação React/Vite oficial.
+- `legacy_streamlit/README.md`: registro documental da interface aposentada.
 
 ### Backend
 
@@ -25,8 +27,10 @@ A refatoração preserva a compatibilidade dos imports existentes e evita reescr
 
 ### Dados e persistência
 
-- `db/`: conexão, compatibilidade SQL e modelos legados.
-- `alembic/`: migrations.
+- `backend/app/core/database.py`: infraestrutura assíncrona oficial.
+- `backend/app/core/sync_database.py`: compatibilidade síncrona isolada para os
+  consumidores SQLAlchemy legados já validados.
+- `backend/alembic/`: migrations oficiais do runtime atual.
 - `data/`: dados locais, catálogos e bases de apoio.
 
 ### Scripts
@@ -36,9 +40,9 @@ A refatoração preserva a compatibilidade dos imports existentes e evita reescr
 ## Fluxo de dados
 
 1. Scripts e pipelines coletam dados de mercado, catálogos, dividendos, índices e indicadores.
-2. Os dados são persistidos em banco local ou PostgreSQL.
+2. O runtime oficial persiste dados no PostgreSQL.
 3. Serviços calculam métricas, qualidade, scores e rankings.
-4. O frontend React/Vite entrega a experiência pública; o Streamlit legado pode acionar rotinas operacionais internas quando usado localmente.
+4. O frontend React/Vite entrega a experiência do produto.
 5. O backend FastAPI expõe rotas e integrações.
 6. Jobs assíncronos podem ser executados via Celery/Redis.
 

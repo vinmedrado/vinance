@@ -12,9 +12,9 @@ Serviços:
 - `backend`: FastAPI em `localhost:8000`.
 - `postgres`: banco principal.
 - `redis`: filas/cache.
-- `mlflow`: tracking de modelos.
-- `worker` e `beat`: jobs.
-- `admin_streamlit`: perfil opcional para legado/admin.
+- `celery_worker` e `celery_beat`: jobs assíncronos e agendados.
+
+O console Streamlit legado foi aposentado e não possui serviço Compose.
 
 ## Produção
 

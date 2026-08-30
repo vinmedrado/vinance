@@ -30,7 +30,7 @@ Confirme que estes itens não estão versionados:
 
 ```bash
 python -m compileall .
-python -c "import importlib; [importlib.import_module(m) for m in ['backend.app.main','db.database','services.final_ranking_service']]"
+python -c "import importlib; [importlib.import_module(m) for m in ['backend.app.main','backend.app.core.database','services.final_ranking_service']]"
 docker compose config
 ```
 
@@ -41,7 +41,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
-streamlit run legacy_streamlit/app.py
+python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Para Linux/macOS:
@@ -51,7 +51,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-streamlit run legacy_streamlit/app.py
+python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ## Como rodar com Docker
@@ -70,7 +70,7 @@ docker compose config
 
 - [ ] Rodei `python -m compileall .` sem erro.
 - [ ] Rodei `docker compose config` sem erro.
-- [ ] Rodei o Streamlit com `streamlit run legacy_streamlit/app.py`.
+- [ ] Validei o frontend React/Vite e o backend FastAPI.
 - [ ] Criei `.env` local a partir de `.env.example`.
 - [ ] Confirmei que nenhum `.env` real será enviado.
 - [ ] Confirmei que `data/financas.db` não está no projeto versionável.
