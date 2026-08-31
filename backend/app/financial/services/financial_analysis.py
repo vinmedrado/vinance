@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Any
 
-from backend.app.core.services.personal_finance import get_core_summary
 from backend.app.financing.schemas import FinancingSimulationRequest
 from backend.app.financing.services.calculator import FinancingInput, calculate_schedule
 
@@ -30,12 +28,25 @@ def _pct(value: float | int | None) -> str:
     return f"{float(value) * 100:.1f}%".replace(".", ",")
 
 
-def get_financial_summary() -> dict[str, Any]:
-    core = get_core_summary()
-    renda_total = _round(core.get("renda_mensal_estimada") or core.get("receitas_total"))
-    despesas_totais = _round(core.get("gasto_mensal_estimado") or core.get("despesas_pendentes") or core.get("despesas_total"))
-    despesas_pendentes = _round(core.get("despesas_pendentes"))
-    despesas_pagas = _round(core.get("despesas_pagas"))
+def get_financial_summary(
+    *,
+    renda_mensal: float | None = None,
+    despesas_mensais: float | None = None,
+    despesas_pendentes: float | None = None,
+    despesas_pagas: float | None = None,
+) -> dict[str, Any]:
+    """Build the legacy analysis summary from explicit, owner-scoped values.
+
+    Persistence belongs to ``backend.app.financial`` and its authenticated
+    asynchronous API.  This calculation helper intentionally performs no
+    database lookup: callers must pass values already resolved for the current
+    user instead of falling back to the retired local SQLite workbook store.
+    """
+
+    renda_total = _round(renda_mensal)
+    despesas_totais = _round(despesas_mensais)
+    despesas_pendentes = _round(despesas_pendentes)
+    despesas_pagas = _round(despesas_pagas)
     saldo_mensal = _round(renda_total - despesas_totais)
     saldo_disponivel = max(0.0, saldo_mensal)
     capacidade_pagamento = _round(min(renda_total * SAFE_COMMITMENT, saldo_disponivel * 0.80)) if renda_total > 0 else 0.0
@@ -50,13 +61,20 @@ def get_financial_summary() -> dict[str, Any]:
         "saldo_disponivel": saldo_disponivel,
         "capacidade_pagamento": capacidade_pagamento,
         "comprometimento_atual_pct": comprometimento_atual_pct,
-        "fonte": "core_financas_db",
-        "core": core,
+        "fonte": "explicit_owner_scoped_input",
+        "core": {},
     }
 
 
-def get_financial_capacity() -> dict[str, Any]:
-    summary = get_financial_summary()
+def get_financial_capacity(
+    *,
+    renda_mensal: float | None = None,
+    despesas_mensais: float | None = None,
+) -> dict[str, Any]:
+    summary = get_financial_summary(
+        renda_mensal=renda_mensal,
+        despesas_mensais=despesas_mensais,
+    )
     renda = summary["renda_total"]
     saldo = summary["saldo_disponivel"]
     capacidade_segura = _round(min(renda * SAFE_COMMITMENT, saldo * 0.80)) if renda > 0 else 0.0
@@ -336,14 +354,16 @@ def analyze_financing_decision(
     saldo_disponivel: float | None = None,
     usar_dados_core: bool = True,
 ) -> dict[str, Any]:
-    core_summary = get_core_summary() if usar_dados_core else {}
-    summary = get_financial_summary() if usar_dados_core else {
-        "renda_total": _round(renda_mensal),
-        "despesas_totais": _round(despesas_mensais),
-        "saldo_mensal": _round((renda_mensal or 0) - (despesas_mensais or 0)),
-        "saldo_disponivel": _round(saldo_disponivel if saldo_disponivel is not None else (renda_mensal or 0) - (despesas_mensais or 0)),
-        "capacidade_pagamento": 0.0,
-    }
+    summary = get_financial_summary(
+        renda_mensal=renda_mensal,
+        despesas_mensais=despesas_mensais,
+    )
+    if saldo_disponivel is not None:
+        summary["saldo_disponivel"] = _round(saldo_disponivel)
+    core_summary = {
+        "source": "explicit_owner_scoped_input",
+        "legacy_sqlite_retired": True,
+    } if usar_dados_core else {}
 
     renda = _round(renda_mensal if renda_mensal is not None else summary.get("renda_total"))
     despesas = _round(despesas_mensais if despesas_mensais is not None else summary.get("despesas_totais"))

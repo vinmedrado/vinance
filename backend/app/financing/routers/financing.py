@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -11,7 +10,6 @@ from backend.app.financing.models import FinancingHistory, FinancingPreset, Fina
 from backend.app.financing.schemas import FinancingCompareRequest, FinancingSimulationRequest, FinancingSimulationResponse, StrategyRequest
 from backend.app.financing.services.calculator import FinancingInput, calculate_schedule
 from backend.app.financing.services.presets import DEFAULT_PRESETS
-from backend.app.core.services.personal_finance import get_core_summary
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/financing", tags=["Financing"])
@@ -77,19 +75,12 @@ def _save_simulation(db: Session, user_id: int, result: dict, monthly_income: fl
 def simulate(payload: FinancingSimulationRequest, db: Session = Depends(get_db), auth: AuthenticatedUser = Depends(require_authenticated_user)):
     user_id = auth.user_id
 
-    # Integração core -> financing: se a renda não vier na requisição,
-    # tenta usar a renda mensal estimada do módulo original de finanças pessoais.
-    effective_payload = payload
     monthly_income = payload.monthly_income
-    if monthly_income is None:
-        core_summary = get_core_summary()
-        estimated_income = core_summary.get("renda_mensal_estimada")
-        if estimated_income:
-            monthly_income = float(estimated_income)
-            effective_payload = payload.model_copy(update={"monthly_income": monthly_income})
-
-    result = calculate_schedule(_to_input(effective_payload))
-    result["core_finance_context"] = get_core_summary()
+    result = calculate_schedule(_to_input(payload))
+    result["core_finance_context"] = {
+        "source": "request_payload",
+        "legacy_sqlite_retired": True,
+    }
     _save_simulation(db, user_id, result, monthly_income)
     logger.info("Simulação de financiamento salva: user_id=%s asset_type=%s system=%s", user_id, payload.asset_type, payload.system)
     return result
