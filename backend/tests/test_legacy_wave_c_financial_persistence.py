@@ -74,7 +74,7 @@ def test_wave_c_paths_have_no_implicit_sqlite_or_demo_owner() -> None:
     assert "personal_finance" not in sources
 
 
-def test_local_excel_importer_stays_outside_official_runtime() -> None:
+def test_legacy_excel_importer_is_retired_from_official_runtime() -> None:
     importer = ROOT / "services" / "import_excel.py"
     runtime_sources = "\n".join(
         path.read_text(encoding="utf-8")
@@ -85,7 +85,7 @@ def test_local_excel_importer_stays_outside_official_runtime() -> None:
         )
     )
 
-    assert importer.is_file()
+    assert not importer.exists()
     assert "services.import_excel" not in runtime_sources
     assert "import_excel" not in runtime_sources
 

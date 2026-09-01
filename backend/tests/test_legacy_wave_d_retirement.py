@@ -84,8 +84,8 @@ def test_backtest_history_schema_is_written_by_trading_pipeline() -> None:
     assert "metrics" in pipeline_sources
 
 
-def test_wave_e_local_tooling_was_not_removed() -> None:
-    tooling = (
+def test_wave_e_retirement_keeps_only_the_safe_readiness_entry_point() -> None:
+    retired = (
         ROOT / "scripts" / "migrate_sqlite_to_postgres.py",
         ROOT / "scripts" / "report_analysis_summary.py",
         ROOT / "scripts" / "update_asset_quality_scores.py",
@@ -93,4 +93,5 @@ def test_wave_e_local_tooling_was_not_removed() -> None:
         ROOT / "services" / "import_excel.py",
     )
 
-    assert all(path.is_file() for path in tooling)
+    assert all(not path.exists() for path in retired)
+    assert (ROOT / "scripts" / "production_readiness_check.py").is_file()

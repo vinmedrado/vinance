@@ -49,8 +49,8 @@ def check_mlflow() -> dict[str, Any]:
 
 def check_celery() -> dict[str, Any]:
     try:
-        from workers.celery_app import app
-        insp = app.control.inspect(timeout=2)
+        from backend.app.core.celery import celery_app
+        insp = celery_app.control.inspect(timeout=2)
         active = insp.active() or {}
         if active:
             return _check("celery", "pass", "Celery worker ativo", {"workers": list(active.keys())})
@@ -84,28 +84,17 @@ def check_env_secrets() -> dict[str, Any]:
 
 def check_auth_config() -> dict[str, Any]:
     try:
-        from services.auth_middleware import DEV_MODE
-        if os.getenv("FINANCEOS_ENV") == "production" and DEV_MODE:
-            return _check("auth", "fail", "FINANCEOS_DEV_MODE não pode estar ativo em produção")
-        return _check("auth", "pass", "Configuração de auth OK")
+        from backend.app.auth.dependencies import get_current_user
+        from backend.app.auth.security import decode_access_token
+        from backend.app.core.config import settings
+
+        if not callable(get_current_user) or not callable(decode_access_token):
+            return _check("auth", "fail", "Dependências canônicas de autenticação indisponíveis")
+        if settings.is_production and len(settings.secret_key.strip()) < 32:
+            return _check("auth", "fail", "SECRET_KEY de produção não atende ao mínimo de segurança")
+        return _check("auth", "pass", "Autenticação canônica disponível")
     except Exception as exc:
         return _check("auth", "fail", f"Auth quebrado: {exc}")
-
-
-def check_storage_paths() -> dict[str, Any]:
-    required = [ROOT / "ml" / "models", ROOT / "ml" / "datasets", ROOT / "ml" / "predictions"]
-    missing = []
-    for path in required:
-        try:
-            path.mkdir(parents=True, exist_ok=True)
-            test = path / ".write_test"
-            test.write_text("ok", encoding="utf-8")
-            test.unlink(missing_ok=True)
-        except Exception as exc:
-            missing.append(f"{path}: {exc}")
-    if missing:
-        return _check("storage", "warn", "Problemas em paths de storage", {"issues": missing})
-    return _check("storage", "pass", "Storage local OK")
 
 
 def check_stripe() -> dict[str, Any]:
@@ -119,36 +108,19 @@ def check_stripe() -> dict[str, Any]:
     return _check("stripe", "pass", "Stripe configurado")
 
 
-def check_jobs() -> dict[str, Any]:
-    try:
-        from backend.app.core.sync_database import sync_session
-        with sync_session() as db:
-            try:
-                row = db.execute(text("SELECT COUNT(*) AS total FROM background_jobs WHERE status='running'")).mappings().first()
-                return _check("jobs", "pass", "Tabela de jobs acessível", {"running": int(row["total"] or 0)})
-            except Exception:
-                return _check("jobs", "warn", "Tabela background_jobs indisponível ou ainda não migrada")
-    except Exception as exc:
-        return _check("jobs", "warn", f"Jobs não verificáveis: {exc}")
-
-
 def check_sqlite_disabled() -> dict[str, Any]:
-    allowed_files = {
-        "scripts/migrate_sqlite_to_postgres.py",
-        "scripts/production_readiness_check.py",
-        "PATCH_48_3_SQLITE_SCAN.json",
-    }
     hits = []
-    forbidden_terms = ["sql" + "ite3", "financas" + ".db", "data/" + "financas" + ".db", "sql" + "ite+aiosqlite"]
-    for path in ROOT.rglob("*.py"):
-        if "__pycache__" in path.parts:
+    forbidden_terms = ["sql" + "ite3", "sql" + "ite+aiosqlite", "pg_" + "compat"]
+    scan_roots = (ROOT / "backend" / "app", ROOT / "services", ROOT / "workers", ROOT / "scripts")
+    for scan_root in scan_roots:
+        if not scan_root.exists():
             continue
-        rel = str(path.relative_to(ROOT))
-        if rel in allowed_files:
-            continue
-        txt = path.read_text(encoding="utf-8", errors="ignore")
-        if any(term in txt for term in forbidden_terms):
-            hits.append(rel)
+        for path in scan_root.rglob("*.py"):
+            if {"__pycache__", "tests", "_legacy"} & set(path.parts):
+                continue
+            txt = path.read_text(encoding="utf-8", errors="ignore")
+            if any(term in txt for term in forbidden_terms):
+                hits.append(path.relative_to(ROOT).as_posix())
     if hits:
         status = "fail" if os.getenv("FINANCEOS_ENV", "development") == "production" else "warn"
         return _check("sqlite_disabled", status, "SQLite residual detectado", {"files": hits})
@@ -166,9 +138,7 @@ def run_full_healthcheck() -> dict[str, Any]:
         check_celery(),
         check_env_secrets(),
         check_auth_config(),
-        check_storage_paths(),
         check_stripe(),
-        check_jobs(),
         check_sqlite_disabled(),
     ]
     if any(c["status"] == "fail" for c in checks):

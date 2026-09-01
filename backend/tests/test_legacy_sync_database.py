@@ -276,5 +276,4 @@ def test_only_schema_compatible_consumers_use_the_sync_layer() -> None:
         dependency.close()
 
     assert health_module.check_postgres()["status"] == "pass"
-    assert health_module.check_jobs()["status"] in {"pass", "warn"}
     assert _pool_checked_out() == 0

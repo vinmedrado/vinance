@@ -58,7 +58,7 @@ services:
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    startCommand: celery -A workers.celery_app worker --loglevel=info
+    startCommand: celery -A backend.app.core.celery.celery_app worker --loglevel=info
     envVars:
       - key: ENVIRONMENT
         value: production
@@ -93,7 +93,7 @@ services:
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    startCommand: celery -A workers.celery_app beat --loglevel=info
+    startCommand: celery -A backend.app.core.celery.celery_app beat --loglevel=info
     envVars:
       - key: ENVIRONMENT
         value: production

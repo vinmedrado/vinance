@@ -54,13 +54,12 @@ ignorados pelo Git e foram preservados. Em `data/ml_artifacts` existe somente o
 `.gitkeep` versionado, portanto não foi encontrado artifact ML legado real para
 exclusão.
 
-## Componentes remanescentes da Onda E
+## Componentes encaminhados à Onda E
 
-Alguns módulos legados permanecem fisicamente no worktree porque contêm tarefas
-decoradas ou são dependências diretas de scripts locais. O registry real do
-worker e o call graph do FastAPI confirmaram que nenhum integra o runtime
-oficial. Eles foram reclassificados como `ONDA_E_LOCAL_TOOLING` e sua remoção
-deve ser concluída junto com os respectivos entry points locais:
+Na conclusão da Onda D, alguns módulos legados ainda permaneciam fisicamente no
+worktree porque continham tarefas decoradas ou eram dependências diretas de
+scripts locais. O registry real do worker e o call graph do FastAPI confirmaram
+que nenhum integrava o runtime oficial. Eles foram encaminhados à Onda E:
 
 - `workers/tasks.py` e os serviços `ml_*` antigos;
 - `services/automation_service.py`, `background_jobs.py` e `job_executor.py`;
@@ -70,8 +69,8 @@ deve ser concluída junto com os respectivos entry points locais:
 - scripts de analysis/backtest/catálogo/ML que importavam as stacks aposentadas;
 - `services/asset_catalog_db.py`, importadores Excel e utilitários SQLite locais.
 
-Não restou código de produto bloqueado na Onda D. Nenhum desses itens está no
-registry real do worker canônico.
+Esses itens foram aposentados na Onda E. Nenhum estava no registry real do
+worker canônico.
 
 ## Garantias
 
