@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 from backend.app.intelligence.contextual_financial_memory import ContextualFinancialMemory
 from backend.app.intelligence.financial_safety_guardrails import FinancialSafetyGuardrails
@@ -228,18 +228,6 @@ class FinancialAIOrchestrator:
             provider=response.get("provider", "local_fallback"), success=True, started_at=started,
         )
         return response
-
-    @classmethod
-    def answer_from_db(cls, db: Any, ctx: Any, question: str, *, year: int | None = None, month: int | None = None) -> dict[str, Any]:
-        from backend.app.intelligence.financial_context_builder import FinancialContextBuilder
-        cache_key = AdvisorPerformanceService.cache_key(ctx.organization_id, ctx.user_id, year, month)
-        context = AdvisorPerformanceService.get_cached_context(cache_key)
-        if context is None:
-            context = FinancialContextBuilder.build(db, ctx, year=year, month=month)
-            AdvisorPerformanceService.set_cached_context(cache_key, context)
-        from backend.app.intelligence.user_learning_profile_service import UserLearningProfileService
-        learning = UserLearningProfileService.update_from_interaction(db, organization_id=ctx.organization_id, user_id=ctx.user_id, question=question, context=context)
-        return cls.answer(question, context, learning)
 
     @classmethod
     def suggest_questions(cls, context: dict[str, Any], memory: dict[str, Any] | None = None) -> list[str]:

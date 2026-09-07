@@ -129,7 +129,7 @@ Resultado: **OK** — saída `0`, sem erro de sintaxe.
 Comando:
 
 ```bash
-python -c "import importlib; [importlib.import_module(m) for m in ['backend.app.main','db.database','services.final_ranking_service']]"
+python -c "import importlib; [importlib.import_module(m) for m in ['backend.app.main','services.final_ranking_service']]"
 ```
 
 Resultado neste ambiente: **não conclusivo por dependência ausente no container de validação**.
@@ -138,7 +138,6 @@ Log:
 
 ```text
 FAIL backend.app.main: ModuleNotFoundError: No module named 'sqlalchemy'
-FAIL db.database: ModuleNotFoundError: No module named 'sqlalchemy'
 FAIL services.final_ranking_service: ModuleNotFoundError: No module named 'sqlalchemy'
 ```
 

@@ -62,7 +62,7 @@ def test_wave_c_paths_have_no_implicit_sqlite_or_demo_owner() -> None:
             ROOT / "backend" / "app" / "financial" / "service.py",
             ROOT / "backend" / "app" / "financial" / "router.py",
             ROOT / "backend" / "app" / "financial" / "services" / "financial_analysis.py",
-            ROOT / "backend" / "app" / "financing" / "routers" / "financing.py",
+            ROOT / "backend" / "app" / "financing" / "services" / "calculator.py",
         )
     )
 
@@ -72,6 +72,7 @@ def test_wave_c_paths_have_no_implicit_sqlite_or_demo_owner() -> None:
     assert "demo-user" not in sources
     assert "pg_compat" not in sources
     assert "personal_finance" not in sources
+    assert not (ROOT / "backend" / "app" / "financing" / "routers" / "financing.py").exists()
 
 
 def test_legacy_excel_importer_is_retired_from_official_runtime() -> None:

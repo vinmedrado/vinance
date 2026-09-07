@@ -167,11 +167,8 @@ def upgrade() -> None:
     op.create_index("ix_data_sync_logs_status", "data_sync_logs", ["status"])
     op.create_index("ix_data_sync_logs_source_entity", "data_sync_logs", ["source", "entity"])
 
-    # Mantém compatibilidade com os demais models já existentes no backend.
-    from backend.app.database import Base
-    import backend.app.models  # noqa: F401
-
-    Base.metadata.create_all(bind=op.get_bind(), checkfirst=True)
+    # O antigo hook create_all foi aposentado. Esta migration está arquivada e
+    # não participa da árvore Alembic canônica.
 
 
 def downgrade() -> None:
