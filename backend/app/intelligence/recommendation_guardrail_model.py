@@ -18,7 +18,7 @@ class AssetRecommendationGuardrail(Base):
         Index("ix_asset_recommendation_guardrails_ticker_market", "ticker", "market"),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     ticker: Mapped[str] = mapped_column(String(32), nullable=False)
     market: Mapped[str] = mapped_column(String(24), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False)

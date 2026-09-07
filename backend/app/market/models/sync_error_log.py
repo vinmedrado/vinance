@@ -17,7 +17,7 @@ class SyncErrorLog(Base):
         Index("ix_sync_error_log_tipo_erro", "tipo_erro"),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     run_id: Mapped[str] = mapped_column(String(64), nullable=False)
     mercado: Mapped[str] = mapped_column(String(32), nullable=False)
     ticker: Mapped[str] = mapped_column(String(32), nullable=False)

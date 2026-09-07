@@ -63,11 +63,17 @@ def _fii(**overrides):
     return SimpleNamespace(**base)
 
 
-def test_fundamentals_metadata_has_only_market_specific_tables():
+def test_fundamentals_metadata_contains_canonical_market_and_ml_tables():
     tables = set(Base.metadata.tables.keys())
     assert {"fii_fundamentals", "acoes_fundamentals", "etf_fundamentals", "bdr_fundamentals", "cripto_fundamentals"}.issubset(tables)
     assert "asset_fundamentals" not in tables
-    assert not any(table.endswith("_ml_features") for table in tables)
+    assert {
+        "fii_ml_features",
+        "acoes_ml_features",
+        "etf_ml_features",
+        "bdr_ml_features",
+        "cripto_ml_features",
+    }.issubset(tables)
 
 
 def test_unique_constraints_are_market_specific():

@@ -21,7 +21,7 @@ class InvestmentRecommendation(Base):
         Index("ix_investment_recommendations_market_rank", "market", "recommendation_rank"),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     budget: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     market: Mapped[str] = mapped_column(String(24), nullable=False)
     ticker: Mapped[str] = mapped_column(String(32), nullable=False)

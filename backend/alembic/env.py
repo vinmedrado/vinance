@@ -23,6 +23,13 @@ from backend.app.market.models.sync_log import SyncLog  # noqa: F401
 from backend.app.market.models.sync_error_log import SyncErrorLog  # noqa: F401
 from backend.app.intelligence.asset_score_model import AssetScore  # noqa: F401
 from backend.app.intelligence.investment_recommendation_model import InvestmentRecommendation  # noqa: F401
+from backend.app.intelligence.models import (  # noqa: F401
+    AcaoMLFeature,
+    BdrMLFeature,
+    CriptoMLFeature,
+    EtfMLFeature,
+    FiiMLFeature,
+)
 from backend.app.intelligence.recommendation_guardrail_model import AssetRecommendationGuardrail  # noqa: F401
 from backend.app.intelligence.asset_trend_signal_model import AssetTrendSignal  # noqa: F401
 from backend.app.investment_decisions.models import InvestmentDecisionAudit  # noqa: F401
@@ -34,6 +41,7 @@ from backend.app.investment_alerts.models import (  # noqa: F401
 )
 from backend.app.core.config import settings
 from backend.app.core.database import Base
+from backend.alembic.schema_ownership import include_name
 
 config = context.config
 if config.config_file_name is not None:
@@ -49,13 +57,19 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         compare_type=True,
+        include_name=include_name,
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        include_name=include_name,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

@@ -17,7 +17,7 @@ class SyncLog(Base):
         Index("ix_sync_log_status", "status"),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     run_id: Mapped[str] = mapped_column(String(64), nullable=False)
     source: Mapped[str] = mapped_column(String(80), nullable=False)
     mercado: Mapped[str] = mapped_column(String(32), nullable=False)
