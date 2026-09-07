@@ -8,7 +8,7 @@ from ..storage.database import create_sync_engine
 
 def main() -> None:
     settings = get_settings()
-    print("Vinance Trading Lab")
+    print("Vinance Trading V2")
     print(f"Modo: {settings.trading_mode}")
     print(f"Ativos: {settings.trading_symbols}")
     print(f"Intervalo: {settings.trading_interval}")

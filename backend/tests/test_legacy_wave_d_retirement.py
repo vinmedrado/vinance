@@ -1,9 +1,24 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+RETIRED_TRADING_PACKAGES = (
+    "backtests",
+    "candles",
+    "execution",
+    "features",
+    "live_trading",
+    "models",
+    "monitoring",
+    "paper_trading",
+    "portfolio",
+    "risk",
+    "signals",
+    "targets",
+)
 
 
 def test_superseded_analytics_and_trading_entry_points_are_absent() -> None:
@@ -18,6 +33,14 @@ def test_superseded_analytics_and_trading_entry_points_are_absent() -> None:
         ROOT / "services" / "catalog_pipeline_runs.py",
         ROOT / "services" / "market_data_pipeline_runs.py",
         ROOT / "services" / "pipeline_background_tasks.py",
+        ROOT / "backend" / "trading" / "features" / "builder.py",
+        ROOT / "backend" / "trading" / "models" / "baseline.py",
+        ROOT / "backend" / "trading" / "scripts" / "auditar_banco_trading.py",
+        ROOT / "backend" / "trading" / "scripts" / "collect_history.py",
+        ROOT / "backend" / "trading" / "scripts" / "collect_sample.py",
+        ROOT / "backend" / "trading" / "scripts" / "run_pipeline.py",
+        ROOT / "backend" / "trading" / "scripts" / "run_research_pipeline.py",
+        ROOT / "backend" / "trading" / "targets" / "builder.py",
     )
 
     assert all(not path.exists() for path in retired_paths)
@@ -69,19 +92,52 @@ def test_official_runtime_has_no_legacy_database_or_entry_point_imports() -> Non
     assert all(token not in runtime_sources for token in forbidden)
 
 
-def test_backtest_history_schema_is_written_by_trading_pipeline() -> None:
-    pipeline_sources = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in (
-            ROOT / "backend" / "trading" / "scripts" / "run_pipeline.py",
-            ROOT / "backend" / "trading" / "scripts" / "run_research_pipeline.py",
-        )
+def test_backtest_history_schema_remains_owned_by_trading_v2() -> None:
+    schema = (ROOT / "backend" / "trading" / "storage" / "schema.sql").read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS backtest_runs" in schema
+    assert "strategy_version" in schema
+    assert "parameters JSONB" in schema
+    assert "metrics JSONB" in schema
+
+
+def test_no_competing_trading_v1_python_stack_remains() -> None:
+    trading_root = ROOT / "backend" / "trading"
+    assert all(
+        not any((trading_root / package).rglob("*.py"))
+        for package in RETIRED_TRADING_PACKAGES
     )
 
-    assert "INSERT INTO backtest_runs" in pipeline_sources
-    assert "strategy_version" in pipeline_sources
-    assert "parameters" in pipeline_sources
-    assert "metrics" in pipeline_sources
+    source = "\n".join(
+        path.read_text(encoding="utf-8", errors="ignore")
+        for path in trading_root.rglob("*.py")
+        if "tests" not in path.parts
+    )
+
+    assert 'FEATURE_VERSION = "v1"' not in source
+    assert 'MODEL_VERSION = "logistic_v1"' not in source
+    assert 'MODEL_VERSION = "logistic_research_v2"' not in source
+    assert all(
+        re.search(
+            rf"\bbackend\.trading\.{re.escape(package)}(?:\.|\b)",
+            source,
+        )
+        is None
+        for package in RETIRED_TRADING_PACKAGES
+    )
+
+
+def test_trading_v2_keeps_paper_only_as_the_safe_default() -> None:
+    settings_source = (
+        ROOT / "backend" / "trading" / "config" / "settings.py"
+    ).read_text(encoding="utf-8")
+    campaign_source = (
+        ROOT / "backend" / "trading" / "scripts" / "experiment_campaign_v2.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"PAPER_ONLY"' in settings_source
+    assert '!= "PAPER_ONLY"' in campaign_source
+    assert "requires trading_mode=PAPER_ONLY" in campaign_source
 
 
 def test_wave_e_retirement_keeps_only_the_safe_readiness_entry_point() -> None:

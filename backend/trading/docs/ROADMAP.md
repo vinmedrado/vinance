@@ -1,28 +1,17 @@
-# Roadmap
+# Roadmap Trading V2
 
-## Fase 1 — Dados
-- Criar tabelas.
-- Coletar BTCUSDT e ETHUSDT em 5 minutos.
-- Fazer backfill histórico.
-- Medir lacunas, duplicidades e atraso.
+## Entregue
 
-## Fase 2 — Baseline
-- Features v1.
-- Target de alta/queda em 12 candles.
-- Regressão logística.
-- Walk-forward validation.
+- expansão histórica e validação de integridade;
+- Feature Store V2 e Target Engine V2;
+- ML Engine V2 e Prediction Engine V2;
+- Backtesting V2 com walk-forward;
+- Research V2 e Validation V2;
+- Paper Trading V2 em modo PAPER_ONLY.
 
-## Fase 3 — Estratégias
-- LightGBM/XGBoost.
-- Filtros de liquidez e volatilidade.
-- Custos, spread e slippage.
+## Guardrails
 
-## Fase 4 — Paper trading
-- Carteira simulada.
-- Limites diários.
-- Dashboard e alertas.
-
-## Fase 5 — Revisão
-- Comparar resultados fora da amostra.
-- Verificar estabilidade por regime.
-- Manter trading real desativado até revisão completa.
+- A stack V1 está aposentada e não deve receber novos entrypoints.
+- Artefatos, outputs e histórico de backtest são preservados.
+- O schema operacional de Trading V2 permanece em storage/schema.sql.
+- Trading real continua desativado e exige uma decisão arquitetural futura explícita.
