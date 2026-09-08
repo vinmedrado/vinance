@@ -10,10 +10,17 @@ from backend.app.financial.budget_engine import calculate_budget_strategy
 from backend.app.financial.models import Expense, FinancialProfile, Income
 from backend.app.financial.schemas import ExpenseCreate, FinancialProfileCreate, IncomeCreate
 from backend.app.financial.scoring import calculate_financial_score
+from backend.app.financial_state.service import get_default_household
 
 
 async def create_income(session: AsyncSession, *, user_id: int, payload: IncomeCreate) -> Income:
-    income = Income(user_id=user_id, **payload.model_dump())
+    household = await get_default_household(session, user_id=user_id)
+    income = Income(
+        user_id=user_id,
+        household_id=household.id,
+        ownership_scope="PERSONAL",
+        **payload.model_dump(),
+    )
     session.add(income)
     await session.commit()
     await session.refresh(income)
@@ -21,14 +28,28 @@ async def create_income(session: AsyncSession, *, user_id: int, payload: IncomeC
 
 
 async def list_incomes(session: AsyncSession, *, user_id: int) -> list[Income]:
+    household = await get_default_household(session, user_id=user_id)
     result = await session.execute(
-        select(Income).where(Income.user_id == user_id).order_by(Income.received_at.desc(), Income.id.desc())
+        select(Income)
+        .where(
+            Income.user_id == user_id,
+            Income.household_id == household.id,
+            Income.ownership_scope == "PERSONAL",
+        )
+        .order_by(Income.received_at.desc(), Income.id.desc())
     )
     return list(result.scalars().all())
 
 
 async def create_expense(session: AsyncSession, *, user_id: int, payload: ExpenseCreate) -> Expense:
-    expense = Expense(user_id=user_id, **payload.model_dump())
+    household = await get_default_household(session, user_id=user_id)
+    expense = Expense(
+        user_id=user_id,
+        household_id=household.id,
+        ownership_scope="PERSONAL",
+        expense_nature=None,
+        **payload.model_dump(),
+    )
     session.add(expense)
     await session.commit()
     await session.refresh(expense)
@@ -36,8 +57,15 @@ async def create_expense(session: AsyncSession, *, user_id: int, payload: Expens
 
 
 async def list_expenses(session: AsyncSession, *, user_id: int) -> list[Expense]:
+    household = await get_default_household(session, user_id=user_id)
     result = await session.execute(
-        select(Expense).where(Expense.user_id == user_id).order_by(Expense.due_date.asc(), Expense.id.desc())
+        select(Expense)
+        .where(
+            Expense.user_id == user_id,
+            Expense.household_id == household.id,
+            Expense.ownership_scope == "PERSONAL",
+        )
+        .order_by(Expense.due_date.asc(), Expense.id.desc())
     )
     return list(result.scalars().all())
 

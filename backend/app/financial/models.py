@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.core.database import Base
@@ -11,9 +11,18 @@ from backend.app.core.database import Base
 
 class Income(Base):
     __tablename__ = "incomes"
+    __table_args__ = (
+        CheckConstraint("ownership_scope IN ('PERSONAL','HOUSEHOLD')", name="ck_incomes_ownership_scope"),
+        Index("ix_incomes_household_received", "household_id", "received_at"),
+        Index("ix_incomes_household_owner", "household_id", "ownership_scope", "user_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    household_id: Mapped[int] = mapped_column(
+        ForeignKey("households.id", ondelete="RESTRICT"), nullable=False
+    )
+    ownership_scope: Mapped[str] = mapped_column(String(16), nullable=False, default="PERSONAL")
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     income_type: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -25,9 +34,19 @@ class Income(Base):
 
 class Expense(Base):
     __tablename__ = "expenses"
+    __table_args__ = (
+        CheckConstraint("ownership_scope IN ('PERSONAL','HOUSEHOLD')", name="ck_expenses_ownership_scope"),
+        CheckConstraint("expense_nature IN ('FIXED','VARIABLE')", name="ck_expenses_nature"),
+        Index("ix_expenses_household_due", "household_id", "due_date"),
+        Index("ix_expenses_household_owner", "household_id", "ownership_scope", "user_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    household_id: Mapped[int] = mapped_column(
+        ForeignKey("households.id", ondelete="RESTRICT"), nullable=False
+    )
+    ownership_scope: Mapped[str] = mapped_column(String(16), nullable=False, default="PERSONAL")
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     category: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
@@ -35,6 +54,7 @@ class Expense(Base):
     paid_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     is_recurring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    expense_nature: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

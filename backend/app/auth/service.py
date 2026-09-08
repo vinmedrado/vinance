@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.auth.models import User
 from backend.app.auth.security import get_password_hash, verify_password
 from backend.app.auth.schemas import UserCreate
+from backend.app.financial_state.models import Household, HouseholdMember
 
 
 async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
@@ -20,6 +21,24 @@ async def create_user(session: AsyncSession, payload: UserCreate) -> User:
         hashed_password=get_password_hash(payload.password),
     )
     session.add(user)
+    await session.flush()
+    household = Household(
+        name=f"{payload.full_name or payload.email} — pessoal",
+        household_type="PERSONAL",
+        created_by_user_id=user.id,
+        status="ACTIVE",
+    )
+    session.add(household)
+    await session.flush()
+    session.add(
+        HouseholdMember(
+            household_id=household.id,
+            user_id=user.id,
+            role="OWNER",
+            status="ACTIVE",
+            is_default=True,
+        )
+    )
     await session.commit()
     await session.refresh(user)
     return user
