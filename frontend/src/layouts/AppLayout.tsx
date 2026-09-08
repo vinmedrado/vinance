@@ -6,7 +6,7 @@ import { useThemeMode } from '../hooks/useThemeMode';
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { label: 'Financeiro', path: '/financial', icon: WalletCards },
+  { label: 'Minha situação', path: '/financial', icon: WalletCards },
   { label: 'Mercado', path: '/market', icon: BarChart3 },
   { label: 'Inteligência', path: '/intelligence', icon: Brain },
   { label: 'Investir', path: '/investir', icon: TrendingUp },
