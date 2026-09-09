@@ -21,12 +21,14 @@ import {
   useCreateHouseholdExpense,
   useCreateHouseholdIncome,
   useCreateFinancialStateSnapshot,
+  useCurrentFinancialPolicy,
   useCurrentFinancialState,
   useDefaultHousehold,
   useHouseholdExpenses,
   useHouseholdIncomes,
   useHouseholds,
 } from '../features/financial-state/hooks/useFinancialState';
+import { FinancialPolicyCard } from '../features/financial-state/components/FinancialPolicyCard';
 import type { DataQuality, MoneyValue, OwnershipScope } from '../features/financial-state/types/financialState.types';
 import { useFinancialProfile } from '../features/financial/hooks/useFinancial';
 import type { ApiErrorShape } from '../services/api';
@@ -195,6 +197,7 @@ export function FinancialPage() {
   }, [defaultHousehold.data, selectedHouseholdId]);
 
   const financialState = useCurrentFinancialState(selectedHouseholdId);
+  const financialPolicy = useCurrentFinancialPolicy(selectedHouseholdId);
   const incomes = useHouseholdIncomes(selectedHouseholdId);
   const expenses = useHouseholdExpenses(selectedHouseholdId);
   const createIncome = useCreateHouseholdIncome(selectedHouseholdId);
@@ -254,6 +257,7 @@ export function FinancialPage() {
     households.refetch();
     defaultHousehold.refetch();
     financialState.refetch();
+    financialPolicy.refetch();
     incomes.refetch();
     expenses.refetch();
     profile.refetch();
@@ -262,9 +266,9 @@ export function FinancialPage() {
   return (
     <section className="vn-page">
       <SectionHeader
-        eyebrow="Financial Autopilot · fase 1"
+        eyebrow="Financial Autopilot · fase 2"
         title="Minha situação financeira"
-        description="Uma leitura objetiva da sua renda, gastos, patrimônio, dívidas e objetivos — com transparência sobre o que ainda falta informar."
+        description="Uma leitura objetiva da sua situação e da ordem de prioridades agora — com transparência sobre o que ainda falta informar."
         action={state ? <Button variant="secondary" onClick={() => createSnapshot.mutate()} disabled={createSnapshot.isPending}>{createSnapshot.isPending ? 'Salvando...' : 'Salvar retrato'}</Button> : undefined}
       />
 
@@ -385,6 +389,13 @@ export function FinancialPage() {
 
       {state && metrics && (
         <>
+          <FinancialPolicyCard
+            policy={financialPolicy.data}
+            isLoading={financialPolicy.isLoading}
+            errorMessage={financialPolicy.error ? errorMessage(financialPolicy.error) : undefined}
+            onRetry={() => financialPolicy.refetch()}
+          />
+
           <Card
             title="Qualidade dos dados"
             description="A confiança mede completude e atualidade das informações; não é uma previsão de mercado."

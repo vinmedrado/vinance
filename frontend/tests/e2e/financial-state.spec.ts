@@ -59,6 +59,40 @@ const financialState = {
   provenance: {},
 };
 
+const financialPolicy = {
+  household_id: 10,
+  engine_version: 'financial-policy-v1',
+  rules_version: 'financial-policy-rules-v1',
+  evaluated_at: '2026-09-08T12:00:00Z',
+  input_fingerprint: 'a'.repeat(64),
+  ruleset_fingerprint: 'b'.repeat(64),
+  decision_fingerprint: 'c'.repeat(64),
+  policy_state: 'EMERGENCY_RESERVE_PRIORITY',
+  investment_readiness: 'LIMITED',
+  summary: 'A prioridade atual é fortalecer a reserva de emergência.',
+  priority_stack: [
+    {
+      rank: 1,
+      code: 'BUILD_EMERGENCY_RESERVE',
+      title: 'Fortalecer a reserva de emergência',
+      explanation: 'Aproxime a reserva do alvo dinâmico calculado com o contexto conhecido.',
+      status: 'ACTIVE',
+      evidence_refs: ['EMERGENCY_RESERVE'],
+    },
+    {
+      rank: 2,
+      code: 'INVEST_SURPLUS_CAPITAL',
+      title: 'Investir somente o capital excedente',
+      explanation: 'Ativos, mercados e quantidades não são escolhidos aqui.',
+      status: 'CONDITIONAL',
+      evidence_refs: ['INVESTMENT_CAPACITY'],
+    },
+  ],
+  data_gate: { status: 'LIMITED', critical_missing_fields: [], readiness_missing_fields: [] },
+  debt_policy: {}, reserve_policy: {}, goal_policy: {}, blockers: [], warnings: [], limitations: [],
+  evidence: [], rules_evaluated: [], ruleset: {}, source_financial_state: {}, previous_financial_state: {},
+};
+
 test('financial state preserva ausência, ownership e idempotência de snapshot', async ({ page }) => {
   const incomePayloads: unknown[] = [];
   const snapshotKeys: string[] = [];
@@ -72,6 +106,7 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
     if (path.endsWith('/financial/profile')) return json(route, { id: 1 });
     if (path.endsWith('/households/default')) return json(route, household);
     if (path.endsWith('/financial/households')) return json(route, [household]);
+    if (path.endsWith('/households/10/financial-policy')) return json(route, financialPolicy);
     if (path.endsWith('/households/10/financial-state/snapshots')) {
       snapshotAttempts += 1;
       snapshotKeys.push(request.headers()['idempotency-key']);
@@ -94,6 +129,10 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await page.goto('/financial');
 
   await expect(page.getByRole('heading', { name: 'Minha situação financeira' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Prioridades financeiras agora' })).toBeVisible();
+  await expect(page.getByText('Novos aportes limitados')).toBeVisible();
+  await expect(page.getByText(/1\. Fortalecer a reserva de emergência/)).toBeVisible();
+  await expect(page.getByText(/2\. Investir somente o capital excedente/)).toBeVisible();
   await expect(page.getByText(/Variáveis: Não informado/)).toBeVisible();
   await expect(page.getByText(/Dívidas:.*0,00/)).toBeVisible();
 

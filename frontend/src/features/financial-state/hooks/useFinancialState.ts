@@ -1,9 +1,11 @@
 import { useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSessionToken } from '../../auth/hooks/useAuth';
 import {
   createExpense,
   createFinancialStateSnapshot,
   createIncome,
+  getCurrentFinancialPolicy,
   getCurrentFinancialState,
   getDefaultHousehold,
   getFinancialStateHistory,
@@ -13,41 +15,74 @@ import {
 } from '../services/financialState.service';
 import type { ExpensePayload, IncomePayload } from '../types/financialState.types';
 
+type FinancialQueryPart = string | number | null;
+
+export const financialStateQueryKey = (
+  sessionToken: string | null,
+  ...parts: FinancialQueryPart[]
+) => ['financial-state', sessionToken, ...parts] as const;
+
+export const financialPolicyQueryKey = (
+  sessionToken: string | null,
+  ...parts: FinancialQueryPart[]
+) => ['financial-policy', sessionToken, ...parts] as const;
+
 export function useHouseholds() {
-  return useQuery({ queryKey: ['financial-state', 'households'], queryFn: listHouseholds });
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: financialStateQueryKey(sessionToken, 'households'),
+    queryFn: listHouseholds,
+  });
 }
 
 export function useDefaultHousehold() {
-  return useQuery({ queryKey: ['financial-state', 'household', 'default'], queryFn: getDefaultHousehold });
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: financialStateQueryKey(sessionToken, 'household', 'default'),
+    queryFn: getDefaultHousehold,
+  });
 }
 
 export function useCurrentFinancialState(householdId: number | null) {
+  const sessionToken = useSessionToken();
   return useQuery({
-    queryKey: ['financial-state', 'current', householdId],
+    queryKey: financialStateQueryKey(sessionToken, 'current', householdId),
     queryFn: () => getCurrentFinancialState(householdId as number),
     enabled: householdId !== null,
   });
 }
 
-export function useFinancialStateHistory(householdId: number | null) {
+export function useCurrentFinancialPolicy(householdId: number | null) {
+  const sessionToken = useSessionToken();
   return useQuery({
-    queryKey: ['financial-state', 'history', householdId],
+    queryKey: financialPolicyQueryKey(sessionToken, 'current', householdId),
+    queryFn: () => getCurrentFinancialPolicy(householdId as number),
+    enabled: householdId !== null,
+  });
+}
+
+export function useFinancialStateHistory(householdId: number | null) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: financialStateQueryKey(sessionToken, 'history', householdId),
     queryFn: () => getFinancialStateHistory(householdId as number),
     enabled: householdId !== null,
   });
 }
 
 export function useHouseholdIncomes(householdId: number | null) {
+  const sessionToken = useSessionToken();
   return useQuery({
-    queryKey: ['financial-state', 'incomes', householdId],
+    queryKey: financialStateQueryKey(sessionToken, 'incomes', householdId),
     queryFn: () => listHouseholdIncomes(householdId as number),
     enabled: householdId !== null,
   });
 }
 
 export function useHouseholdExpenses(householdId: number | null) {
+  const sessionToken = useSessionToken();
   return useQuery({
-    queryKey: ['financial-state', 'expenses', householdId],
+    queryKey: financialStateQueryKey(sessionToken, 'expenses', householdId),
     queryFn: () => listHouseholdExpenses(householdId as number),
     enabled: householdId !== null,
   });
@@ -55,14 +90,16 @@ export function useHouseholdExpenses(householdId: number | null) {
 
 export function useCreateHouseholdIncome(householdId: number | null) {
   const queryClient = useQueryClient();
+  const sessionToken = useSessionToken();
   return useMutation({
     mutationFn: (payload: IncomePayload) => {
       if (householdId === null) throw new Error('Household não selecionado');
       return createIncome(householdId, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['financial-state', 'incomes', householdId] });
-      queryClient.invalidateQueries({ queryKey: ['financial-state', 'current', householdId] });
+      queryClient.invalidateQueries({ queryKey: financialStateQueryKey(sessionToken, 'incomes', householdId) });
+      queryClient.invalidateQueries({ queryKey: financialStateQueryKey(sessionToken, 'current', householdId) });
+      queryClient.invalidateQueries({ queryKey: financialPolicyQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: ['financial'] });
     },
   });
@@ -70,14 +107,16 @@ export function useCreateHouseholdIncome(householdId: number | null) {
 
 export function useCreateHouseholdExpense(householdId: number | null) {
   const queryClient = useQueryClient();
+  const sessionToken = useSessionToken();
   return useMutation({
     mutationFn: (payload: ExpensePayload) => {
       if (householdId === null) throw new Error('Household não selecionado');
       return createExpense(householdId, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['financial-state', 'expenses', householdId] });
-      queryClient.invalidateQueries({ queryKey: ['financial-state', 'current', householdId] });
+      queryClient.invalidateQueries({ queryKey: financialStateQueryKey(sessionToken, 'expenses', householdId) });
+      queryClient.invalidateQueries({ queryKey: financialStateQueryKey(sessionToken, 'current', householdId) });
+      queryClient.invalidateQueries({ queryKey: financialPolicyQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: ['financial'] });
     },
   });
@@ -91,6 +130,7 @@ function snapshotIdempotencyKey(householdId: number) {
 
 export function useCreateFinancialStateSnapshot(householdId: number | null) {
   const queryClient = useQueryClient();
+  const sessionToken = useSessionToken();
   const pendingRequest = useRef<{ householdId: number; key: string } | null>(null);
   return useMutation({
     mutationFn: () => {
@@ -102,7 +142,8 @@ export function useCreateFinancialStateSnapshot(householdId: number | null) {
     },
     onSuccess: () => {
       pendingRequest.current = null;
-      queryClient.invalidateQueries({ queryKey: ['financial-state', 'history', householdId] });
+      queryClient.invalidateQueries({ queryKey: financialStateQueryKey(sessionToken, 'history', householdId) });
+      queryClient.invalidateQueries({ queryKey: financialPolicyQueryKey(sessionToken, 'current', householdId) });
     },
   });
 }

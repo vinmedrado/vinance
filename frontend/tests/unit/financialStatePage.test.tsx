@@ -1,16 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { FinancialPage } from '../../src/pages/FinancialPage';
-import type { FinancialState, Household } from '../../src/features/financial-state/types/financialState.types';
+import type { FinancialPolicy, FinancialState, Household } from '../../src/features/financial-state/types/financialState.types';
+import { clearSession, setSession } from '../../src/services/api';
 
 
 const service = vi.hoisted(() => ({
   listHouseholds: vi.fn(),
   getDefaultHousehold: vi.fn(),
   getCurrentFinancialState: vi.fn(),
+  getCurrentFinancialPolicy: vi.fn(),
   createFinancialStateSnapshot: vi.fn(),
   getFinancialStateHistory: vi.fn(),
   listHouseholdIncomes: vi.fn(),
@@ -78,15 +80,73 @@ const state: FinancialState = {
   provenance: {},
 };
 
+const policy: FinancialPolicy = {
+  household_id: 10,
+  engine_version: 'financial-policy-v1',
+  rules_version: 'financial-policy-rules-v1',
+  evaluated_at: '2026-09-08T12:00:00Z',
+  input_fingerprint: 'a'.repeat(64),
+  ruleset_fingerprint: 'b'.repeat(64),
+  decision_fingerprint: 'c'.repeat(64),
+  policy_state: 'EMERGENCY_RESERVE_PRIORITY',
+  investment_readiness: 'LIMITED',
+  summary: 'A prioridade atual é fortalecer a reserva de emergência.',
+  priority_stack: [
+    {
+      rank: 1,
+      code: 'BUILD_EMERGENCY_RESERVE',
+      title: 'Fortalecer a reserva de emergência',
+      explanation: 'Aproxime a reserva do alvo dinâmico calculado com o contexto conhecido.',
+      status: 'ACTIVE',
+      evidence_refs: ['EMERGENCY_RESERVE'],
+    },
+    {
+      rank: 2,
+      code: 'INVEST_SURPLUS_CAPITAL',
+      title: 'Investir somente o capital excedente',
+      explanation: 'Ativos, mercados e quantidades não são escolhidos aqui.',
+      status: 'CONDITIONAL',
+      evidence_refs: ['INVESTMENT_CAPACITY'],
+    },
+  ],
+  data_gate: {
+    status: 'LIMITED',
+    critical_missing_fields: [],
+    readiness_missing_fields: [],
+    critical_stale_fields: [],
+    currencies: ['BRL'],
+    missing_currency_fields: [],
+    readiness_limiters: ['SOURCE_QUALITY_NOT_COMPLETE'],
+  },
+  debt_policy: {},
+  reserve_policy: {},
+  goal_policy: {},
+  blockers: [],
+  warnings: [{
+    code: 'STALE_DATA_PRESENT',
+    message: 'Confirme os dados antes de ampliar novos aportes.',
+    fields: [],
+    rule_ids: [],
+  }],
+  limitations: [],
+  evidence: [],
+  rules_evaluated: [],
+  ruleset: {},
+  source_financial_state: {},
+  previous_financial_state: {},
+};
+
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(<QueryClientProvider client={client}><FinancialPage /></QueryClientProvider>);
 }
 
 beforeEach(() => {
+  clearSession('logout');
   service.listHouseholds.mockReset().mockResolvedValue([household]);
   service.getDefaultHousehold.mockReset().mockResolvedValue(household);
   service.getCurrentFinancialState.mockReset().mockResolvedValue(state);
+  service.getCurrentFinancialPolicy.mockReset().mockResolvedValue(policy);
   service.getFinancialStateHistory.mockReset().mockResolvedValue({ items: [], total: 0 });
   service.createFinancialStateSnapshot.mockReset().mockResolvedValue({ id: 1 });
   service.listHouseholdIncomes.mockReset().mockResolvedValue([]);
@@ -102,11 +162,38 @@ test('usa métricas do engine e distingue ausência de zero real', async () => {
 
   expect(await screen.findByRole('heading', { name: 'Minha situação financeira' })).toBeInTheDocument();
   expect(await screen.findByText('Parcial · 82%')).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Prioridades financeiras agora' })).toBeInTheDocument();
+  expect(screen.getByText('Novos aportes limitados')).toBeInTheDocument();
+  expect(screen.getByText('Agora')).toHaveClass('vn-badge--warning');
+  expect(screen.getByText(/1\. Fortalecer a reserva de emergência/)).toBeInTheDocument();
+  expect(screen.getByText(/2\. Investir somente o capital excedente/)).toBeInTheDocument();
   expect(screen.getByText(/123,45/)).toBeInTheDocument();
   expect(screen.getByText(/Variáveis: Não informado/)).toBeInTheDocument();
   expect(screen.getByText(/Dívidas:.*0,00/)).toBeInTheDocument();
   expect(screen.getByText('Renda não recorrente deste mês')).toBeInTheDocument();
   expect(screen.getByText('Despesas variáveis deste mês')).toBeInTheDocument();
+});
+
+test('não reutiliza dados financeiros quando a identidade da sessão muda', async () => {
+  setSession('session-token-a', { id: 1 });
+  renderPage();
+
+  await waitFor(() => expect(service.getCurrentFinancialPolicy).toHaveBeenCalledTimes(1));
+  act(() => setSession('session-token-b', { id: 2 }));
+
+  await waitFor(() => expect(service.getCurrentFinancialPolicy).toHaveBeenCalledTimes(2));
+  expect(service.getCurrentFinancialState).toHaveBeenCalledTimes(2);
+  expect(service.listHouseholds).toHaveBeenCalledTimes(2);
+});
+
+test('isola falha da política sem esconder o Financial State', async () => {
+  service.getCurrentFinancialPolicy.mockRejectedValueOnce(new Error('Política indisponível'));
+
+  renderPage();
+
+  expect(await screen.findByText('Política indisponível')).toBeInTheDocument();
+  expect(screen.getByText(/123,45/)).toBeInTheDocument();
+  expect(screen.queryByText('Não foi possível carregar sua situação')).not.toBeInTheDocument();
 });
 
 test('salva snapshot auditável pelo endpoint dedicado', async () => {

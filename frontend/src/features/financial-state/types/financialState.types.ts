@@ -132,6 +132,67 @@ export type FinancialStateHistory = {
   total: number;
 };
 
+export type FinancialPolicyState =
+  | 'DATA_BLOCKED'
+  | 'CASHFLOW_RECOVERY'
+  | 'DEBT_PRIORITY'
+  | 'EMERGENCY_RESERVE_PRIORITY'
+  | 'GOAL_PRIORITY'
+  | 'BALANCED_BUILD'
+  | 'INVESTMENT_READY';
+
+export type InvestmentReadiness = 'BLOCKED' | 'LIMITED' | 'READY';
+
+export type FinancialPolicyMessage = {
+  code: string;
+  message: string;
+  fields: string[];
+  rule_ids: string[];
+};
+
+export type FinancialPriority = {
+  rank: number;
+  code: string;
+  title: string;
+  explanation: string;
+  status: 'ACTIVE' | 'NEXT' | 'CONDITIONAL' | 'BLOCKED';
+  evidence_refs: string[];
+};
+
+export type FinancialPolicy = {
+  household_id: number;
+  engine_version: 'financial-policy-v1';
+  rules_version: string;
+  evaluated_at: string;
+  input_fingerprint: string;
+  ruleset_fingerprint: string;
+  decision_fingerprint: string;
+  policy_state: FinancialPolicyState;
+  investment_readiness: InvestmentReadiness;
+  summary: string;
+  priority_stack: FinancialPriority[];
+  data_gate: {
+    status: 'BLOCKED' | 'LIMITED' | 'PASS';
+    critical_missing_fields: string[];
+    readiness_missing_fields: string[];
+    critical_stale_fields: string[];
+    currencies: string[];
+    missing_currency_fields: string[];
+    readiness_limiters: string[];
+  };
+  debt_policy: Record<string, unknown>;
+  reserve_policy: Record<string, unknown>;
+  goal_policy: Record<string, unknown>;
+  blockers: FinancialPolicyMessage[];
+  warnings: FinancialPolicyMessage[];
+  limitations: FinancialPolicyMessage[];
+  evidence: Array<Record<string, unknown>>;
+  rules_evaluated: Array<Record<string, unknown>>;
+  ruleset: Record<string, unknown>;
+  source_financial_state: Record<string, unknown>;
+  previous_financial_state: Record<string, unknown>;
+};
+
 export type IncomePayload = {
   ownership_scope: OwnershipScope;
   description: string;

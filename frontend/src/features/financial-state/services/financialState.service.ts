@@ -4,6 +4,7 @@ import type {
   ExpensePayload,
   FinancialState,
   FinancialStateHistory,
+  FinancialPolicy,
   FinancialStateSnapshot,
   GoalPayload,
   Household,
@@ -25,6 +26,13 @@ export async function getDefaultHousehold() {
 
 export async function getCurrentFinancialState(householdId: number) {
   const { data } = await api.get<FinancialState>(`/financial/households/${householdId}/financial-state`);
+  return data;
+}
+
+export async function getCurrentFinancialPolicy(householdId: number) {
+  const { data } = await api.get<FinancialPolicy>(
+    `/financial/households/${householdId}/financial-policy`,
+  );
   return data;
 }
 
