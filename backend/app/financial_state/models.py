@@ -204,6 +204,11 @@ class FinancialGoal(Base):
 class FinancialStateSnapshot(Base):
     __tablename__ = "financial_state_snapshots"
     __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "household_id",
+            name="uq_financial_state_snapshots_id_household",
+        ),
         CheckConstraint(
             "data_quality IN ('COMPLETE','PARTIAL','INSUFFICIENT','STALE','INCONSISTENT')",
             name="ck_financial_state_snapshots_quality",

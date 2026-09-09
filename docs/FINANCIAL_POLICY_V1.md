@@ -24,6 +24,13 @@ política. Registros `PERSONAL` só são considerados para membros ativos; regis
 `HOUSEHOLD` permanecem válidos quando registrados por um membro conhecido que
 depois foi removido, exatamente como no State v1.
 
+A saída separa a decisão consolidada de `member_policy_views`. Essas visões
+individuais usam somente métricas `PERSONAL` já calculadas pelo Financial State;
+valores `HOUSEHOLD` nunca são atribuídos artificialmente a um membro. Em um
+household compartilhado a prontidão individual permanece prudencialmente
+limitada quando depende do contexto consolidado. Membros removidos não voltam à
+avaliação pessoal.
+
 ## Precedência dos estados
 
 A primeira condição aplicável define o estado principal:
@@ -114,15 +121,32 @@ infinito. Objetivo integralmente financiado não é limitado só por não ter pr
 
 - `GET /api/v1/financial/households/{household_id}/financial-policy`
 - `GET /api/v1/financial/households/{household_id}/financial-policy/from-state-snapshot/{snapshot_id}`
+- `POST /api/v1/financial/households/{household_id}/financial-policy/decisions`
+- `GET /api/v1/financial/households/{household_id}/financial-policy/history`
+- `GET /api/v1/financial/households/{household_id}/financial-policy/history/{policy_id}`
 
-As duas rotas exigem autenticação, aplicam o isolamento do household e usam
-`Cache-Control: private, no-store`. A segunda reconstrói o State a partir do
-snapshot imutável existente, valida o fingerprint dos inputs e compara o contrato
-persistido ao State reconstruído antes de reaplicar as regras congeladas. Falhas
-de integridade fecham o replay. Assim, não há segunda tabela de snapshot nem
-migration nesta fase. O serviço é somente leitura e não chama `commit`,
-`create_all` ou um segundo engine/Base. No cliente, as chaves de cache financeiro
-são vinculadas à sessão para não reutilizar dados entre identidades.
+Todas exigem autenticação e aplicam o isolamento defensivo do household. Leituras
+usam `Cache-Control: private, no-store`. O replay reconstrói o State a partir de
+um snapshot imutável existente, valida o fingerprint dos inputs e compara o
+contrato persistido ao State reconstruído antes de reaplicar as regras congeladas.
+Falhas de integridade fecham o replay.
+
+O `POST decisions` captura um Financial State v1 imutável e persiste a política
+completa produzida por ele. O header opcional `Idempotency-Key` é único dentro do
+household e reapresenta a mesma decisão em retries. Cada decisão fica ligada por
+FK ao snapshot exato de State, às duas versões de engine/regras e aos três
+fingerprints. Banco e aplicação proíbem update/delete/truncate; não existe API de
+mutação. Histórico e detalhe devolvem o payload armazenado e nunca recalculam a
+decisão com regras novas. O endpoint de replay continua útil para verificação,
+mas não substitui o registro histórico congelado.
+
+O payload guarda prioridades, blockers, warnings, evidências, traces,
+`missing_information` e explicações estruturadas. Texto de apresentação é
+derivado dessas estruturas pelo backend; nenhuma regra financeira vive no React.
+Toda persistência usa o engine/Base canônico e a migration Alembic manual
+`0019_financial_policy_v1`; não há `create_all` ou infraestrutura paralela. No
+cliente, as chaves de cache financeiro são vinculadas à sessão para não reutilizar
+dados entre identidades.
 
 As tabelas externas do Trading V2 continuam fora do ownership do Alembic e não
 são lidas ou alteradas pelo Financial Policy Engine.

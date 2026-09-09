@@ -91,6 +91,31 @@ READINESS_CORE_FIELDS = (
 )
 SUPPORTED_AGGREGATE_CURRENCIES = ("BRL",)
 
+# Messages that identify information which, if supplied or corrected, can
+# materially change the policy.  Keeping this catalogue versioned with the
+# rules makes the API's ``missing_information`` output deterministic and
+# auditable instead of relying on wording heuristics.
+MISSING_INFORMATION_CODES = frozenset(
+    {
+        "POLICY_CONTEXT_MISSING",
+        "FINANCIAL_STATE_FIELDS_MISSING",
+        "DECISION_CORE_MISSING",
+        "CURRENCY_MISSING",
+        "READINESS_CORE_MISSING",
+        "GOALS_NOT_DECLARED",
+        "DEBT_RATE_UNKNOWN",
+        "DEBT_DUE_DATE_UNKNOWN",
+        "DEBT_SERVICE_CONTEXT_UNKNOWN",
+        "FIXED_EXPENSE_SHARE_UNKNOWN",
+        "GOAL_PROGRESS_UNKNOWN",
+        "GOAL_DEADLINE_UNKNOWN",
+        "GOAL_FUNDING_GAP_UNKNOWN",
+        "EMPLOYMENT_STABILITY_NOT_MODELED",
+        "DEPENDENTS_NOT_MODELED",
+        "FINANCIAL_TREND_HISTORY_NOT_AVAILABLE",
+    }
+)
+
 GOAL_PRIORITY_WEIGHTS = MappingProxyType({"HIGH": 3, "MEDIUM": 2, "LOW": 1})
 GOAL_URGENCY_WEIGHTS = MappingProxyType(
     {"OVERDUE": 4, "URGENT": 3, "NEAR_TERM": 2, "UNSCHEDULED": 0}

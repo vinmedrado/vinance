@@ -13,6 +13,7 @@ from backend.app.financial_policy.rules import (
     ENGINE_VERSION,
     GOAL_PRIORITY_WEIGHTS,
     GOAL_URGENCY_WEIGHTS,
+    MISSING_INFORMATION_CODES,
     POLICY_STATE_PRECEDENCE,
     PRIORITY_ORDER,
     READINESS_CORE_FIELDS,
@@ -135,6 +136,7 @@ def _ruleset_fingerprint() -> str:
             "critical_decision_fields": CRITICAL_DECISION_FIELDS,
             "readiness_core_fields": READINESS_CORE_FIELDS,
             "supported_aggregate_currencies": SUPPORTED_AGGREGATE_CURRENCIES,
+            "missing_information_codes": sorted(MISSING_INFORMATION_CODES),
         }
     )
 
@@ -938,6 +940,277 @@ def _cashflow_deterioration(
     return signals
 
 
+def _policy_explanations(
+    *,
+    policy_state: str,
+    readiness: str,
+    summary: str,
+    priorities: Sequence[Mapping[str, Any]],
+    metrics: Mapping[str, Any],
+    debt_policy: Mapping[str, Any],
+    reserve_policy: Mapping[str, Any],
+    goal_policy: Mapping[str, Any],
+    blockers: Sequence[Mapping[str, Any]],
+    readiness_limiters: Sequence[str],
+    traces: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    active = next(
+        (item for item in priorities if item.get("status") == "ACTIVE"),
+        priorities[0] if priorities else None,
+    )
+    decision = str(active.get("title")) if active else summary
+    evidence_refs = list(active.get("evidence_refs") or []) if active else []
+    rule_prefixes_by_state = {
+        "DATA_BLOCKED": ("FPV1-DATA-",),
+        "CASHFLOW_RECOVERY": ("FPV1-CASH-",),
+        "DEBT_PRIORITY": ("FPV1-DEBT-", "FPV1-NET-"),
+        "EMERGENCY_RESERVE_PRIORITY": ("FPV1-RESERVE-",),
+        "GOAL_PRIORITY": ("FPV1-GOAL-",),
+        "BALANCED_BUILD": ("FPV1-READY-",),
+        "INVESTMENT_READY": ("FPV1-READY-",),
+    }
+    relevant_prefixes = rule_prefixes_by_state[policy_state]
+    triggered_rule_ids = [
+        str(trace["rule_id"])
+        for trace in traces
+        if trace.get("outcome") == "TRIGGERED"
+        and str(trace.get("rule_id", "")).startswith(relevant_prefixes)
+    ]
+    if policy_state == "DATA_BLOCKED":
+        reason = "A decisão foi limitada pelos bloqueios de dados: " + ", ".join(
+            str(item.get("code")) for item in blockers
+        )
+    elif policy_state == "CASHFLOW_RECOVERY":
+        reason = (
+            "Fluxo de caixa conhecido: "
+            f"{metrics.get('cash_flow')}; renda disponível: {metrics.get('disposable_income')}; "
+            f"capacidade de poupança: {metrics.get('savings_capacity')}."
+        )
+    elif policy_state == "DEBT_PRIORITY":
+        reason = (
+            f"Passivos conhecidos: {debt_policy.get('total_liabilities')}; "
+            f"debt service ratio: {debt_policy.get('debt_service_ratio')}; "
+            f"dívidas priorizadas: {debt_policy.get('due_priority_debt_ids') or []}."
+        )
+    elif policy_state == "EMERGENCY_RESERVE_PRIORITY":
+        reason = (
+            f"Reserva atual: {reserve_policy.get('current_amount')}; cobertura atual: "
+            f"{reserve_policy.get('current_months')} mês(es); alvo vigente: "
+            f"{reserve_policy.get('target_months')} mês(es)."
+        )
+    elif policy_state == "GOAL_PRIORITY":
+        priority_ids = set(goal_policy.get("priority_goal_ids") or [])
+        goal = next(
+            (item for item in goal_policy.get("goals") or [] if item.get("id") in priority_ids),
+            None,
+        )
+        reason = (
+            f"Objetivo priorizado: {goal.get('name')}; funding gap: {goal.get('funding_gap')}; "
+            f"deadline: {goal.get('deadline')}."
+            if goal
+            else summary
+        )
+    elif policy_state == "INVESTMENT_READY":
+        reason = (
+            "As prioridades prudenciais conhecidas foram atendidas; capacidade de investimento "
+            f"observada: {metrics.get('investment_capacity')}."
+        )
+    else:
+        reason = (
+            "A construção permanece limitada pelos fatores: "
+            + (", ".join(readiness_limiters) if readiness_limiters else "nenhum bloqueio crítico")
+            + "."
+        )
+    return [
+        {
+            "code": "PRIMARY_POLICY_DECISION",
+            "decision": decision,
+            "reason": reason,
+            "evidence_refs": evidence_refs,
+            "rule_ids": list(dict.fromkeys(triggered_rule_ids)),
+            "blocked_alternatives": (
+                ["INVEST_SURPLUS_CAPITAL"] if readiness != "READY" else []
+            ),
+        },
+        {
+            "code": "INVESTMENT_READINESS_DECISION",
+            "decision": readiness,
+            "reason": (
+                "Novos investimentos estão liberados apenas como capital excedente."
+                if readiness == "READY"
+                else "Novos investimentos permanecem limitados ou bloqueados pelas prioridades e evidências listadas."
+            ),
+            "evidence_refs": ["INVESTMENT_CAPACITY", "READINESS_LIMITERS"],
+            "rule_ids": ["FPV1-READY-001"],
+            "blocked_alternatives": (
+                [] if readiness == "READY" else ["FULL_NEW_INVESTMENT"]
+            ),
+        },
+    ]
+
+
+def _member_policy_views(
+    state: Mapping[str, Any],
+    context: Mapping[str, Any],
+    *,
+    household_id: int,
+    evaluated_at: datetime,
+    consolidated_state: str,
+    consolidated_readiness: str,
+) -> list[dict[str, Any]]:
+    """Expose policy signals over the personal metrics already produced by State v1.
+
+    Household-owned values deliberately remain only in the consolidated view.
+    A shared-household member therefore never receives a fabricated READY status
+    from an incomplete personal slice.
+    """
+
+    raw_views = list(state.get("member_views") or [])
+    household = context.get("household") or {}
+    personal_household = (
+        str(household.get("household_type", "")).upper() == "PERSONAL"
+        and len(raw_views) == 1
+    )
+    personal_debts = _active_context_records(
+        context,
+        "liabilities",
+        {"ACTIVE", "DEFAULTED"},
+        household_id=household_id,
+    )
+    results: list[dict[str, Any]] = []
+    for raw in sorted(raw_views, key=lambda item: _stable_identifier_key(item.get("user_id"))):
+        view = dict(raw)
+        user_id = int(view["user_id"])
+        metrics = dict(view.get("metrics") or {})
+        goals = list(view.get("goals") or [])
+        missing = list(view.get("missing_fields") or [])
+        inconsistencies = list(view.get("inconsistencies") or [])
+        signals: list[str] = []
+        critical_missing = [field for field in CRITICAL_DECISION_FIELDS if metrics.get(field) is None]
+        disposable = _decimal(metrics.get("disposable_income"))
+        savings = _decimal(metrics.get("savings_capacity"))
+        cash_flow = _decimal(metrics.get("cash_flow"))
+        reserve = _decimal(metrics.get("emergency_reserve"))
+        reserve_months = _decimal(metrics.get("emergency_reserve_months"))
+        debt_service_ratio = _decimal(metrics.get("debt_service_ratio"))
+        net_worth = _decimal(metrics.get("net_worth"))
+        member_debts = [
+            item
+            for item in personal_debts
+            if str(item.get("ownership_scope", "")).upper() == "PERSONAL"
+            and int(item.get("user_id")) == user_id
+        ]
+        member_debt_due_priority = any(
+            (due_date := _as_date(item.get("due_date"))) is not None
+            and (due_date - evaluated_at.date()).days <= RULES.near_term_debt_days
+            and (
+                (balance := _decimal(item.get("current_balance"))) is None
+                or balance > 0
+            )
+            for item in member_debts
+        )
+        debt_priority = bool(
+            (debt_service_ratio is not None and debt_service_ratio >= RULES.debt_service_priority_pct)
+            or (net_worth is not None and net_worth < 0)
+            or any(str(item.get("status", "")).upper() == "DEFAULTED" for item in member_debts)
+            or any(
+                (rate := _decimal(item.get("annual_interest_rate_pct"))) is not None
+                and rate >= RULES.known_high_cost_debt_apr_pct
+                for item in member_debts
+            )
+            or member_debt_due_priority
+        )
+        cash_recovery = bool(
+            (disposable is not None and disposable <= 0)
+            or (savings is not None and savings <= 0)
+            or (cash_flow is not None and cash_flow < 0)
+        )
+        reserve_priority = bool(
+            reserve == 0
+            or (
+                reserve_months is not None
+                and reserve_months < RULES.reserve_base_months
+            )
+        )
+        goal_priority = False
+        for goal in goals:
+            gap = _decimal(goal.get("funding_gap"))
+            if gap is None or gap <= 0 or str(goal.get("status", "ACTIVE")).upper() != "ACTIVE":
+                continue
+            priority = str(goal.get("priority", "LOW")).upper()
+            deadline = _as_date(goal.get("deadline"))
+            days = (deadline - evaluated_at.date()).days if deadline else None
+            if (
+                priority == "HIGH"
+                or (days is not None and days <= RULES.urgent_goal_days)
+                or (priority == "MEDIUM" and days is not None and days <= RULES.near_term_goal_days)
+            ):
+                goal_priority = True
+                break
+        if inconsistencies or critical_missing:
+            signals.append("COMPLETE_CRITICAL_DATA")
+        if cash_recovery:
+            signals.append("STABILIZE_CASH_FLOW")
+        if debt_priority:
+            signals.append("REDUCE_DEBT_BURDEN")
+        if reserve_priority:
+            signals.append("BUILD_EMERGENCY_RESERVE")
+        if goal_priority:
+            signals.append("FUND_PRIORITY_GOAL")
+        if not signals:
+            signals.append("COMPLETE_READINESS_DATA")
+
+        if personal_household:
+            member_state = consolidated_state
+            member_readiness = consolidated_readiness
+            explanation = "Esta visão pessoal coincide com o household individual canônico."
+        elif inconsistencies or critical_missing:
+            member_state = "DATA_BLOCKED"
+            member_readiness = "BLOCKED"
+            explanation = "A visão pessoal possui dados críticos ausentes ou inconsistentes."
+        elif cash_recovery:
+            member_state = "CASHFLOW_RECOVERY"
+            member_readiness = "BLOCKED"
+            explanation = "A visão pessoal indica recuperação de fluxo de caixa como prioridade."
+        elif debt_priority:
+            member_state = "DEBT_PRIORITY"
+            member_readiness = "LIMITED"
+            explanation = "A visão pessoal indica pressão de dívida, sem incluir valores compartilhados."
+        elif reserve_priority:
+            member_state = "EMERGENCY_RESERVE_PRIORITY"
+            member_readiness = "LIMITED"
+            explanation = "A reserva pessoal conhecida está abaixo do piso prudencial da política."
+        elif goal_priority:
+            member_state = "GOAL_PRIORITY"
+            member_readiness = "LIMITED"
+            explanation = "Um objetivo pessoal conhecido exige prioridade."
+        else:
+            member_state = "BALANCED_BUILD"
+            member_readiness = "LIMITED"
+            explanation = "Visão pessoal parcial; valores HOUSEHOLD permanecem na decisão consolidada."
+        member_missing = list(missing)
+        if not personal_household:
+            member_missing.append("household.shared_values_excluded_from_personal_view")
+        results.append(
+            {
+                "user_id": user_id,
+                "full_name": view.get("full_name"),
+                "scope": "PERSONAL_ONLY",
+                "policy_state": member_state,
+                "investment_readiness": member_readiness,
+                "priority_signals": sorted(
+                    set(signals), key=lambda code: PRIORITY_ORDER[code]
+                ),
+                "metrics": metrics,
+                "goals": goals,
+                "missing_information": list(dict.fromkeys(member_missing)),
+                "inconsistencies": inconsistencies,
+                "explanation": explanation,
+            }
+        )
+    return results
+
+
 def calculate_financial_policy(
     financial_state: Mapping[str, Any],
     *,
@@ -1550,6 +1823,43 @@ def calculate_financial_policy(
         _evidence("CASHFLOW_DETERIORATION", "Deterioração de caixa observada", deterioration_signals, "FIELDS", "financial_policy.history.boundary_crossings"),
     ]
 
+    source_missing_fields = list(state.get("missing_fields") or [])
+    information_messages = [*blockers, *warnings, *limitations]
+    if source_missing_fields:
+        information_messages.append(
+            _message(
+                "FINANCIAL_STATE_FIELDS_MISSING",
+                "Informações ausentes no Financial State podem alterar a política quando forem fornecidas.",
+                fields=tuple(source_missing_fields),
+            )
+        )
+    missing_information = _dedupe_messages(
+        item
+        for item in information_messages
+        if str(item.get("code")) in MISSING_INFORMATION_CODES
+    )
+    explanations = _policy_explanations(
+        policy_state=policy_state,
+        readiness=readiness,
+        summary=summaries[policy_state],
+        priorities=priorities,
+        metrics=metrics,
+        debt_policy=debt_policy,
+        reserve_policy=reserve_policy,
+        goal_policy=goal_policy,
+        blockers=blockers,
+        readiness_limiters=readiness_limiters,
+        traces=traces,
+    )
+    member_policy_views = _member_policy_views(
+        state,
+        context,
+        household_id=household_id,
+        evaluated_at=evaluated_at,
+        consolidated_state=policy_state,
+        consolidated_readiness=readiness,
+    )
+
     gate_status = "BLOCKED" if data_blockers else ("LIMITED" if readiness_limiters else "PASS")
     input_fingerprint = _fingerprint(state, context, previous_state)
     ruleset_fingerprint = _ruleset_fingerprint()
@@ -1581,15 +1891,22 @@ def calculate_financial_policy(
             "blockers": blockers,
             "warnings": warnings,
             "limitations": limitations,
+            "missing_information": missing_information,
+            "explanations": explanations,
             "evidence": evidence,
+            "member_policy_views": member_policy_views,
             "rules_evaluated": traces,
         }
     )
     return {
+        "policy_id": None,
         "household_id": household_id,
+        "financial_state_snapshot_id": state.get("snapshot_id"),
         "engine_version": ENGINE_VERSION,
         "rules_version": RULES_VERSION,
         "evaluated_at": evaluated_at,
+        "generated_at": evaluated_at,
+        "created_at": None,
         "input_fingerprint": input_fingerprint,
         "ruleset_fingerprint": ruleset_fingerprint,
         "decision_fingerprint": decision_fingerprint,
@@ -1604,7 +1921,10 @@ def calculate_financial_policy(
         "blockers": blockers,
         "warnings": warnings,
         "limitations": limitations,
+        "missing_information": missing_information,
+        "explanations": explanations,
         "evidence": evidence,
+        "member_policy_views": member_policy_views,
         "rules_evaluated": traces,
         "ruleset": ruleset,
         "source_financial_state": {

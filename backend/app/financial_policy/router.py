@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.auth.dependencies import get_current_user
 from backend.app.auth.models import User
 from backend.app.core.database import get_session
 from backend.app.financial_policy import service
-from backend.app.financial_policy.schemas import FinancialPolicyRead
+from backend.app.financial_policy.schemas import FinancialPolicyHistory, FinancialPolicyRead
 from backend.app.financial_state import service as state_service
 
 
@@ -91,5 +91,74 @@ async def financial_policy_replay(
         session,
         household_id=household_id,
         snapshot_id=snapshot_id,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/households/{household_id}/financial-policy/decisions",
+    response_model=FinancialPolicyRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def financial_policy_decision_create(
+    household_id: int = Path(ge=1),
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=128,
+    ),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    return await _domain_call(
+        service.create_policy_decision,
+        session,
+        household_id=household_id,
+        user_id=current_user.id,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.get(
+    "/households/{household_id}/financial-policy/history",
+    response_model=FinancialPolicyHistory,
+)
+async def financial_policy_history(
+    response: Response,
+    household_id: int = Path(ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        service.policy_decision_history,
+        session,
+        household_id=household_id,
+        user_id=current_user.id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/households/{household_id}/financial-policy/history/{policy_id}",
+    response_model=FinancialPolicyRead,
+)
+async def financial_policy_decision_detail(
+    response: Response,
+    household_id: int = Path(ge=1),
+    policy_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        service.get_policy_decision,
+        session,
+        household_id=household_id,
+        policy_id=policy_id,
         user_id=current_user.id,
     )

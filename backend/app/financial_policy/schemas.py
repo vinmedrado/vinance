@@ -46,6 +46,29 @@ class PolicyEvidence(BaseModel):
     source: str
 
 
+class PolicyExplanation(BaseModel):
+    code: str
+    decision: str
+    reason: str
+    evidence_refs: list[str]
+    rule_ids: list[str]
+    blocked_alternatives: list[str]
+
+
+class MemberPolicyView(BaseModel):
+    user_id: int
+    full_name: str | None
+    scope: Literal["PERSONAL_ONLY"]
+    policy_state: PolicyState
+    investment_readiness: InvestmentReadiness
+    priority_signals: list[str]
+    metrics: dict[str, Any]
+    goals: list[dict[str, Any]]
+    missing_information: list[str]
+    inconsistencies: list[str]
+    explanation: str
+
+
 class RuleEvaluation(BaseModel):
     rule_id: str
     rule_version: str
@@ -192,10 +215,14 @@ class PreviousFinancialState(BaseModel):
 
 
 class FinancialPolicyRead(BaseModel):
+    policy_id: int | None = None
     household_id: int
+    financial_state_snapshot_id: int | None = None
     engine_version: str
     rules_version: str
     evaluated_at: datetime
+    generated_at: datetime
+    created_at: datetime | None = None
     input_fingerprint: str = Field(min_length=64, max_length=64)
     ruleset_fingerprint: str = Field(min_length=64, max_length=64)
     decision_fingerprint: str = Field(min_length=64, max_length=64)
@@ -210,8 +237,29 @@ class FinancialPolicyRead(BaseModel):
     blockers: list[PolicyMessage]
     warnings: list[PolicyMessage]
     limitations: list[PolicyMessage]
+    missing_information: list[PolicyMessage]
+    explanations: list[PolicyExplanation]
     evidence: list[PolicyEvidence]
+    member_policy_views: list[MemberPolicyView]
     rules_evaluated: list[RuleEvaluation]
     ruleset: PolicyRuleset
     source_financial_state: SourceFinancialState
     previous_financial_state: PreviousFinancialState
+
+
+class FinancialPolicyDecisionSummary(BaseModel):
+    policy_id: int
+    household_id: int
+    financial_state_snapshot_id: int
+    engine_version: str
+    rules_version: str
+    policy_state: PolicyState
+    investment_readiness: InvestmentReadiness
+    decision_fingerprint: str = Field(min_length=64, max_length=64)
+    generated_at: datetime
+    created_at: datetime
+
+
+class FinancialPolicyHistory(BaseModel):
+    items: list[FinancialPolicyDecisionSummary]
+    total: int = Field(ge=0)
