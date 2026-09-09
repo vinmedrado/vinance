@@ -60,10 +60,14 @@ const financialState = {
 };
 
 const financialPolicy = {
+  policy_id: null,
   household_id: 10,
+  financial_state_snapshot_id: null,
   engine_version: 'financial-policy-v1',
   rules_version: 'financial-policy-rules-v1',
   evaluated_at: '2026-09-08T12:00:00Z',
+  generated_at: '2026-09-08T12:00:00Z',
+  created_at: null,
   input_fingerprint: 'a'.repeat(64),
   ruleset_fingerprint: 'b'.repeat(64),
   decision_fingerprint: 'c'.repeat(64),
@@ -90,13 +94,40 @@ const financialPolicy = {
   ],
   data_gate: { status: 'LIMITED', critical_missing_fields: [], readiness_missing_fields: [] },
   debt_policy: {}, reserve_policy: {}, goal_policy: {}, blockers: [], warnings: [], limitations: [],
-  evidence: [], rules_evaluated: [], ruleset: {}, source_financial_state: {}, previous_financial_state: {},
+  missing_information: [],
+  explanations: [
+    {
+      code: 'PRIMARY_POLICY_DECISION',
+      decision: 'Fortalecer a reserva de emergência',
+      reason: 'Sua reserva atual cobre 3 meses e ainda está abaixo do alvo vigente.',
+      evidence_refs: ['EMERGENCY_RESERVE'],
+      rule_ids: ['FPV1-RESERVE-002'],
+      blocked_alternatives: ['INVEST_SURPLUS_CAPITAL'],
+    },
+    {
+      code: 'INVESTMENT_READINESS_DECISION',
+      decision: 'LIMITED',
+      reason: 'Novos investimentos permanecem limitados pela prioridade atual.',
+      evidence_refs: ['INVESTMENT_CAPACITY'],
+      rule_ids: ['FPV1-READY-001'],
+      blocked_alternatives: ['FULL_NEW_INVESTMENT'],
+    },
+  ],
+  evidence: [
+    {
+      code: 'EMERGENCY_RESERVE', label: 'Reserva de emergência', value: '3000.00', unit: 'BRL', source: 'state',
+    },
+  ],
+  member_policy_views: [],
+  rules_evaluated: [], ruleset: {}, source_financial_state: {}, previous_financial_state: {},
 };
 
 test('financial state preserva ausência, ownership e idempotência de snapshot', async ({ page }) => {
   const incomePayloads: unknown[] = [];
   const snapshotKeys: string[] = [];
+  const policyKeys: string[] = [];
   let snapshotAttempts = 0;
+  let policyAttempts = 0;
 
   await page.route('**/api/v1/me', (route) => json(route, authenticatedUser));
   await page.route('**/api/v1/financial/**', async (route) => {
@@ -106,6 +137,20 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
     if (path.endsWith('/financial/profile')) return json(route, { id: 1 });
     if (path.endsWith('/households/default')) return json(route, household);
     if (path.endsWith('/financial/households')) return json(route, [household]);
+    if (path.endsWith('/households/10/financial-policy/history')) {
+      return json(route, { items: [], total: 0 });
+    }
+    if (path.endsWith('/households/10/financial-policy/decisions')) {
+      policyAttempts += 1;
+      policyKeys.push(request.headers()['idempotency-key']);
+      if (policyAttempts === 1) return json(route, { detail: 'temporariamente indisponível' }, 503);
+      return json(route, {
+        ...financialPolicy,
+        policy_id: 17,
+        financial_state_snapshot_id: 7,
+        created_at: '2026-09-08T12:00:01Z',
+      }, 201);
+    }
     if (path.endsWith('/households/10/financial-policy')) return json(route, financialPolicy);
     if (path.endsWith('/households/10/financial-state/snapshots')) {
       snapshotAttempts += 1;
@@ -129,10 +174,10 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await page.goto('/financial');
 
   await expect(page.getByRole('heading', { name: 'Minha situação financeira' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Prioridades financeiras agora' })).toBeVisible();
-  await expect(page.getByText('Novos aportes limitados')).toBeVisible();
-  await expect(page.getByText(/1\. Fortalecer a reserva de emergência/)).toBeVisible();
-  await expect(page.getByText(/2\. Investir somente o capital excedente/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sua prioridade agora' })).toBeVisible();
+  await expect(page.getByText('LIMITADO', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sua reserva atual cobre 3 meses e ainda está abaixo do alvo vigente.')).toBeVisible();
+  await expect(page.getByText(/Investir somente o capital excedente/)).toBeVisible();
   await expect(page.getByText(/Variáveis: Não informado/)).toBeVisible();
   await expect(page.getByText(/Dívidas:.*0,00/)).toBeVisible();
 
@@ -151,4 +196,12 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   expect(snapshotKeys).toHaveLength(2);
   expect(snapshotKeys[0]).toBeTruthy();
   expect(snapshotKeys[1]).toBe(snapshotKeys[0]);
+
+  await page.getByRole('button', { name: 'Salvar decisão' }).click();
+  await expect(page.getByText('Não foi possível salvar a decisão')).toBeVisible();
+  await page.getByRole('button', { name: 'Tentar novamente' }).last().click();
+  await expect(page.getByText('Decisão financeira salva no histórico.')).toBeVisible();
+  expect(policyKeys).toHaveLength(2);
+  expect(policyKeys[0]).toBeTruthy();
+  expect(policyKeys[1]).toBe(policyKeys[0]);
 });

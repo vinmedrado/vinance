@@ -18,12 +18,14 @@ import {
   ToggleField,
 } from '../components';
 import {
+  useCreateFinancialPolicyDecision,
   useCreateHouseholdExpense,
   useCreateHouseholdIncome,
   useCreateFinancialStateSnapshot,
   useCurrentFinancialPolicy,
   useCurrentFinancialState,
   useDefaultHousehold,
+  useFinancialPolicyHistory,
   useHouseholdExpenses,
   useHouseholdIncomes,
   useHouseholds,
@@ -198,11 +200,13 @@ export function FinancialPage() {
 
   const financialState = useCurrentFinancialState(selectedHouseholdId);
   const financialPolicy = useCurrentFinancialPolicy(selectedHouseholdId);
+  const policyHistory = useFinancialPolicyHistory(selectedHouseholdId);
   const incomes = useHouseholdIncomes(selectedHouseholdId);
   const expenses = useHouseholdExpenses(selectedHouseholdId);
   const createIncome = useCreateHouseholdIncome(selectedHouseholdId);
   const createExpense = useCreateHouseholdExpense(selectedHouseholdId);
   const createSnapshot = useCreateFinancialStateSnapshot(selectedHouseholdId);
+  const createPolicyDecision = useCreateFinancialPolicyDecision(selectedHouseholdId);
   const missingProfile = (profile.error as ApiErrorShape | null)?.status === 404;
   const loadError = getActionError(
     households.error,
@@ -258,6 +262,7 @@ export function FinancialPage() {
     defaultHousehold.refetch();
     financialState.refetch();
     financialPolicy.refetch();
+    policyHistory.refetch();
     incomes.refetch();
     expenses.refetch();
     profile.refetch();
@@ -284,6 +289,7 @@ export function FinancialPage() {
         </Card>
       )}
       {createSnapshot.isSuccess && <Toast message="Retrato financeiro salvo no histórico." />}
+      {createPolicyDecision.isSuccess && <Toast message="Decisão financeira salva no histórico." />}
       {incomeSaved && <Toast message="Receita cadastrada com sucesso." />}
       {expenseSaved && <Toast message="Despesa cadastrada com sucesso." />}
       {missingProfile && <OnboardingCard onCompleted={reload} />}
@@ -391,9 +397,16 @@ export function FinancialPage() {
         <>
           <FinancialPolicyCard
             policy={financialPolicy.data}
+            history={policyHistory.data}
             isLoading={financialPolicy.isLoading}
+            isHistoryLoading={policyHistory.isLoading}
+            isFreezing={createPolicyDecision.isPending}
             errorMessage={financialPolicy.error ? errorMessage(financialPolicy.error) : undefined}
+            historyErrorMessage={policyHistory.error ? errorMessage(policyHistory.error) : undefined}
+            freezeErrorMessage={createPolicyDecision.error ? errorMessage(createPolicyDecision.error) : undefined}
             onRetry={() => financialPolicy.refetch()}
+            onRetryHistory={() => policyHistory.refetch()}
+            onFreeze={() => createPolicyDecision.mutate()}
           />
 
           <Card

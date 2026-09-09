@@ -159,11 +159,46 @@ export type FinancialPriority = {
   evidence_refs: string[];
 };
 
+export type FinancialPolicyEvidence = {
+  code: string;
+  label: string;
+  value: unknown;
+  unit: string;
+  source: string;
+};
+
+export type FinancialPolicyExplanation = {
+  code: string;
+  decision: string;
+  reason: string;
+  evidence_refs: string[];
+  rule_ids: string[];
+  blocked_alternatives: string[];
+};
+
+export type MemberPolicyView = {
+  user_id: number;
+  full_name: string | null;
+  scope: 'PERSONAL_ONLY';
+  policy_state: FinancialPolicyState;
+  investment_readiness: InvestmentReadiness;
+  priority_signals: string[];
+  metrics: FinancialStateMetrics;
+  goals: FinancialStateGoal[];
+  missing_information: string[];
+  inconsistencies: string[];
+  explanation: string;
+};
+
 export type FinancialPolicy = {
+  policy_id: number | null;
   household_id: number;
+  financial_state_snapshot_id: number | null;
   engine_version: 'financial-policy-v1';
   rules_version: string;
   evaluated_at: string;
+  generated_at: string;
+  created_at: string | null;
   input_fingerprint: string;
   ruleset_fingerprint: string;
   decision_fingerprint: string;
@@ -186,11 +221,32 @@ export type FinancialPolicy = {
   blockers: FinancialPolicyMessage[];
   warnings: FinancialPolicyMessage[];
   limitations: FinancialPolicyMessage[];
-  evidence: Array<Record<string, unknown>>;
+  missing_information: FinancialPolicyMessage[];
+  explanations: FinancialPolicyExplanation[];
+  evidence: FinancialPolicyEvidence[];
+  member_policy_views: MemberPolicyView[];
   rules_evaluated: Array<Record<string, unknown>>;
   ruleset: Record<string, unknown>;
   source_financial_state: Record<string, unknown>;
   previous_financial_state: Record<string, unknown>;
+};
+
+export type FinancialPolicyDecisionSummary = {
+  policy_id: number;
+  household_id: number;
+  financial_state_snapshot_id: number;
+  engine_version: string;
+  rules_version: string;
+  policy_state: FinancialPolicyState;
+  investment_readiness: InvestmentReadiness;
+  decision_fingerprint: string;
+  generated_at: string;
+  created_at: string;
+};
+
+export type FinancialPolicyHistory = {
+  items: FinancialPolicyDecisionSummary[];
+  total: number;
 };
 
 export type IncomePayload = {

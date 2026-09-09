@@ -2,12 +2,15 @@ import { useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSessionToken } from '../../auth/hooks/useAuth';
 import {
+  createFinancialPolicyDecision,
   createExpense,
   createFinancialStateSnapshot,
   createIncome,
   getCurrentFinancialPolicy,
   getCurrentFinancialState,
   getDefaultHousehold,
+  getFinancialPolicyDecision,
+  getFinancialPolicyHistory,
   getFinancialStateHistory,
   listHouseholdExpenses,
   listHouseholdIncomes,
@@ -58,6 +61,27 @@ export function useCurrentFinancialPolicy(householdId: number | null) {
     queryKey: financialPolicyQueryKey(sessionToken, 'current', householdId),
     queryFn: () => getCurrentFinancialPolicy(householdId as number),
     enabled: householdId !== null,
+  });
+}
+
+export function useFinancialPolicyHistory(householdId: number | null) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: financialPolicyQueryKey(sessionToken, 'history', householdId),
+    queryFn: () => getFinancialPolicyHistory(householdId as number),
+    enabled: householdId !== null,
+  });
+}
+
+export function useFinancialPolicyDecision(
+  householdId: number | null,
+  policyId: number | null,
+) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: financialPolicyQueryKey(sessionToken, 'history', householdId, policyId),
+    queryFn: () => getFinancialPolicyDecision(householdId as number, policyId as number),
+    enabled: householdId !== null && policyId !== null,
   });
 }
 
@@ -126,6 +150,66 @@ function snapshotIdempotencyKey(householdId: number) {
   const randomPart = globalThis.crypto?.randomUUID?.()
     ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `financial-state-${householdId}-${randomPart}`;
+}
+
+function policyIdempotencyKey(householdId: number) {
+  const randomPart = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `financial-policy-${householdId}-${randomPart}`;
+}
+
+export function useCreateFinancialPolicyDecision(householdId: number | null) {
+  const queryClient = useQueryClient();
+  const sessionToken = useSessionToken();
+  const pendingRequest = useRef<{
+    householdId: number;
+    key: string;
+    sessionToken: string | null;
+  } | null>(null);
+  return useMutation({
+    mutationFn: () => {
+      if (householdId === null) throw new Error('Household não selecionado');
+      if (!pendingRequest.current || pendingRequest.current.householdId !== householdId) {
+        pendingRequest.current = {
+          householdId,
+          key: policyIdempotencyKey(householdId),
+          sessionToken,
+        };
+      }
+      return createFinancialPolicyDecision(householdId, pendingRequest.current.key);
+    },
+    onSuccess: (decision) => {
+      const completedRequest = pendingRequest.current;
+      pendingRequest.current = null;
+      const completedHouseholdId = decision.household_id;
+      const completedSessionToken = completedRequest?.householdId === completedHouseholdId
+        ? completedRequest.sessionToken
+        : sessionToken;
+      queryClient.setQueryData(
+        financialPolicyQueryKey(
+          completedSessionToken,
+          'history',
+          completedHouseholdId,
+          decision.policy_id,
+        ),
+        decision,
+      );
+      queryClient.invalidateQueries({
+        queryKey: financialPolicyQueryKey(
+          completedSessionToken,
+          'history',
+          completedHouseholdId,
+        ),
+      });
+      queryClient.invalidateQueries({
+        queryKey: financialPolicyQueryKey(
+          completedSessionToken,
+          'current',
+          completedHouseholdId,
+        ),
+      });
+    },
+  });
 }
 
 export function useCreateFinancialStateSnapshot(householdId: number | null) {

@@ -5,6 +5,7 @@ import type {
   FinancialState,
   FinancialStateHistory,
   FinancialPolicy,
+  FinancialPolicyHistory,
   FinancialStateSnapshot,
   GoalPayload,
   Household,
@@ -32,6 +33,32 @@ export async function getCurrentFinancialState(householdId: number) {
 export async function getCurrentFinancialPolicy(householdId: number) {
   const { data } = await api.get<FinancialPolicy>(
     `/financial/households/${householdId}/financial-policy`,
+  );
+  return data;
+}
+
+export async function createFinancialPolicyDecision(
+  householdId: number,
+  idempotencyKey: string,
+) {
+  const { data } = await api.post<FinancialPolicy>(
+    `/financial/households/${householdId}/financial-policy/decisions`,
+    undefined,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  );
+  return data;
+}
+
+export async function getFinancialPolicyHistory(householdId: number) {
+  const { data } = await api.get<FinancialPolicyHistory>(
+    `/financial/households/${householdId}/financial-policy/history`,
+  );
+  return data;
+}
+
+export async function getFinancialPolicyDecision(householdId: number, policyId: number) {
+  const { data } = await api.get<FinancialPolicy>(
+    `/financial/households/${householdId}/financial-policy/history/${policyId}`,
   );
   return data;
 }
