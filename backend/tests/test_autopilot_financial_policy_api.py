@@ -105,11 +105,18 @@ def test_policy_api_contract_is_registered_and_authenticated() -> None:
             "/api/v1/financial/households/{household_id}/financial-policy/"
             "from-state-snapshot/{snapshot_id}"
         ),
+        "/api/v1/financial/households/{household_id}/financial-policy/decisions",
+        "/api/v1/financial/households/{household_id}/financial-policy/history",
+        (
+            "/api/v1/financial/households/{household_id}/financial-policy/"
+            "history/{policy_id}"
+        ),
     }
     paths = app.openapi()["paths"]
     for path in expected:
-        assert "get" in paths[path]
-        assert paths[path]["get"]["security"] == [{"HTTPBearer": []}]
+        method = "post" if path.endswith("/decisions") else "get"
+        assert method in paths[path]
+        assert paths[path][method]["security"] == [{"HTTPBearer": []}]
 
 
 def test_current_policy_forwards_authenticated_identity_and_disables_cache(monkeypatch) -> None:
@@ -183,6 +190,148 @@ def test_anonymous_user_cannot_read_financial_policy() -> None:
         app.dependency_overrides[get_session] = _fake_session
         with TestClient(app) as client:
             response = client.get("/api/v1/financial/households/10/financial-policy")
+        assert response.status_code == 401
+    finally:
+        _restore(previous)
+
+
+def test_policy_freeze_forwards_idempotency_and_returns_auditable_identity(
+    monkeypatch,
+) -> None:
+    captured: dict = {}
+
+    async def freeze(*_args, **kwargs):
+        captured.update(kwargs)
+        payload = _policy_response()
+        payload.update(
+            {
+                "policy_id": 17,
+                "financial_state_snapshot_id": 7,
+                "created_at": NOW,
+            }
+        )
+        return payload
+
+    monkeypatch.setattr(policy_router.service, "create_policy_decision", freeze)
+    previous = _authenticated()
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/financial/households/10/financial-policy/decisions",
+                headers={"Idempotency-Key": "policy-request-1"},
+            )
+        assert response.status_code == 201
+        assert response.json()["policy_id"] == 17
+        assert response.json()["financial_state_snapshot_id"] == 7
+        assert captured == {
+            "household_id": 10,
+            "user_id": 91,
+            "idempotency_key": "policy-request-1",
+        }
+    finally:
+        _restore(previous)
+
+
+def test_policy_history_and_detail_forward_identity_without_recalculation(
+    monkeypatch,
+) -> None:
+    calls: list[tuple[str, dict]] = []
+    payload = _policy_response()
+    payload.update(
+        {
+            "policy_id": 17,
+            "financial_state_snapshot_id": 7,
+            "created_at": NOW,
+        }
+    )
+
+    async def history(*_args, **kwargs):
+        calls.append(("history", kwargs))
+        return {
+            "items": [
+                {
+                    "policy_id": 17,
+                    "household_id": 10,
+                    "financial_state_snapshot_id": 7,
+                    "engine_version": payload["engine_version"],
+                    "rules_version": payload["rules_version"],
+                    "policy_state": payload["policy_state"],
+                    "investment_readiness": payload["investment_readiness"],
+                    "decision_fingerprint": payload["decision_fingerprint"],
+                    "generated_at": payload["generated_at"],
+                    "created_at": NOW,
+                }
+            ],
+            "total": 1,
+        }
+
+    async def detail(*_args, **kwargs):
+        calls.append(("detail", kwargs))
+        return payload
+
+    monkeypatch.setattr(policy_router.service, "policy_decision_history", history)
+    monkeypatch.setattr(policy_router.service, "get_policy_decision", detail)
+    previous = _authenticated()
+    try:
+        with TestClient(app) as client:
+            history_response = client.get(
+                "/api/v1/financial/households/10/financial-policy/history",
+                params={"limit": 5, "offset": 2},
+            )
+            detail_response = client.get(
+                "/api/v1/financial/households/10/financial-policy/history/17"
+            )
+        assert history_response.status_code == 200
+        assert history_response.headers["cache-control"] == "private, no-store"
+        assert history_response.json()["total"] == 1
+        assert detail_response.status_code == 200
+        assert detail_response.headers["cache-control"] == "private, no-store"
+        assert detail_response.json()["policy_id"] == 17
+        assert calls == [
+            (
+                "history",
+                {
+                    "household_id": 10,
+                    "user_id": 91,
+                    "limit": 5,
+                    "offset": 2,
+                },
+            ),
+            (
+                "detail",
+                {"household_id": 10, "policy_id": 17, "user_id": 91},
+            ),
+        ]
+    finally:
+        _restore(previous)
+
+
+def test_cross_household_policy_history_is_defensively_not_found(monkeypatch) -> None:
+    async def not_owned(*_args, **_kwargs):
+        raise state_service.HouseholdNotFoundError("not owned")
+
+    monkeypatch.setattr(policy_router.service, "policy_decision_history", not_owned)
+    previous = _authenticated()
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/api/v1/financial/households/999/financial-policy/history"
+            )
+        assert response.status_code == 404
+        assert response.json()["error"] == "Recurso financeiro não encontrado"
+    finally:
+        _restore(previous)
+
+
+def test_anonymous_user_cannot_freeze_financial_policy() -> None:
+    previous = dict(app.dependency_overrides)
+    try:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides[get_session] = _fake_session
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/financial/households/10/financial-policy/decisions"
+            )
         assert response.status_code == 401
     finally:
         _restore(previous)

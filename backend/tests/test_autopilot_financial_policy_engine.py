@@ -184,6 +184,8 @@ def test_known_high_cost_debt_threshold_is_exact(
 
     assert result["policy_state"] == expected_state
     assert result["investment_readiness"] == expected_readiness
+    if rate >= Decimal("15"):
+        assert result["explanations"][0]["rule_ids"] == ["FPV1-DEBT-002"]
 
 
 @pytest.mark.parametrize(
@@ -279,6 +281,20 @@ def test_explicit_zero_cash_capacity_is_not_missing_and_forces_recovery() -> Non
     assert result["investment_readiness"] == "BLOCKED"
     assert result["data_gate"]["critical_missing_fields"] == []
     assert any(item["code"] == "NO_INVESTMENT_CAPACITY" for item in result["blockers"])
+
+
+def test_negative_consolidated_cashflow_and_disposable_income_force_recovery() -> None:
+    inputs = _complete_inputs()
+    inputs["incomes"][0]["amount"] = Decimal("2000")
+
+    state = calculate_financial_state(inputs, evaluated_at=NOW)
+    result = calculate_financial_policy(state, normalized_inputs=inputs)
+
+    assert state["metrics"]["cash_flow"] == Decimal("-500.00")
+    assert state["metrics"]["disposable_income"] == Decimal("-1000.00")
+    assert result["policy_state"] == "CASHFLOW_RECOVERY"
+    assert result["investment_readiness"] == "BLOCKED"
+    assert result["explanations"][0]["rule_ids"] == ["FPV1-CASH-001"]
 
 
 def test_missing_reserve_stays_unknown_while_real_zero_is_absent() -> None:
@@ -481,6 +497,42 @@ def test_unfunded_goal_without_deadline_limits_but_funded_goal_does_not() -> Non
     assert "GOAL_DEADLINE_UNKNOWN" not in funded_result["data_gate"][
         "readiness_limiters"
     ]
+
+
+def test_partially_funded_household_goal_is_prioritized_and_completed_goal_is_ignored() -> None:
+    inputs = _complete_inputs()
+    inputs["household"]["household_type"] = "SHARED"
+    inputs["goals"] = [
+        {
+            **_owned(2, scope="HOUSEHOLD"),
+            "name": "Entrada do imóvel",
+            "target_amount": Decimal("10000"),
+            "current_amount": Decimal("4000"),
+            "deadline": (NOW.date() + timedelta(days=60)).isoformat(),
+            "priority": "HIGH",
+            "currency": "BRL",
+            "status": "ACTIVE",
+        },
+        {
+            **_owned(3),
+            "name": "Objetivo arquivado",
+            "target_amount": Decimal("1000"),
+            "current_amount": Decimal("200"),
+            "deadline": None,
+            "priority": "HIGH",
+            "currency": "BRL",
+            "status": "COMPLETED",
+        },
+    ]
+
+    result = _policy(inputs)
+
+    assert result["policy_state"] == "GOAL_PRIORITY"
+    assert result["goal_policy"]["priority_goal_ids"] == [2]
+    assert result["goal_policy"]["goals"][0]["ownership_scope"] == "HOUSEHOLD"
+    assert result["goal_policy"]["goals"][0]["current_amount"] == Decimal("4000")
+    assert result["goal_policy"]["goals"][0]["funding_gap"] == Decimal("6000.00")
+    assert all(goal["id"] != 3 for goal in result["goal_policy"]["goals"])
 
 
 def test_removed_member_personal_context_is_excluded_but_household_context_remains() -> None:
@@ -728,3 +780,130 @@ def test_priority_stack_keeps_formal_precedence_and_contiguous_ranks() -> None:
         "INVEST_SURPLUS_CAPITAL",
     ]
     assert [item["rank"] for item in result["priority_stack"]] == [1, 2, 3, 4, 5, 6]
+
+
+def test_policy_output_exposes_audit_identity_and_structured_explanations() -> None:
+    inputs = _complete_inputs()
+    state = calculate_financial_state(inputs, evaluated_at=NOW)
+    state["snapshot_id"] = 71
+
+    result = calculate_financial_policy(state, normalized_inputs=inputs)
+
+    assert result["policy_id"] is None
+    assert result["financial_state_snapshot_id"] == 71
+    assert result["generated_at"] == NOW
+    assert result["created_at"] is None
+    assert result["explanations"][0] == {
+        "code": "PRIMARY_POLICY_DECISION",
+        "decision": "Investir somente o capital excedente",
+        "reason": (
+            "As prioridades prudenciais conhecidas foram atendidas; capacidade de "
+            "investimento observada: 5000.00."
+        ),
+        "evidence_refs": ["INVESTMENT_CAPACITY"],
+        "rule_ids": ["FPV1-READY-001"],
+        "blocked_alternatives": [],
+    }
+
+
+def test_missing_information_identifies_inputs_that_can_change_the_decision() -> None:
+    inputs = _complete_inputs()
+    inputs["liabilities"] = [_active_debt(rate=None)]
+
+    result = _policy(inputs)
+    missing_codes = {item["code"] for item in result["missing_information"]}
+
+    assert "DEBT_RATE_UNKNOWN" in missing_codes
+    debt_rate = next(
+        item for item in result["missing_information"] if item["code"] == "DEBT_RATE_UNKNOWN"
+    )
+    assert debt_rate["fields"] == ["liabilities.1.annual_interest_rate_pct"]
+    assert result["investment_readiness"] == "LIMITED"
+
+
+def test_shared_household_keeps_member_policy_distinct_from_consolidated_policy() -> None:
+    inputs = _complete_inputs()
+    inputs["household"]["household_type"] = "SHARED"
+    inputs["members"].extend(
+        [
+            {"user_id": 2, "full_name": "Bia", "status": "ACTIVE"},
+            {"user_id": 3, "full_name": "Removida", "status": "REMOVED"},
+        ]
+    )
+    inputs["incomes"].append(
+        {
+            **_owned(20, user_id=2),
+            "amount": Decimal("1000"),
+            "is_recurring": True,
+            "received_at": "2026-09-05",
+        }
+    )
+    inputs["expenses"].append(
+        {
+            **_owned(20, user_id=2),
+            "amount": Decimal("2000"),
+            "expense_nature": "FIXED",
+            "due_date": "2026-09-05",
+        }
+    )
+    inputs["expenses"].append(
+        {
+            **_owned(30, scope="HOUSEHOLD"),
+            "amount": Decimal("500"),
+            "expense_nature": "VARIABLE",
+            "due_date": "2026-09-05",
+        }
+    )
+
+    result = _policy(inputs)
+    views = {item["user_id"]: item for item in result["member_policy_views"]}
+
+    assert set(views) == {1, 2}
+    assert result["policy_state"] == "EMERGENCY_RESERVE_PRIORITY"
+    assert views[2]["policy_state"] == "CASHFLOW_RECOVERY"
+    assert views[2]["investment_readiness"] == "BLOCKED"
+    assert views[2]["metrics"]["disposable_income"] == Decimal("-1000.00")
+    assert (
+        "household.shared_values_excluded_from_personal_view"
+        in views[2]["missing_information"]
+    )
+
+
+def test_household_debt_never_becomes_the_recording_members_personal_debt() -> None:
+    inputs = _complete_inputs()
+    inputs["household"]["household_type"] = "SHARED"
+    inputs["liabilities"] = [
+        {
+            **_active_debt(rate=Decimal("30")),
+            "ownership_scope": "HOUSEHOLD",
+        }
+    ]
+
+    result = _policy(inputs)
+    member = result["member_policy_views"][0]
+
+    assert result["policy_state"] == "DEBT_PRIORITY"
+    assert member["policy_state"] == "BALANCED_BUILD"
+    assert member["investment_readiness"] == "LIMITED"
+    assert "REDUCE_DEBT_BURDEN" not in member["priority_signals"]
+    assert member["metrics"]["total_liabilities"] is None
+
+
+def test_personal_debt_due_soon_is_preserved_in_the_members_policy_view() -> None:
+    inputs = _complete_inputs()
+    inputs["household"]["household_type"] = "SHARED"
+    inputs["liabilities"] = [
+        _active_debt(
+            rate=Decimal("1"),
+            payment=Decimal("100"),
+            due_date=(NOW.date() + timedelta(days=1)).isoformat(),
+        )
+    ]
+
+    result = _policy(inputs)
+    member = result["member_policy_views"][0]
+
+    assert result["policy_state"] == "DEBT_PRIORITY"
+    assert result["explanations"][0]["rule_ids"] == ["FPV1-DEBT-005"]
+    assert member["policy_state"] == "DEBT_PRIORITY"
+    assert "REDUCE_DEBT_BURDEN" in member["priority_signals"]

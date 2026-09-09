@@ -6,13 +6,15 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.auth import service as auth_service
 from backend.app.auth.schemas import UserCreate
 from backend.app.financial.models import Expense, Income
 from backend.app.financial_policy import service as policy_service
+from backend.app.financial_policy.models import FinancialPolicyDecision
 from backend.app.financial_state import service as state_service
 from backend.app.financial_state.models import (
     FinancialGoal,
@@ -162,6 +164,62 @@ async def test_real_postgres_policy_current_history_and_household_isolation() ->
             assert ready["policy_state"] == "INVESTMENT_READY"
             assert ready["investment_readiness"] == "READY"
 
+            policy_key = f"policy-decision-{uuid4()}"
+            frozen = await policy_service.create_policy_decision(
+                session,
+                household_id=household.id,
+                user_id=owner.id,
+                idempotency_key=policy_key,
+            )
+            frozen_retry = await policy_service.create_policy_decision(
+                session,
+                household_id=household.id,
+                user_id=owner.id,
+                idempotency_key=policy_key,
+            )
+            assert frozen_retry["policy_id"] == frozen["policy_id"]
+            assert frozen_retry["decision_fingerprint"] == frozen["decision_fingerprint"]
+            assert frozen["financial_state_snapshot_id"] is not None
+            assert frozen["policy_state"] == "INVESTMENT_READY"
+            assert await session.scalar(
+                select(func.count(FinancialPolicyDecision.id)).where(
+                    FinancialPolicyDecision.household_id == household.id
+                )
+            ) == 1
+
+            policy_history = await policy_service.policy_decision_history(
+                session,
+                household_id=household.id,
+                user_id=owner.id,
+                limit=20,
+                offset=0,
+            )
+            policy_detail = await policy_service.get_policy_decision(
+                session,
+                household_id=household.id,
+                policy_id=frozen["policy_id"],
+                user_id=owner.id,
+            )
+            assert policy_history["total"] == 1
+            assert policy_history["items"][0]["policy_id"] == frozen["policy_id"]
+            assert policy_detail["decision_fingerprint"] == frozen["decision_fingerprint"]
+
+            for mutation in (
+                "UPDATE financial_policy_decisions SET policy_state = 'DATA_BLOCKED' WHERE id = :policy_id",
+                "DELETE FROM financial_policy_decisions WHERE id = :policy_id",
+                "TRUNCATE TABLE financial_policy_decisions",
+            ):
+                with pytest.raises(DBAPIError):
+                    async with session.begin_nested():
+                        await session.execute(
+                            text(mutation), {"policy_id": frozen["policy_id"]}
+                        )
+            assert await session.scalar(
+                select(func.count(FinancialPolicyDecision.id)).where(
+                    FinancialPolicyDecision.household_id == household.id
+                )
+            ) == 1
+
             snapshot = await state_service.create_snapshot(
                 session,
                 household_id=household.id,
@@ -218,6 +276,28 @@ async def test_real_postgres_policy_current_history_and_household_isolation() ->
                     session,
                     household_id=household.id,
                     snapshot_id=snapshot.id,
+                    user_id=outsider.id,
+                )
+            with pytest.raises(state_service.HouseholdNotFoundError):
+                await policy_service.create_policy_decision(
+                    session,
+                    household_id=household.id,
+                    user_id=outsider.id,
+                    idempotency_key=f"outsider-{uuid4()}",
+                )
+            with pytest.raises(state_service.HouseholdNotFoundError):
+                await policy_service.policy_decision_history(
+                    session,
+                    household_id=household.id,
+                    user_id=outsider.id,
+                    limit=20,
+                    offset=0,
+                )
+            with pytest.raises(state_service.HouseholdNotFoundError):
+                await policy_service.get_policy_decision(
+                    session,
+                    household_id=household.id,
+                    policy_id=frozen["policy_id"],
                     user_id=outsider.id,
                 )
         finally:

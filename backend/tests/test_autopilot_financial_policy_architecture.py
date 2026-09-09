@@ -13,6 +13,8 @@ from backend.app.financial_policy.rules import (
     RULES_VERSION,
     SUPPORTED_FINANCIAL_STATE_VERSION,
 )
+from backend.app.core.database import Base
+from backend.app.financial_policy.models import FinancialPolicyDecision
 from backend.app.financial_state.engine import ENGINE_VERSION as STATE_ENGINE_VERSION
 
 
@@ -76,8 +78,19 @@ def test_pure_policy_layer_has_no_database_market_or_recommendation_dependency()
         assert "db.database" not in source
 
 
-def test_policy_does_not_define_persistence_or_universal_budget_allocations() -> None:
-    assert not (POLICY_MODULE / "models.py").exists()
+def test_policy_persistence_uses_the_canonical_base_without_parallel_infrastructure() -> None:
+    models = POLICY_MODULE / "models.py"
+    assert models.exists()
+    assert FinancialPolicyDecision.metadata is Base.metadata
+    assert FinancialPolicyDecision.__tablename__ == "financial_policy_decisions"
+    imports = _imports(models)
+    assert "backend.app.core.database" in imports
+    source = models.read_text(encoding="utf-8")
+    assert "create_all" not in source
+    assert "db.database" not in source
+
+
+def test_policy_does_not_define_universal_budget_or_asset_allocations() -> None:
     combined = "\n".join(path.read_text(encoding="utf-8") for path in PURE_FILES)
     forbidden = (
         "70/20/10",
@@ -88,3 +101,29 @@ def test_policy_does_not_define_persistence_or_universal_budget_allocations() ->
         "portfolio_weight",
     )
     assert not any(token.lower() in combined.lower() for token in forbidden)
+
+
+def test_manual_migration_is_linear_immutable_and_does_not_own_trading_v2() -> None:
+    migration = ROOT / "backend" / "alembic" / "versions" / "0019_financial_policy_v1.py"
+    source = migration.read_text(encoding="utf-8")
+
+    assert 'revision = "0019_financial_policy_v1"' in source
+    assert 'down_revision = "0018_household_state"' in source
+    assert '"financial_policy_decisions"' in source
+    assert '"financial_state_snapshots"' in source
+    assert "fk_policy_decision_snapshot_household" in source
+    assert "uq_policy_decision_snapshot_versions" in source
+    assert "uq_financial_policy_decisions_idempotency" in source
+    assert "BEFORE UPDATE OR DELETE" in source
+    assert "BEFORE TRUNCATE" in source
+    assert "autogenerate" not in source
+    assert "create_all" not in source
+    trading_external = {
+        "backtest_runs",
+        "crypto_candles",
+        "crypto_features",
+        "crypto_targets",
+        "paper_trades",
+        "trading_signals",
+    }
+    assert not any(name in source for name in trading_external)
