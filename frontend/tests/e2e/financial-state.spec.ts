@@ -122,12 +122,54 @@ const financialPolicy = {
   rules_evaluated: [], ruleset: {}, source_financial_state: {}, previous_financial_state: {},
 };
 
+const capitalAllocation = {
+  allocation_id: null,
+  household_id: 10,
+  financial_state_snapshot_id: null,
+  financial_policy_id: null,
+  engine_version: 'capital-allocation-v1',
+  rules_version: 'capital-allocation-rules-v1',
+  allocation_period: 'MONTHLY',
+  allocation_status: 'CONSTRAINED',
+  currency: 'BRL',
+  allocatable_capital: '4000.00',
+  allocated_capital: '3000.00',
+  remaining_capital: '1000.00',
+  investment_bucket_amount: '0.00',
+  bucket_totals: {
+    protected_capital: '3000.00', goal_capital: '0.00', investment_capital: '0.00', speculative_capital: '0.00',
+  },
+  allocations: [
+    {
+      priority_code: 'BUILD_EMERGENCY_RESERVE', priority_rank: 1, bucket_type: 'PROTECTED_CAPITAL',
+      target_type: 'EMERGENCY_RESERVE', target_id: null, target_name: 'Reserva de emergência',
+      ownership_scope: 'HOUSEHOLD', user_id: null, requested_amount: '5000.00',
+      allocated_amount: '3000.00', remaining_need: '2000.00', status: 'PARTIALLY_FUNDED',
+      reason: 'A reserva ainda está abaixo do alvo vigente.', evidence_refs: ['EMERGENCY_RESERVE'],
+    },
+    {
+      priority_code: 'INVEST_SURPLUS_CAPITAL', priority_rank: 2, bucket_type: 'INVESTMENT_CAPITAL',
+      target_type: 'INVESTMENT', target_id: null, target_name: 'Capital elegível para investimentos',
+      ownership_scope: null, user_id: null, requested_amount: '0.00', allocated_amount: '0.00',
+      remaining_need: '0.00', status: 'BLOCKED', reason: 'A prioridade superior ainda não foi atendida.',
+      evidence_refs: ['INVESTMENT_READINESS'],
+    },
+  ],
+  unfunded_priorities: [], member_impacts: [], blockers: [], warnings: [], missing_information: [],
+  evidence: [], rules_evaluated: [], data_gate: {}, ruleset: {}, source_financial_state: {},
+  source_financial_policy: {}, input_fingerprint: 'd'.repeat(64), policy_fingerprint: 'c'.repeat(64),
+  ruleset_fingerprint: 'e'.repeat(64), decision_fingerprint: 'f'.repeat(64),
+  generated_at: '2026-09-08T12:00:00Z', created_at: null,
+};
+
 test('financial state preserva ausência, ownership e idempotência de snapshot', async ({ page }) => {
   const incomePayloads: unknown[] = [];
   const snapshotKeys: string[] = [];
   const policyKeys: string[] = [];
+  const allocationKeys: string[] = [];
   let snapshotAttempts = 0;
   let policyAttempts = 0;
+  let allocationAttempts = 0;
 
   await page.route('**/api/v1/me', (route) => json(route, authenticatedUser));
   await page.route('**/api/v1/financial/**', async (route) => {
@@ -137,6 +179,22 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
     if (path.endsWith('/financial/profile')) return json(route, { id: 1 });
     if (path.endsWith('/households/default')) return json(route, household);
     if (path.endsWith('/financial/households')) return json(route, [household]);
+    if (path.endsWith('/households/10/capital-allocation/history')) {
+      return json(route, { items: [], total: 0 });
+    }
+    if (path.endsWith('/households/10/capital-allocation/decisions')) {
+      allocationAttempts += 1;
+      allocationKeys.push(request.headers()['idempotency-key']);
+      if (allocationAttempts === 1) return json(route, { detail: 'temporariamente indisponível' }, 503);
+      return json(route, {
+        ...capitalAllocation,
+        allocation_id: 23,
+        financial_state_snapshot_id: 7,
+        financial_policy_id: 17,
+        created_at: '2026-09-08T12:00:01Z',
+      }, 201);
+    }
+    if (path.endsWith('/households/10/capital-allocation')) return json(route, capitalAllocation);
     if (path.endsWith('/households/10/financial-policy/history')) {
       return json(route, { items: [], total: 0 });
     }
@@ -175,6 +233,13 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
 
   await expect(page.getByRole('heading', { name: 'Minha situação financeira' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Sua prioridade agora' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Plano deste período' })).toBeVisible();
+  await expect(page.getByText('Capital disponível no período')).toBeVisible();
+  await expect(
+    page.getByRole('list', { name: 'Plano de capital do período' })
+      .getByText('Reserva de emergência', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: /4\.000,00/ })).toBeVisible();
   await expect(page.getByText('LIMITADO', { exact: true })).toBeVisible();
   await expect(page.getByText('Sua reserva atual cobre 3 meses e ainda está abaixo do alvo vigente.')).toBeVisible();
   await expect(page.getByText(/Investir somente o capital excedente/)).toBeVisible();
@@ -186,7 +251,7 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await page.getByLabel('Valor').fill('2500');
   await page.getByLabel('Pertence a').selectOption('HOUSEHOLD');
   await page.getByRole('button', { name: 'Salvar receita' }).click();
-  await expect(page.getByRole('status')).toContainText('Receita cadastrada');
+  await expect(page.getByRole('status').filter({ hasText: 'Receita cadastrada' })).toContainText('Receita cadastrada');
   expect(incomePayloads).toEqual([expect.objectContaining({ ownership_scope: 'HOUSEHOLD', amount: 2500 })]);
 
   await page.getByRole('button', { name: 'Salvar retrato' }).click();
@@ -204,4 +269,12 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   expect(policyKeys).toHaveLength(2);
   expect(policyKeys[0]).toBeTruthy();
   expect(policyKeys[1]).toBe(policyKeys[0]);
+
+  await page.getByRole('button', { name: 'Salvar plano' }).click();
+  await expect(page.getByText('Não foi possível salvar o plano')).toBeVisible();
+  await page.getByRole('button', { name: 'Tentar novamente' }).last().click();
+  await expect(page.getByText('Plano de capital salvo no histórico.')).toBeVisible();
+  expect(allocationKeys).toHaveLength(2);
+  expect(allocationKeys[0]).toBeTruthy();
+  expect(allocationKeys[1]).toBe(allocationKeys[0]);
 });

@@ -249,6 +249,127 @@ export type FinancialPolicyHistory = {
   total: number;
 };
 
+export type CapitalAllocationStatus = 'BLOCKED' | 'CONSTRAINED' | 'ACTIVE' | 'SURPLUS';
+export type CapitalAllocationBucket =
+  | 'INFORMATIONAL'
+  | 'PROTECTED_CAPITAL'
+  | 'GOAL_CAPITAL'
+  | 'INVESTMENT_CAPITAL'
+  | 'SPECULATIVE_CAPITAL';
+
+export type CapitalAllocationMessage = {
+  code: string;
+  message: string;
+  fields: string[];
+  rule_ids: string[];
+};
+
+export type CapitalAllocationEvidence = {
+  code: string;
+  label: string;
+  value: unknown;
+  unit: string;
+  source: string;
+};
+
+export type CapitalAllocationItem = {
+  priority_code: string;
+  priority_rank: number;
+  bucket_type: CapitalAllocationBucket;
+  target_type: 'DATA' | 'CASH_FLOW' | 'LIABILITY' | 'EMERGENCY_RESERVE' | 'GOAL' | 'INVESTMENT';
+  target_id: number | string | null;
+  target_name: string | null;
+  ownership_scope: OwnershipScope | null;
+  user_id: number | string | null;
+  requested_amount: MoneyValue;
+  allocated_amount: string | number;
+  remaining_need: MoneyValue;
+  status: 'NOT_CALCULABLE' | 'UNFUNDED' | 'PARTIALLY_FUNDED' | 'FUNDED' | 'ALLOCATED' | 'BLOCKED';
+  reason: string;
+  evidence_refs: string[];
+};
+
+export type CapitalAllocationMemberImpact = {
+  user_id: number;
+  full_name: string | null;
+  personal_allocatable_capital: MoneyValue;
+  allocated_to_personal_priorities: string | number;
+  remaining_personal_capacity: MoneyValue;
+  explanation: string;
+};
+
+export type CapitalAllocation = {
+  allocation_id: number | null;
+  household_id: number;
+  financial_state_snapshot_id: number | null;
+  financial_policy_id: number | null;
+  engine_version: 'capital-allocation-v1';
+  rules_version: 'capital-allocation-rules-v1';
+  allocation_period: 'MONTHLY';
+  allocation_status: CapitalAllocationStatus;
+  currency: string;
+  allocatable_capital: MoneyValue;
+  allocated_capital: string | number;
+  remaining_capital: MoneyValue;
+  investment_bucket_amount: string | number;
+  bucket_totals: {
+    protected_capital: string | number;
+    goal_capital: string | number;
+    investment_capital: string | number;
+    speculative_capital: string | number;
+  };
+  allocations: CapitalAllocationItem[];
+  unfunded_priorities: CapitalAllocationItem[];
+  member_impacts: CapitalAllocationMemberImpact[];
+  blockers: CapitalAllocationMessage[];
+  warnings: CapitalAllocationMessage[];
+  missing_information: CapitalAllocationMessage[];
+  evidence: CapitalAllocationEvidence[];
+  rules_evaluated: Array<Record<string, unknown>>;
+  data_gate: {
+    status: 'BLOCKED' | 'LIMITED' | 'PASS';
+    state_quality: DataQuality | string;
+    state_confidence: number | null;
+    policy_state: FinancialPolicyState | null;
+    investment_readiness: InvestmentReadiness | null;
+    currencies: string[];
+    critical_stale_fields: string[];
+    consistency_checks: Record<string, boolean>;
+  };
+  ruleset: Record<string, unknown>;
+  source_financial_state: Record<string, unknown>;
+  source_financial_policy: Record<string, unknown>;
+  input_fingerprint: string;
+  policy_fingerprint: string;
+  ruleset_fingerprint: string;
+  decision_fingerprint: string;
+  generated_at: string;
+  created_at: string | null;
+};
+
+export type CapitalAllocationDecisionSummary = {
+  allocation_id: number;
+  household_id: number;
+  financial_state_snapshot_id: number;
+  financial_policy_id: number;
+  engine_version: string;
+  rules_version: string;
+  allocation_period: 'MONTHLY';
+  allocation_status: CapitalAllocationStatus;
+  currency: string;
+  allocatable_capital: MoneyValue;
+  allocated_capital: string | number;
+  investment_bucket_amount: string | number;
+  decision_fingerprint: string;
+  generated_at: string;
+  created_at: string;
+};
+
+export type CapitalAllocationHistory = {
+  items: CapitalAllocationDecisionSummary[];
+  total: number;
+};
+
 export type IncomePayload = {
   ownership_scope: OwnershipScope;
   description: string;

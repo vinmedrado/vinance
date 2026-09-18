@@ -1,6 +1,8 @@
 import { api } from '../../../services/api';
 import type {
   AssetPayload,
+  CapitalAllocation,
+  CapitalAllocationHistory,
   ExpensePayload,
   FinancialState,
   FinancialStateHistory,
@@ -59,6 +61,46 @@ export async function getFinancialPolicyHistory(householdId: number) {
 export async function getFinancialPolicyDecision(householdId: number, policyId: number) {
   const { data } = await api.get<FinancialPolicy>(
     `/financial/households/${householdId}/financial-policy/history/${policyId}`,
+  );
+  return data;
+}
+
+export async function getCurrentCapitalAllocation(householdId: number) {
+  const { data } = await api.get<CapitalAllocation>(
+    `/financial/households/${householdId}/capital-allocation`,
+  );
+  return data;
+}
+
+export async function getCapitalAllocationFromPolicy(householdId: number, policyId: number) {
+  const { data } = await api.get<CapitalAllocation>(
+    `/financial/households/${householdId}/capital-allocation/from-policy/${policyId}`,
+  );
+  return data;
+}
+
+export async function createCapitalAllocationDecision(
+  householdId: number,
+  idempotencyKey: string,
+) {
+  const { data } = await api.post<CapitalAllocation>(
+    `/financial/households/${householdId}/capital-allocation/decisions`,
+    undefined,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  );
+  return data;
+}
+
+export async function getCapitalAllocationHistory(householdId: number) {
+  const { data } = await api.get<CapitalAllocationHistory>(
+    `/financial/households/${householdId}/capital-allocation/history`,
+  );
+  return data;
+}
+
+export async function getCapitalAllocationDecision(householdId: number, allocationId: number) {
+  const { data } = await api.get<CapitalAllocation>(
+    `/financial/households/${householdId}/capital-allocation/history/${allocationId}`,
   );
   return data;
 }

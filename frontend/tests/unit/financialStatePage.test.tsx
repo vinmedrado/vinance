@@ -4,8 +4,17 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { FinancialPage } from '../../src/pages/FinancialPage';
-import { financialPolicyQueryKey } from '../../src/features/financial-state/hooks/useFinancialState';
-import type { FinancialPolicy, FinancialState, Household } from '../../src/features/financial-state/types/financialState.types';
+import {
+  capitalAllocationQueryKey,
+  financialPolicyQueryKey,
+  financialStateQueryKey,
+} from '../../src/features/financial-state/hooks/useFinancialState';
+import type {
+  CapitalAllocation,
+  FinancialPolicy,
+  FinancialState,
+  Household,
+} from '../../src/features/financial-state/types/financialState.types';
 import { clearSession, setSession } from '../../src/services/api';
 
 
@@ -17,6 +26,11 @@ const service = vi.hoisted(() => ({
   createFinancialPolicyDecision: vi.fn(),
   getFinancialPolicyHistory: vi.fn(),
   getFinancialPolicyDecision: vi.fn(),
+  getCurrentCapitalAllocation: vi.fn(),
+  getCapitalAllocationFromPolicy: vi.fn(),
+  createCapitalAllocationDecision: vi.fn(),
+  getCapitalAllocationHistory: vi.fn(),
+  getCapitalAllocationDecision: vi.fn(),
   createFinancialStateSnapshot: vi.fn(),
   getFinancialStateHistory: vi.fn(),
   listHouseholdIncomes: vi.fn(),
@@ -179,6 +193,88 @@ const policy: FinancialPolicy = {
   previous_financial_state: {},
 };
 
+const allocation: CapitalAllocation = {
+  allocation_id: null,
+  household_id: 10,
+  financial_state_snapshot_id: null,
+  financial_policy_id: null,
+  engine_version: 'capital-allocation-v1',
+  rules_version: 'capital-allocation-rules-v1',
+  allocation_period: 'MONTHLY',
+  allocation_status: 'SURPLUS',
+  currency: 'BRL',
+  allocatable_capital: '4000.00',
+  allocated_capital: '4000.00',
+  remaining_capital: '0.00',
+  investment_bucket_amount: '1000.00',
+  bucket_totals: {
+    protected_capital: '3000.00',
+    goal_capital: '0.00',
+    investment_capital: '1000.00',
+    speculative_capital: '0.00',
+  },
+  allocations: [
+    {
+      priority_code: 'BUILD_EMERGENCY_RESERVE',
+      priority_rank: 1,
+      bucket_type: 'PROTECTED_CAPITAL',
+      target_type: 'EMERGENCY_RESERVE',
+      target_id: null,
+      target_name: 'Reserva de emergência',
+      ownership_scope: 'HOUSEHOLD',
+      user_id: null,
+      requested_amount: '3000.00',
+      allocated_amount: '3000.00',
+      remaining_need: '0.00',
+      status: 'FUNDED',
+      reason: 'O gap veio da política financeira vigente.',
+      evidence_refs: ['EMERGENCY_RESERVE'],
+    },
+    {
+      priority_code: 'INVEST_SURPLUS_CAPITAL',
+      priority_rank: 2,
+      bucket_type: 'INVESTMENT_CAPITAL',
+      target_type: 'INVESTMENT',
+      target_id: null,
+      target_name: 'Capital elegível para investimentos',
+      ownership_scope: null,
+      user_id: null,
+      requested_amount: '1000.00',
+      allocated_amount: '1000.00',
+      remaining_need: '0.00',
+      status: 'ALLOCATED',
+      reason: 'Residual permitido pela política.',
+      evidence_refs: ['INVESTMENT_CAPACITY'],
+    },
+  ],
+  unfunded_priorities: [],
+  member_impacts: [],
+  blockers: [],
+  warnings: [],
+  missing_information: [],
+  evidence: [],
+  rules_evaluated: [],
+  data_gate: {
+    status: 'PASS',
+    state_quality: 'COMPLETE',
+    state_confidence: 100,
+    policy_state: 'INVESTMENT_READY',
+    investment_readiness: 'READY',
+    currencies: ['BRL'],
+    critical_stale_fields: [],
+    consistency_checks: { capital_conservation: true },
+  },
+  ruleset: {},
+  source_financial_state: {},
+  source_financial_policy: {},
+  input_fingerprint: 'd'.repeat(64),
+  policy_fingerprint: 'c'.repeat(64),
+  ruleset_fingerprint: 'e'.repeat(64),
+  decision_fingerprint: 'f'.repeat(64),
+  generated_at: '2026-09-08T12:00:00Z',
+  created_at: null,
+};
+
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return {
@@ -195,6 +291,17 @@ beforeEach(() => {
   service.getCurrentFinancialPolicy.mockReset().mockResolvedValue(policy);
   service.getFinancialPolicyHistory.mockReset().mockResolvedValue({ items: [], total: 0 });
   service.getFinancialPolicyDecision.mockReset().mockResolvedValue(policy);
+  service.getCurrentCapitalAllocation.mockReset().mockResolvedValue(allocation);
+  service.getCapitalAllocationFromPolicy.mockReset().mockResolvedValue(allocation);
+  service.getCapitalAllocationHistory.mockReset().mockResolvedValue({ items: [], total: 0 });
+  service.getCapitalAllocationDecision.mockReset().mockResolvedValue(allocation);
+  service.createCapitalAllocationDecision.mockReset().mockResolvedValue({
+    ...allocation,
+    allocation_id: 23,
+    financial_state_snapshot_id: 7,
+    financial_policy_id: 17,
+    created_at: '2026-09-08T12:00:01Z',
+  });
   service.createFinancialPolicyDecision.mockReset().mockResolvedValue({
     ...policy,
     policy_id: 17,
@@ -217,6 +324,10 @@ test('usa métricas do engine e distingue ausência de zero real', async () => {
   expect(await screen.findByRole('heading', { name: 'Minha situação financeira' })).toBeInTheDocument();
   expect(await screen.findByText('Parcial · 82%')).toBeInTheDocument();
   expect(await screen.findByRole('heading', { name: 'Sua prioridade agora' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Plano deste período' })).toBeInTheDocument();
+  expect(screen.getByText('COM CAPITAL ELEGÍVEL')).toHaveClass('vn-badge--success');
+  expect(screen.getByRole('heading', { name: /R\$\s*4\.000,00/ })).toBeInTheDocument();
+  expect(screen.getByText('Capital elegível para investimentos')).toBeInTheDocument();
   expect(screen.getByText('LIMITADO')).toHaveClass('vn-badge--warning');
   expect(screen.getByRole('heading', { name: 'Fortalecer a reserva de emergência' })).toBeInTheDocument();
   expect(screen.getByText('Sua reserva atual cobre 3 meses e ainda está abaixo do alvo vigente.')).toBeInTheDocument();
@@ -237,6 +348,7 @@ test('não reutiliza dados financeiros quando a identidade da sessão muda', asy
 
   await waitFor(() => expect(service.getCurrentFinancialPolicy).toHaveBeenCalledTimes(2));
   expect(service.getCurrentFinancialState).toHaveBeenCalledTimes(2);
+  expect(service.getCurrentCapitalAllocation).toHaveBeenCalledTimes(2);
   expect(service.listHouseholds).toHaveBeenCalledTimes(2);
 });
 
@@ -248,6 +360,35 @@ test('isola falha da política sem esconder o Financial State', async () => {
   expect(await screen.findByText('Política indisponível')).toBeInTheDocument();
   expect(screen.getByText(/123,45/)).toBeInTheDocument();
   expect(screen.queryByText('Não foi possível carregar sua situação')).not.toBeInTheDocument();
+});
+
+test('isola falha do plano sem esconder State nem Policy', async () => {
+  service.getCurrentCapitalAllocation.mockRejectedValueOnce(new Error('Plano indisponível'));
+
+  renderPage();
+
+  expect(await screen.findByText('Plano indisponível')).toBeInTheDocument();
+  expect(screen.getByText(/123,45/)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Sua prioridade agora' })).toBeInTheDocument();
+});
+
+test('mostra capital desconhecido sem convertê-lo em zero', async () => {
+  service.getCurrentCapitalAllocation.mockResolvedValueOnce({
+    ...allocation,
+    allocation_status: 'BLOCKED',
+    allocatable_capital: null,
+    allocated_capital: '0.00',
+    remaining_capital: null,
+    investment_bucket_amount: '0.00',
+    allocations: [],
+    blockers: [{ code: 'DATA', message: 'Informe renda e despesas.', fields: [], rule_ids: [] }],
+  });
+
+  renderPage();
+
+  expect((await screen.findAllByText('Não calculável')).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Os dados atuais não permitem afirmar quanto pode ser distribuído.')).toBeInTheDocument();
+  expect(screen.getByText('Informe renda e despesas.')).toBeInTheDocument();
 });
 
 test('não apresenta histórico vazio quando a consulta de decisões falha', async () => {
@@ -280,6 +421,56 @@ test('congela decisão auditável e atualiza o histórico sem lógica financeira
     'financial-policy-10-00000000-0000-4000-8000-000000000001',
   );
   expect(await screen.findByText('Decisão financeira salva no histórico.')).toBeInTheDocument();
+});
+
+test('congela o plano completo com chave idempotente própria', async () => {
+  renderPage();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Salvar plano' }));
+
+  expect(service.createCapitalAllocationDecision).toHaveBeenCalledWith(
+    10,
+    'capital-allocation-10-00000000-0000-4000-8000-000000000001',
+  );
+  expect(await screen.findByText('Plano de capital salvo no histórico.')).toBeInTheDocument();
+});
+
+test('mantém o plano congelado no cache do household que iniciou o POST', async () => {
+  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
+  let resolveAllocation!: (decision: CapitalAllocation) => void;
+  service.createCapitalAllocationDecision.mockReturnValueOnce(
+    new Promise<CapitalAllocation>((resolve) => { resolveAllocation = resolve; }),
+  );
+  const { client } = renderPage();
+  const setQueryData = vi.spyOn(client, 'setQueryData');
+  const invalidateQueries = vi.spyOn(client, 'invalidateQueries');
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Salvar plano' }));
+  await userEvent.selectOptions(screen.getByLabelText('Household'), '20');
+  act(() => resolveAllocation({
+    ...allocation,
+    allocation_id: 23,
+    household_id: 10,
+    financial_state_snapshot_id: 7,
+    financial_policy_id: 17,
+    created_at: '2026-09-08T12:00:01Z',
+  }));
+
+  expect(await screen.findByText('Plano de capital salvo no histórico.')).toBeInTheDocument();
+  expect(setQueryData).toHaveBeenCalledWith(
+    capitalAllocationQueryKey(null, 'history', 10, 23),
+    expect.objectContaining({ allocation_id: 23, household_id: 10 }),
+  );
+  expect(setQueryData).not.toHaveBeenCalledWith(
+    capitalAllocationQueryKey(null, 'history', 20, 23),
+    expect.anything(),
+  );
+  expect(invalidateQueries).toHaveBeenCalledWith({
+    queryKey: financialPolicyQueryKey(null, 'current', 10),
+  });
+  expect(invalidateQueries).toHaveBeenCalledWith({
+    queryKey: financialStateQueryKey(null, 'current', 10),
+  });
 });
 
 test('mantém a resposta da decisão no cache do household que iniciou o POST', async () => {

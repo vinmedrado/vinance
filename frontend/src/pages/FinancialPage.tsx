@@ -18,10 +18,13 @@ import {
   ToggleField,
 } from '../components';
 import {
+  useCapitalAllocationHistory,
+  useCreateCapitalAllocationDecision,
   useCreateFinancialPolicyDecision,
   useCreateHouseholdExpense,
   useCreateHouseholdIncome,
   useCreateFinancialStateSnapshot,
+  useCurrentCapitalAllocation,
   useCurrentFinancialPolicy,
   useCurrentFinancialState,
   useDefaultHousehold,
@@ -31,6 +34,7 @@ import {
   useHouseholds,
 } from '../features/financial-state/hooks/useFinancialState';
 import { FinancialPolicyCard } from '../features/financial-state/components/FinancialPolicyCard';
+import { CapitalAllocationCard } from '../features/financial-state/components/CapitalAllocationCard';
 import type { DataQuality, MoneyValue, OwnershipScope } from '../features/financial-state/types/financialState.types';
 import { useFinancialProfile } from '../features/financial/hooks/useFinancial';
 import type { ApiErrorShape } from '../services/api';
@@ -201,12 +205,15 @@ export function FinancialPage() {
   const financialState = useCurrentFinancialState(selectedHouseholdId);
   const financialPolicy = useCurrentFinancialPolicy(selectedHouseholdId);
   const policyHistory = useFinancialPolicyHistory(selectedHouseholdId);
+  const capitalAllocation = useCurrentCapitalAllocation(selectedHouseholdId);
+  const allocationHistory = useCapitalAllocationHistory(selectedHouseholdId);
   const incomes = useHouseholdIncomes(selectedHouseholdId);
   const expenses = useHouseholdExpenses(selectedHouseholdId);
   const createIncome = useCreateHouseholdIncome(selectedHouseholdId);
   const createExpense = useCreateHouseholdExpense(selectedHouseholdId);
   const createSnapshot = useCreateFinancialStateSnapshot(selectedHouseholdId);
   const createPolicyDecision = useCreateFinancialPolicyDecision(selectedHouseholdId);
+  const createAllocationDecision = useCreateCapitalAllocationDecision(selectedHouseholdId);
   const missingProfile = (profile.error as ApiErrorShape | null)?.status === 404;
   const loadError = getActionError(
     households.error,
@@ -263,6 +270,8 @@ export function FinancialPage() {
     financialState.refetch();
     financialPolicy.refetch();
     policyHistory.refetch();
+    capitalAllocation.refetch();
+    allocationHistory.refetch();
     incomes.refetch();
     expenses.refetch();
     profile.refetch();
@@ -271,7 +280,7 @@ export function FinancialPage() {
   return (
     <section className="vn-page">
       <SectionHeader
-        eyebrow="Financial Autopilot · fase 2"
+        eyebrow="Financial Autopilot · fase 3"
         title="Minha situação financeira"
         description="Uma leitura objetiva da sua situação e da ordem de prioridades agora — com transparência sobre o que ainda falta informar."
         action={state ? <Button variant="secondary" onClick={() => createSnapshot.mutate()} disabled={createSnapshot.isPending}>{createSnapshot.isPending ? 'Salvando...' : 'Salvar retrato'}</Button> : undefined}
@@ -290,6 +299,7 @@ export function FinancialPage() {
       )}
       {createSnapshot.isSuccess && <Toast message="Retrato financeiro salvo no histórico." />}
       {createPolicyDecision.isSuccess && <Toast message="Decisão financeira salva no histórico." />}
+      {createAllocationDecision.isSuccess && <Toast message="Plano de capital salvo no histórico." />}
       {incomeSaved && <Toast message="Receita cadastrada com sucesso." />}
       {expenseSaved && <Toast message="Despesa cadastrada com sucesso." />}
       {missingProfile && <OnboardingCard onCompleted={reload} />}
@@ -407,6 +417,20 @@ export function FinancialPage() {
             onRetry={() => financialPolicy.refetch()}
             onRetryHistory={() => policyHistory.refetch()}
             onFreeze={() => createPolicyDecision.mutate()}
+          />
+
+          <CapitalAllocationCard
+            allocation={capitalAllocation.data}
+            history={allocationHistory.data}
+            isLoading={capitalAllocation.isLoading}
+            isHistoryLoading={allocationHistory.isLoading}
+            isFreezing={createAllocationDecision.isPending}
+            errorMessage={capitalAllocation.error ? errorMessage(capitalAllocation.error) : undefined}
+            historyErrorMessage={allocationHistory.error ? errorMessage(allocationHistory.error) : undefined}
+            freezeErrorMessage={createAllocationDecision.error ? errorMessage(createAllocationDecision.error) : undefined}
+            onRetry={() => capitalAllocation.refetch()}
+            onRetryHistory={() => allocationHistory.refetch()}
+            onFreeze={() => createAllocationDecision.mutate()}
           />
 
           <Card
