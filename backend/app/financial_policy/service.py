@@ -110,14 +110,18 @@ async def _previous_snapshot(
     return result.scalar_one_or_none()
 
 
-async def current_financial_policy(
+async def current_financial_policy_context(
     session: AsyncSession,
     *,
     household_id: int,
     user_id: int,
     evaluated_at: datetime | None = None,
-) -> dict[str, Any]:
-    """Evaluate the current canonical State once and derive a read-only policy."""
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Evaluate State exactly once and return it with its derived Policy.
+
+    The paired contract is consumed by later Autopilot stages so they cannot
+    accidentally evaluate a second, slightly different Financial State.
+    """
 
     evaluated = evaluated_at or datetime.now(timezone.utc)
     normalized_inputs = await state_service.build_normalized_inputs(
@@ -135,11 +139,30 @@ async def current_financial_policy(
         before_evaluated_at=current_state["evaluated_at"],
     )
     previous_state = _state_from_snapshot(snapshot) if snapshot is not None else None
-    return calculate_financial_policy(
+    policy = calculate_financial_policy(
         current_state,
         normalized_inputs=normalized_inputs,
         previous_financial_state=previous_state,
     )
+    return current_state, policy
+
+
+async def current_financial_policy(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    user_id: int,
+    evaluated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Evaluate the current canonical State once and derive a read-only policy."""
+
+    _, policy = await current_financial_policy_context(
+        session,
+        household_id=household_id,
+        user_id=user_id,
+        evaluated_at=evaluated_at,
+    )
+    return policy
 
 
 async def financial_policy_from_state_snapshot(

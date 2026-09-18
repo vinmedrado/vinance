@@ -26,6 +26,12 @@ class FinancialPolicyDecision(Base):
 
     __tablename__ = "financial_policy_decisions"
     __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "financial_state_snapshot_id",
+            "household_id",
+            name="uq_financial_policy_decisions_chain",
+        ),
         CheckConstraint(
             "policy_state IN ('DATA_BLOCKED','CASHFLOW_RECOVERY','DEBT_PRIORITY',"
             "'EMERGENCY_RESERVE_PRIORITY','GOAL_PRIORITY','BALANCED_BUILD',"
