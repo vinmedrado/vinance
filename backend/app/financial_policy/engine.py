@@ -98,6 +98,36 @@ def _sha256_payload(value: Any) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+_DECISION_FINGERPRINT_FIELDS = (
+    "input_fingerprint",
+    "ruleset_fingerprint",
+    "policy_state",
+    "investment_readiness",
+    "summary",
+    "priority_stack",
+    "data_gate",
+    "debt_policy",
+    "reserve_policy",
+    "goal_policy",
+    "blockers",
+    "warnings",
+    "limitations",
+    "missing_information",
+    "explanations",
+    "evidence",
+    "member_policy_views",
+    "rules_evaluated",
+)
+
+
+def decision_fingerprint_from_payload(payload: Mapping[str, Any]) -> str:
+    """Rebuild the v1 decision digest from its complete semantic contract."""
+
+    return _sha256_payload(
+        {field: deepcopy(payload.get(field)) for field in _DECISION_FINGERPRINT_FIELDS}
+    )
+
+
 def _fingerprint(
     financial_state: Mapping[str, Any],
     normalized_inputs: Mapping[str, Any],
@@ -1876,7 +1906,7 @@ def calculate_financial_policy(
         "version": RULES_VERSION,
         "thresholds": RULES.public_thresholds(),
     }
-    decision_fingerprint = _sha256_payload(
+    decision_fingerprint = decision_fingerprint_from_payload(
         {
             "input_fingerprint": input_fingerprint,
             "ruleset_fingerprint": ruleset_fingerprint,
