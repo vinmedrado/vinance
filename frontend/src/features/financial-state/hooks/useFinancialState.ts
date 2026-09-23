@@ -4,6 +4,7 @@ import { useSessionToken } from '../../auth/hooks/useAuth';
 import {
   createCapitalAllocationDecision,
   createFinancialPolicyDecision,
+  createInvestmentOrchestrationDecision,
   createExpense,
   createFinancialStateSnapshot,
   createIncome,
@@ -17,6 +18,10 @@ import {
   getFinancialPolicyDecision,
   getFinancialPolicyHistory,
   getFinancialStateHistory,
+  getCurrentInvestmentOrchestration,
+  getInvestmentOrchestrationDecision,
+  getInvestmentOrchestrationFromAllocation,
+  getInvestmentOrchestrationHistory,
   listHouseholdExpenses,
   listHouseholdIncomes,
   listHouseholds,
@@ -39,6 +44,11 @@ export const capitalAllocationQueryKey = (
   sessionToken: string | null,
   ...parts: FinancialQueryPart[]
 ) => ['capital-allocation', sessionToken, ...parts] as const;
+
+export const investmentOrchestrationQueryKey = (
+  sessionToken: string | null,
+  ...parts: FinancialQueryPart[]
+) => ['investment-orchestration', sessionToken, ...parts] as const;
 
 export function useHouseholds() {
   const sessionToken = useSessionToken();
@@ -148,6 +158,64 @@ export function useCapitalAllocationDecision(
   });
 }
 
+export function useCurrentInvestmentOrchestration(householdId: number | null) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: investmentOrchestrationQueryKey(sessionToken, 'current', householdId),
+    queryFn: () => getCurrentInvestmentOrchestration(householdId as number),
+    enabled: householdId !== null,
+  });
+}
+
+export function useInvestmentOrchestrationFromAllocation(
+  householdId: number | null,
+  allocationId: number | null,
+) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: investmentOrchestrationQueryKey(
+      sessionToken,
+      'allocation',
+      householdId,
+      allocationId,
+    ),
+    queryFn: () => getInvestmentOrchestrationFromAllocation(
+      householdId as number,
+      allocationId as number,
+    ),
+    enabled: householdId !== null && allocationId !== null,
+  });
+}
+
+export function useInvestmentOrchestrationHistory(householdId: number | null) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: investmentOrchestrationQueryKey(sessionToken, 'history', householdId),
+    queryFn: () => getInvestmentOrchestrationHistory(householdId as number),
+    enabled: householdId !== null,
+  });
+}
+
+export function useInvestmentOrchestrationDecision(
+  householdId: number | null,
+  orchestrationId: number | null,
+) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: investmentOrchestrationQueryKey(
+      sessionToken,
+      'history',
+      householdId,
+      orchestrationId,
+    ),
+    queryFn: () => getInvestmentOrchestrationDecision(
+      householdId as number,
+      orchestrationId as number,
+    ),
+    enabled: householdId !== null && orchestrationId !== null,
+  });
+}
+
 export function useFinancialStateHistory(householdId: number | null) {
   const sessionToken = useSessionToken();
   return useQuery({
@@ -188,6 +256,7 @@ export function useCreateHouseholdIncome(householdId: number | null) {
       queryClient.invalidateQueries({ queryKey: financialStateQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: financialPolicyQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: capitalAllocationQueryKey(sessionToken, 'current', householdId) });
+      queryClient.invalidateQueries({ queryKey: investmentOrchestrationQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: ['financial'] });
     },
   });
@@ -206,6 +275,7 @@ export function useCreateHouseholdExpense(householdId: number | null) {
       queryClient.invalidateQueries({ queryKey: financialStateQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: financialPolicyQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: capitalAllocationQueryKey(sessionToken, 'current', householdId) });
+      queryClient.invalidateQueries({ queryKey: investmentOrchestrationQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: ['financial'] });
     },
   });
@@ -227,6 +297,12 @@ function allocationIdempotencyKey(householdId: number) {
   const randomPart = globalThis.crypto?.randomUUID?.()
     ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `capital-allocation-${householdId}-${randomPart}`;
+}
+
+function orchestrationIdempotencyKey(householdId: number) {
+  const randomPart = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `investment-orchestration-${householdId}-${randomPart}`;
 }
 
 export function useCreateFinancialPolicyDecision(householdId: number | null) {
@@ -361,6 +437,70 @@ export function useCreateCapitalAllocationDecision(householdId: number | null) {
           completedHouseholdId,
         ),
       });
+      queryClient.invalidateQueries({
+        queryKey: investmentOrchestrationQueryKey(
+          completedSessionToken,
+          'current',
+          completedHouseholdId,
+        ),
+      });
+    },
+  });
+}
+
+export function useCreateInvestmentOrchestrationDecision(householdId: number | null) {
+  const queryClient = useQueryClient();
+  const sessionToken = useSessionToken();
+  const pendingRequest = useRef<{
+    householdId: number;
+    key: string;
+    sessionToken: string | null;
+  } | null>(null);
+  return useMutation({
+    mutationFn: () => {
+      if (householdId === null) throw new Error('Household não selecionado');
+      if (
+        !pendingRequest.current
+        || pendingRequest.current.householdId !== householdId
+        || pendingRequest.current.sessionToken !== sessionToken
+      ) {
+        pendingRequest.current = {
+          householdId,
+          key: orchestrationIdempotencyKey(householdId),
+          sessionToken,
+        };
+      }
+      return createInvestmentOrchestrationDecision(
+        householdId,
+        pendingRequest.current.key,
+      );
+    },
+    onSuccess: (decision) => {
+      const completedRequest = pendingRequest.current;
+      pendingRequest.current = null;
+      const completedHouseholdId = decision.household_id;
+      const completedSessionToken = completedRequest?.householdId === completedHouseholdId
+        ? completedRequest.sessionToken
+        : sessionToken;
+      queryClient.setQueryData(
+        investmentOrchestrationQueryKey(
+          completedSessionToken,
+          'history',
+          completedHouseholdId,
+          decision.orchestration_id,
+        ),
+        decision,
+      );
+      for (const key of [
+        investmentOrchestrationQueryKey(completedSessionToken, 'history', completedHouseholdId),
+        investmentOrchestrationQueryKey(completedSessionToken, 'current', completedHouseholdId),
+        capitalAllocationQueryKey(completedSessionToken, 'history', completedHouseholdId),
+        capitalAllocationQueryKey(completedSessionToken, 'current', completedHouseholdId),
+        financialPolicyQueryKey(completedSessionToken, 'history', completedHouseholdId),
+        financialStateQueryKey(completedSessionToken, 'history', completedHouseholdId),
+      ]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
     },
   });
 }
@@ -382,6 +522,7 @@ export function useCreateFinancialStateSnapshot(householdId: number | null) {
       queryClient.invalidateQueries({ queryKey: financialStateQueryKey(sessionToken, 'history', householdId) });
       queryClient.invalidateQueries({ queryKey: financialPolicyQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: capitalAllocationQueryKey(sessionToken, 'current', householdId) });
+      queryClient.invalidateQueries({ queryKey: investmentOrchestrationQueryKey(sessionToken, 'current', householdId) });
     },
   });
 }

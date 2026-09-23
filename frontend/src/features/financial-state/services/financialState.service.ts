@@ -14,6 +14,8 @@ import type {
   HouseholdExpense,
   HouseholdIncome,
   IncomePayload,
+  InvestmentOrchestration,
+  InvestmentOrchestrationHistory,
   LiabilityPayload,
 } from '../types/financialState.types';
 
@@ -101,6 +103,52 @@ export async function getCapitalAllocationHistory(householdId: number) {
 export async function getCapitalAllocationDecision(householdId: number, allocationId: number) {
   const { data } = await api.get<CapitalAllocation>(
     `/financial/households/${householdId}/capital-allocation/history/${allocationId}`,
+  );
+  return data;
+}
+
+export async function getCurrentInvestmentOrchestration(householdId: number) {
+  const { data } = await api.get<InvestmentOrchestration>(
+    `/financial/households/${householdId}/investment-orchestration`,
+  );
+  return data;
+}
+
+export async function getInvestmentOrchestrationFromAllocation(
+  householdId: number,
+  allocationId: number,
+) {
+  const { data } = await api.get<InvestmentOrchestration>(
+    `/financial/households/${householdId}/investment-orchestration/from-allocation/${allocationId}`,
+  );
+  return data;
+}
+
+export async function createInvestmentOrchestrationDecision(
+  householdId: number,
+  idempotencyKey: string,
+) {
+  const { data } = await api.post<InvestmentOrchestration>(
+    `/financial/households/${householdId}/investment-orchestration/decisions`,
+    undefined,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  );
+  return data;
+}
+
+export async function getInvestmentOrchestrationHistory(householdId: number) {
+  const { data } = await api.get<InvestmentOrchestrationHistory>(
+    `/financial/households/${householdId}/investment-orchestration/history`,
+  );
+  return data;
+}
+
+export async function getInvestmentOrchestrationDecision(
+  householdId: number,
+  orchestrationId: number,
+) {
+  const { data } = await api.get<InvestmentOrchestration>(
+    `/financial/households/${householdId}/investment-orchestration/history/${orchestrationId}`,
   );
   return data;
 }

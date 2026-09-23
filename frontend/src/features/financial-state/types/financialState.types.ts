@@ -370,6 +370,126 @@ export type CapitalAllocationHistory = {
   total: number;
 };
 
+export type InvestmentOrchestrationStatus =
+  | 'BLOCKED'
+  | 'LIMITED'
+  | 'ACTIVE'
+  | 'NO_SUITABLE_OPPORTUNITY';
+
+export type InvestmentOrchestrationMessage = {
+  code: string;
+  message: string;
+  fields: string[];
+  rule_ids: string[];
+};
+
+export type AssetClassDecision = {
+  asset_class: string;
+  market: string | null;
+  eligibility: 'ELIGIBLE' | 'LIMITED' | 'INELIGIBLE' | 'UNKNOWN';
+  reason: string;
+  risk_fit: string;
+  liquidity_fit: string;
+  data_quality: string;
+  constraints: string[];
+  opportunity_count: number;
+  eligible_opportunity_count: number;
+};
+
+export type InvestmentClassAllocation = {
+  asset_class: string;
+  market: string;
+  signal_score: MoneyValue;
+  allocated_amount: MoneyValue;
+  suggested_capital: MoneyValue;
+  remaining_cash: MoneyValue;
+  method: string;
+};
+
+export type RankedInvestmentOpportunity = {
+  asset_id: number | null;
+  symbol: string;
+  ticker: string | null;
+  asset_class: string;
+  market: string;
+  action: 'BUY' | 'WAIT' | 'AVOID' | 'NO_RECOMMENDATION';
+  rank: number | null;
+  price_reference: MoneyValue;
+  quantity_candidate: number;
+  quantity_suggested: number;
+  capital_required: MoneyValue;
+  capital_committed: MoneyValue;
+  recommendation_score: MoneyValue;
+  risk_level: string;
+  trend_label: string | null;
+  momentum_score: MoneyValue;
+  confidence: MoneyValue;
+  guardrail_status: string;
+  reasons: unknown[];
+  warnings: unknown[];
+  reason: string;
+  [key: string]: unknown;
+};
+
+export type InvestmentOrchestration = {
+  orchestration_id: number | null;
+  household_id: number;
+  financial_state_snapshot_id: number | null;
+  financial_policy_decision_id: number | null;
+  capital_allocation_decision_id: number | null;
+  engine_version: 'investment-orchestrator-v1';
+  rules_version: 'investment-orchestrator-rules-v1';
+  status: InvestmentOrchestrationStatus;
+  currency: string;
+  investment_budget: MoneyValue;
+  profile_context: Record<string, unknown>;
+  portfolio_context: Record<string, unknown>;
+  market_context: Record<string, unknown>;
+  asset_class_decisions: AssetClassDecision[];
+  class_allocations: InvestmentClassAllocation[];
+  ranked_opportunities: RankedInvestmentOpportunity[];
+  suggested_capital: MoneyValue;
+  remaining_investment_cash: MoneyValue;
+  speculative_capital: MoneyValue;
+  trading_dispatch: false;
+  blockers: InvestmentOrchestrationMessage[];
+  warnings: InvestmentOrchestrationMessage[];
+  missing_information: InvestmentOrchestrationMessage[];
+  evidence: Array<Record<string, unknown>>;
+  rule_traces: Array<Record<string, unknown>>;
+  state_fingerprint: string;
+  policy_fingerprint: string;
+  allocation_fingerprint: string;
+  market_context_fingerprint: string;
+  ruleset_fingerprint: string;
+  decision_fingerprint: string;
+  generated_at: string;
+  created_at: string | null;
+};
+
+export type InvestmentOrchestrationDecisionSummary = {
+  orchestration_id: number;
+  household_id: number;
+  financial_state_snapshot_id: number;
+  financial_policy_decision_id: number;
+  capital_allocation_decision_id: number;
+  engine_version: string;
+  rules_version: string;
+  status: InvestmentOrchestrationStatus;
+  currency: string;
+  investment_budget: MoneyValue;
+  suggested_capital: MoneyValue;
+  remaining_investment_cash: MoneyValue;
+  decision_fingerprint: string;
+  generated_at: string;
+  created_at: string;
+};
+
+export type InvestmentOrchestrationHistory = {
+  items: InvestmentOrchestrationDecisionSummary[];
+  total: number;
+};
+
 export type IncomePayload = {
   ownership_scope: OwnershipScope;
   description: string;

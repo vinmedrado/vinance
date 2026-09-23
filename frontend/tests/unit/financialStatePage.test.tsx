@@ -8,12 +8,14 @@ import {
   capitalAllocationQueryKey,
   financialPolicyQueryKey,
   financialStateQueryKey,
+  investmentOrchestrationQueryKey,
 } from '../../src/features/financial-state/hooks/useFinancialState';
 import type {
   CapitalAllocation,
   FinancialPolicy,
   FinancialState,
   Household,
+  InvestmentOrchestration,
 } from '../../src/features/financial-state/types/financialState.types';
 import { clearSession, setSession } from '../../src/services/api';
 
@@ -31,6 +33,11 @@ const service = vi.hoisted(() => ({
   createCapitalAllocationDecision: vi.fn(),
   getCapitalAllocationHistory: vi.fn(),
   getCapitalAllocationDecision: vi.fn(),
+  getCurrentInvestmentOrchestration: vi.fn(),
+  getInvestmentOrchestrationFromAllocation: vi.fn(),
+  createInvestmentOrchestrationDecision: vi.fn(),
+  getInvestmentOrchestrationHistory: vi.fn(),
+  getInvestmentOrchestrationDecision: vi.fn(),
   createFinancialStateSnapshot: vi.fn(),
   getFinancialStateHistory: vi.fn(),
   listHouseholdIncomes: vi.fn(),
@@ -275,6 +282,88 @@ const allocation: CapitalAllocation = {
   created_at: null,
 };
 
+const orchestration: InvestmentOrchestration = {
+  orchestration_id: null,
+  household_id: 10,
+  financial_state_snapshot_id: null,
+  financial_policy_decision_id: null,
+  capital_allocation_decision_id: null,
+  engine_version: 'investment-orchestrator-v1',
+  rules_version: 'investment-orchestrator-rules-v1',
+  status: 'LIMITED',
+  currency: 'BRL',
+  investment_budget: '1000.00',
+  profile_context: { status: 'COMPLETE', effective_profile: 'MODERATE' },
+  portfolio_context: { status: 'UNKNOWN' },
+  market_context: { status: 'AVAILABLE' },
+  asset_class_decisions: [{
+    asset_class: 'ACOES',
+    market: 'ACOES',
+    eligibility: 'ELIGIBLE',
+    reason: 'Há oportunidade compatível.',
+    risk_fit: 'COMPATIBLE',
+    liquidity_fit: 'KNOWN_BY_SCORE',
+    data_quality: 'FRESH',
+    constraints: ['STRICT_GUARDRAIL'],
+    opportunity_count: 1,
+    eligible_opportunity_count: 1,
+  }],
+  class_allocations: [{
+    asset_class: 'ACOES',
+    market: 'ACOES',
+    signal_score: '80.00',
+    allocated_amount: '1000.00',
+    suggested_capital: '900.00',
+    remaining_cash: '100.00',
+    method: 'RELATIVE_CANONICAL_RECOMMENDATION_SCORE',
+  }],
+  ranked_opportunities: [{
+    asset_id: 1,
+    symbol: 'TEST3',
+    ticker: 'TEST3',
+    asset_class: 'ACOES',
+    market: 'ACOES',
+    action: 'BUY',
+    rank: 1,
+    price_reference: '100.00',
+    quantity_candidate: 10,
+    quantity_suggested: 9,
+    capital_required: '1000.00',
+    capital_committed: '900.00',
+    recommendation_score: '80.00',
+    risk_level: 'LOW',
+    trend_label: 'UP',
+    momentum_score: '70.00',
+    confidence: '85.00',
+    guardrail_status: 'APPROVED',
+    reasons: [],
+    warnings: [],
+    reason: 'Oportunidade aprovada, atual e compatível com o perfil.',
+  }],
+  suggested_capital: '900.00',
+  remaining_investment_cash: '100.00',
+  speculative_capital: '0.00',
+  trading_dispatch: false,
+  blockers: [],
+  warnings: [{
+    code: 'PORTFOLIO_UNKNOWN',
+    message: 'Cadastre posições para ampliar a análise de concentração.',
+    fields: ['owned_assets'],
+    rule_ids: ['IOV1-PORTFOLIO-001'],
+  }],
+  missing_information: [],
+  evidence: [],
+  rule_traces: [],
+  state_fingerprint: '1'.repeat(64),
+  policy_fingerprint: '2'.repeat(64),
+  allocation_fingerprint: '3'.repeat(64),
+  market_context_fingerprint: '4'.repeat(64),
+  ruleset_fingerprint: '5'.repeat(64),
+  decision_fingerprint: '6'.repeat(64),
+  generated_at: '2026-09-08T12:00:00Z',
+  created_at: null,
+};
+
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return {
@@ -295,6 +384,18 @@ beforeEach(() => {
   service.getCapitalAllocationFromPolicy.mockReset().mockResolvedValue(allocation);
   service.getCapitalAllocationHistory.mockReset().mockResolvedValue({ items: [], total: 0 });
   service.getCapitalAllocationDecision.mockReset().mockResolvedValue(allocation);
+  service.getCurrentInvestmentOrchestration.mockReset().mockResolvedValue(orchestration);
+  service.getInvestmentOrchestrationFromAllocation.mockReset().mockResolvedValue(orchestration);
+  service.getInvestmentOrchestrationHistory.mockReset().mockResolvedValue({ items: [], total: 0 });
+  service.getInvestmentOrchestrationDecision.mockReset().mockResolvedValue(orchestration);
+  service.createInvestmentOrchestrationDecision.mockReset().mockResolvedValue({
+    ...orchestration,
+    orchestration_id: 31,
+    financial_state_snapshot_id: 7,
+    financial_policy_decision_id: 17,
+    capital_allocation_decision_id: 23,
+    created_at: '2026-09-08T12:00:01Z',
+  });
   service.createCapitalAllocationDecision.mockReset().mockResolvedValue({
     ...allocation,
     allocation_id: 23,
@@ -325,10 +426,16 @@ test('usa métricas do engine e distingue ausência de zero real', async () => {
   expect(await screen.findByText('Parcial · 82%')).toBeInTheDocument();
   expect(await screen.findByRole('heading', { name: 'Sua prioridade agora' })).toBeInTheDocument();
   expect(await screen.findByRole('heading', { name: 'Plano deste período' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Como investir este valor' })).toBeInTheDocument();
+  expect(screen.getByText('TEST3')).toBeInTheDocument();
+  expect(screen.getByText('Comprar')).toHaveClass('vn-badge--success');
   expect(screen.getByText('COM CAPITAL ELEGÍVEL')).toHaveClass('vn-badge--success');
   expect(screen.getByRole('heading', { name: /R\$\s*4\.000,00/ })).toBeInTheDocument();
   expect(screen.getByText('Capital elegível para investimentos')).toBeInTheDocument();
-  expect(screen.getByText('LIMITADO')).toHaveClass('vn-badge--warning');
+  expect(screen.getAllByText('LIMITADO')).toHaveLength(2);
+  screen.getAllByText('LIMITADO').forEach((badge) => {
+    expect(badge).toHaveClass('vn-badge--warning');
+  });
   expect(screen.getByRole('heading', { name: 'Fortalecer a reserva de emergência' })).toBeInTheDocument();
   expect(screen.getByText('Sua reserva atual cobre 3 meses e ainda está abaixo do alvo vigente.')).toBeInTheDocument();
   expect(screen.getByText(/Investir somente o capital excedente/)).toBeInTheDocument();
@@ -349,6 +456,7 @@ test('não reutiliza dados financeiros quando a identidade da sessão muda', asy
   await waitFor(() => expect(service.getCurrentFinancialPolicy).toHaveBeenCalledTimes(2));
   expect(service.getCurrentFinancialState).toHaveBeenCalledTimes(2);
   expect(service.getCurrentCapitalAllocation).toHaveBeenCalledTimes(2);
+  expect(service.getCurrentInvestmentOrchestration).toHaveBeenCalledTimes(2);
   expect(service.listHouseholds).toHaveBeenCalledTimes(2);
 });
 
@@ -433,6 +541,50 @@ test('congela o plano completo com chave idempotente própria', async () => {
     'capital-allocation-10-00000000-0000-4000-8000-000000000001',
   );
   expect(await screen.findByText('Plano de capital salvo no histórico.')).toBeInTheDocument();
+});
+
+test('congela a estratégia de investimento com chave idempotente própria', async () => {
+  renderPage();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Salvar estratégia' }));
+
+  expect(service.createInvestmentOrchestrationDecision).toHaveBeenCalledWith(
+    10,
+    'investment-orchestration-10-00000000-0000-4000-8000-000000000001',
+  );
+  expect(await screen.findByText('Estratégia de investimento salva no histórico.')).toBeInTheDocument();
+});
+
+test('mantém a estratégia congelada no cache do household que iniciou o POST', async () => {
+  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
+  let resolveOrchestration!: (decision: InvestmentOrchestration) => void;
+  service.createInvestmentOrchestrationDecision.mockReturnValueOnce(
+    new Promise<InvestmentOrchestration>((resolve) => { resolveOrchestration = resolve; }),
+  );
+  const { client } = renderPage();
+  const setQueryData = vi.spyOn(client, 'setQueryData');
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Salvar estratégia' }));
+  await userEvent.selectOptions(screen.getByLabelText('Household'), '20');
+  act(() => resolveOrchestration({
+    ...orchestration,
+    orchestration_id: 31,
+    household_id: 10,
+    financial_state_snapshot_id: 7,
+    financial_policy_decision_id: 17,
+    capital_allocation_decision_id: 23,
+    created_at: '2026-09-08T12:00:01Z',
+  }));
+
+  expect(await screen.findByText('Estratégia de investimento salva no histórico.')).toBeInTheDocument();
+  expect(setQueryData).toHaveBeenCalledWith(
+    investmentOrchestrationQueryKey(null, 'history', 10, 31),
+    expect.objectContaining({ orchestration_id: 31, household_id: 10 }),
+  );
+  expect(setQueryData).not.toHaveBeenCalledWith(
+    investmentOrchestrationQueryKey(null, 'history', 20, 31),
+    expect.anything(),
+  );
 });
 
 test('mantém o plano congelado no cache do household que iniciou o POST', async () => {

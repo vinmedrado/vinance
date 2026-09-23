@@ -24,17 +24,21 @@ import {
   useCreateHouseholdExpense,
   useCreateHouseholdIncome,
   useCreateFinancialStateSnapshot,
+  useCreateInvestmentOrchestrationDecision,
   useCurrentCapitalAllocation,
   useCurrentFinancialPolicy,
   useCurrentFinancialState,
+  useCurrentInvestmentOrchestration,
   useDefaultHousehold,
   useFinancialPolicyHistory,
   useHouseholdExpenses,
   useHouseholdIncomes,
   useHouseholds,
+  useInvestmentOrchestrationHistory,
 } from '../features/financial-state/hooks/useFinancialState';
 import { FinancialPolicyCard } from '../features/financial-state/components/FinancialPolicyCard';
 import { CapitalAllocationCard } from '../features/financial-state/components/CapitalAllocationCard';
+import { InvestmentOrchestrationCard } from '../features/financial-state/components/InvestmentOrchestrationCard';
 import type { DataQuality, MoneyValue, OwnershipScope } from '../features/financial-state/types/financialState.types';
 import { useFinancialProfile } from '../features/financial/hooks/useFinancial';
 import type { ApiErrorShape } from '../services/api';
@@ -207,6 +211,8 @@ export function FinancialPage() {
   const policyHistory = useFinancialPolicyHistory(selectedHouseholdId);
   const capitalAllocation = useCurrentCapitalAllocation(selectedHouseholdId);
   const allocationHistory = useCapitalAllocationHistory(selectedHouseholdId);
+  const investmentOrchestration = useCurrentInvestmentOrchestration(selectedHouseholdId);
+  const orchestrationHistory = useInvestmentOrchestrationHistory(selectedHouseholdId);
   const incomes = useHouseholdIncomes(selectedHouseholdId);
   const expenses = useHouseholdExpenses(selectedHouseholdId);
   const createIncome = useCreateHouseholdIncome(selectedHouseholdId);
@@ -214,6 +220,7 @@ export function FinancialPage() {
   const createSnapshot = useCreateFinancialStateSnapshot(selectedHouseholdId);
   const createPolicyDecision = useCreateFinancialPolicyDecision(selectedHouseholdId);
   const createAllocationDecision = useCreateCapitalAllocationDecision(selectedHouseholdId);
+  const createOrchestrationDecision = useCreateInvestmentOrchestrationDecision(selectedHouseholdId);
   const missingProfile = (profile.error as ApiErrorShape | null)?.status === 404;
   const loadError = getActionError(
     households.error,
@@ -272,6 +279,8 @@ export function FinancialPage() {
     policyHistory.refetch();
     capitalAllocation.refetch();
     allocationHistory.refetch();
+    investmentOrchestration.refetch();
+    orchestrationHistory.refetch();
     incomes.refetch();
     expenses.refetch();
     profile.refetch();
@@ -280,7 +289,7 @@ export function FinancialPage() {
   return (
     <section className="vn-page">
       <SectionHeader
-        eyebrow="Financial Autopilot · fase 3"
+        eyebrow="Financial Autopilot · fase 4"
         title="Minha situação financeira"
         description="Uma leitura objetiva da sua situação e da ordem de prioridades agora — com transparência sobre o que ainda falta informar."
         action={state ? <Button variant="secondary" onClick={() => createSnapshot.mutate()} disabled={createSnapshot.isPending}>{createSnapshot.isPending ? 'Salvando...' : 'Salvar retrato'}</Button> : undefined}
@@ -300,6 +309,7 @@ export function FinancialPage() {
       {createSnapshot.isSuccess && <Toast message="Retrato financeiro salvo no histórico." />}
       {createPolicyDecision.isSuccess && <Toast message="Decisão financeira salva no histórico." />}
       {createAllocationDecision.isSuccess && <Toast message="Plano de capital salvo no histórico." />}
+      {createOrchestrationDecision.isSuccess && <Toast message="Estratégia de investimento salva no histórico." />}
       {incomeSaved && <Toast message="Receita cadastrada com sucesso." />}
       {expenseSaved && <Toast message="Despesa cadastrada com sucesso." />}
       {missingProfile && <OnboardingCard onCompleted={reload} />}
@@ -431,6 +441,20 @@ export function FinancialPage() {
             onRetry={() => capitalAllocation.refetch()}
             onRetryHistory={() => allocationHistory.refetch()}
             onFreeze={() => createAllocationDecision.mutate()}
+          />
+
+          <InvestmentOrchestrationCard
+            orchestration={investmentOrchestration.data}
+            history={orchestrationHistory.data}
+            isLoading={investmentOrchestration.isLoading}
+            isHistoryLoading={orchestrationHistory.isLoading}
+            isFreezing={createOrchestrationDecision.isPending}
+            errorMessage={investmentOrchestration.error ? errorMessage(investmentOrchestration.error) : undefined}
+            historyErrorMessage={orchestrationHistory.error ? errorMessage(orchestrationHistory.error) : undefined}
+            freezeErrorMessage={createOrchestrationDecision.error ? errorMessage(createOrchestrationDecision.error) : undefined}
+            onRetry={() => investmentOrchestration.refetch()}
+            onRetryHistory={() => orchestrationHistory.refetch()}
+            onFreeze={() => createOrchestrationDecision.mutate()}
           />
 
           <Card

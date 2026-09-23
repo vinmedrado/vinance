@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, GitCompareArrows, Lightbulb, Sparkles } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, SectionHeader } from '../components';
@@ -19,10 +19,15 @@ import {
   TrendInterpreterCard,
 } from '../features/investment-workspace/components';
 import { useCurrentUser } from '../features/auth/hooks/useAuth';
+import {
+  useCurrentInvestmentOrchestration,
+  useInvestmentOrchestrationDecision,
+} from '../features/financial-state/hooks/useFinancialState';
 import { getInvestmentWorkspaceRecommendation } from '../features/investment-workspace/services/investmentWorkspace.service';
 import type { ExplainedBudgetAdvisorResponse, InvestmentWorkspaceFilters, InvestorProfile } from '../features/investment-workspace/types/investmentWorkspace.types';
 import { decisionPresentation } from '../features/investment-workspace/utils/investmentDecision';
 import type { ApiErrorShape } from '../services/api';
+import { formatCurrency } from '../utils/formatters';
 
 const marketOptions = [
   { value: 'FII', label: 'FIIs' },
@@ -148,6 +153,29 @@ export function investmentErrorPresentation(error: ApiErrorShape | null) {
 }
 
 function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
+  const queryParams = new URLSearchParams(globalThis.location?.search ?? '');
+  const isAutopilotMode = queryParams.get('modo') === 'autopilot';
+  const householdParam = Number(queryParams.get('household_id'));
+  const decisionParam = Number(queryParams.get('decision_id'));
+  const autopilotHouseholdId = isAutopilotMode && Number.isInteger(householdParam) && householdParam > 0
+    ? householdParam
+    : null;
+  const autopilotDecisionId = Number.isInteger(decisionParam) && decisionParam > 0
+    ? decisionParam
+    : null;
+  const currentAutopilot = useCurrentInvestmentOrchestration(
+    autopilotDecisionId === null ? autopilotHouseholdId : null,
+  );
+  const frozenAutopilot = useInvestmentOrchestrationDecision(
+    autopilotHouseholdId,
+    autopilotDecisionId,
+  );
+  const autopilot = autopilotDecisionId === null
+    ? currentAutopilot.data
+    : frozenAutopilot.data;
+  const autopilotLoading = currentAutopilot.isLoading || frozenAutopilot.isLoading;
+  const autopilotError = currentAutopilot.error || frozenAutopilot.error;
+  const seededAutopilot = useRef<string | null>(null);
   const [filters, setFilters] = useState<InvestmentWorkspaceFilters>({ budget: 300, market: 'FII', profile: 'CONSERVATIVE', includeWarnings: false });
   const [submittedFilters, setSubmittedFilters] = useState<InvestmentWorkspaceFilters>(filters);
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -155,6 +183,25 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
   const query = useInvestmentWorkspace(submittedFilters, hasSubmitted, userId, requestSequence);
   const error = query.error as ApiErrorShape | null;
   const errorContent = investmentErrorPresentation(error);
+
+  useEffect(() => {
+    if (!autopilot || seededAutopilot.current === autopilot.decision_fingerprint) return;
+    const budget = Number(autopilot.investment_budget);
+    const profile = String(autopilot.profile_context.effective_profile ?? '');
+    const market = autopilot.class_allocations[0]?.market
+      ?? autopilot.ranked_opportunities.find((item) => item.action === 'BUY')?.market;
+    setFilters((current) => ({
+      ...current,
+      budget: Number.isFinite(budget) && budget > 0 ? budget : current.budget,
+      profile: profileOptions.some((item) => item.value === profile)
+        ? profile as InvestorProfile
+        : current.profile,
+      market: marketOptions.some((item) => item.value === market)
+        ? String(market)
+        : current.market,
+    }));
+    seededAutopilot.current = autopilot.decision_fingerprint;
+  }, [autopilot]);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -172,6 +219,39 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
         description="Informe quanto pretende investir e receba uma leitura direta da melhor oportunidade para seu perfil."
         action={<Badge tone="success">Análise quantitativa</Badge>}
       />
+
+      {isAutopilotMode && autopilotLoading && (
+        <Card title="Contexto do Financial Autopilot">
+          <LoadingState label="Carregando o capital e a estratégia autorizados..." />
+        </Card>
+      )}
+      {isAutopilotMode && autopilotError && (
+        <Card title="Contexto do Financial Autopilot">
+          <ErrorState
+            title="Não foi possível carregar a estratégia do Autopilot"
+            description={autopilotError instanceof Error ? autopilotError.message : 'Volte à área financeira e tente novamente.'}
+          />
+        </Card>
+      )}
+      {isAutopilotMode && autopilot && (
+        <Card
+          title="Contexto do Financial Autopilot"
+          description="Esta central recebeu o orçamento e o contexto do backend. A consulta abaixo continua sem executar ordens."
+          action={<a className="vn-button vn-button--secondary" href="/financial">Voltar à situação financeira</a>}
+        >
+          <div className="vn-grid vn-grid--two">
+            <div>
+              <span>Capital máximo autorizado</span>
+              <h3>{formatCurrency(autopilot.investment_budget ?? 0)}</h3>
+            </div>
+            <div>
+              <span>Estratégia congelada</span>
+              <p><Badge tone={autopilot.status === 'ACTIVE' ? 'success' : autopilot.status === 'BLOCKED' ? 'danger' : 'warning'}>{autopilot.status}</Badge></p>
+              <p>Sugerido: {formatCurrency(autopilot.suggested_capital ?? 0)} · preservado em caixa: {formatCurrency(autopilot.remaining_investment_cash ?? 0)}</p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card className="vn-investment-filters" title="Encontre a melhor oportunidade" description="Defina o orçamento, mercado e perfil para consultar o Budget Advisor.">
         <form className="vn-investment-filter-grid" onSubmit={submit}>

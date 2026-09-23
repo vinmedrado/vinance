@@ -162,14 +162,53 @@ const capitalAllocation = {
   generated_at: '2026-09-08T12:00:00Z', created_at: null,
 };
 
+const investmentOrchestration = {
+  orchestration_id: null,
+  household_id: 10,
+  financial_state_snapshot_id: null,
+  financial_policy_decision_id: null,
+  capital_allocation_decision_id: null,
+  engine_version: 'investment-orchestrator-v1',
+  rules_version: 'investment-orchestrator-rules-v1',
+  status: 'BLOCKED',
+  currency: 'BRL',
+  investment_budget: '0.00',
+  profile_context: { status: 'COMPLETE', effective_profile: 'MODERATE' },
+  portfolio_context: { status: 'UNKNOWN' },
+  market_context: { status: 'NOT_CONSULTED' },
+  asset_class_decisions: [],
+  class_allocations: [],
+  ranked_opportunities: [],
+  suggested_capital: '0.00',
+  remaining_investment_cash: '0.00',
+  speculative_capital: '0.00',
+  trading_dispatch: false,
+  blockers: [{
+    code: 'NO_AUTHORIZED_INVESTMENT_CAPITAL',
+    message: 'Não há capital comprovadamente liberado para novos investimentos.',
+    fields: ['capital_allocation.investment_bucket_amount'],
+    rule_ids: ['IOV1-GATE-001'],
+  }],
+  warnings: [],
+  missing_information: [],
+  evidence: [],
+  rule_traces: [],
+  state_fingerprint: '1'.repeat(64), policy_fingerprint: '2'.repeat(64),
+  allocation_fingerprint: '3'.repeat(64), market_context_fingerprint: '4'.repeat(64),
+  ruleset_fingerprint: '5'.repeat(64), decision_fingerprint: '6'.repeat(64),
+  generated_at: '2026-09-08T12:00:00Z', created_at: null,
+};
+
 test('financial state preserva ausência, ownership e idempotência de snapshot', async ({ page }) => {
   const incomePayloads: unknown[] = [];
   const snapshotKeys: string[] = [];
   const policyKeys: string[] = [];
   const allocationKeys: string[] = [];
+  const orchestrationKeys: string[] = [];
   let snapshotAttempts = 0;
   let policyAttempts = 0;
   let allocationAttempts = 0;
+  let orchestrationAttempts = 0;
 
   await page.route('**/api/v1/me', (route) => json(route, authenticatedUser));
   await page.route('**/api/v1/financial/**', async (route) => {
@@ -179,6 +218,23 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
     if (path.endsWith('/financial/profile')) return json(route, { id: 1 });
     if (path.endsWith('/households/default')) return json(route, household);
     if (path.endsWith('/financial/households')) return json(route, [household]);
+    if (path.endsWith('/households/10/investment-orchestration/history')) {
+      return json(route, { items: [], total: 0 });
+    }
+    if (path.endsWith('/households/10/investment-orchestration/decisions')) {
+      orchestrationAttempts += 1;
+      orchestrationKeys.push(request.headers()['idempotency-key']);
+      if (orchestrationAttempts === 1) return json(route, { detail: 'temporariamente indisponível' }, 503);
+      return json(route, {
+        ...investmentOrchestration,
+        orchestration_id: 31,
+        financial_state_snapshot_id: 7,
+        financial_policy_decision_id: 17,
+        capital_allocation_decision_id: 23,
+        created_at: '2026-09-08T12:00:01Z',
+      }, 201);
+    }
+    if (path.endsWith('/households/10/investment-orchestration')) return json(route, investmentOrchestration);
     if (path.endsWith('/households/10/capital-allocation/history')) {
       return json(route, { items: [], total: 0 });
     }
@@ -234,6 +290,8 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await expect(page.getByRole('heading', { name: 'Minha situação financeira' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Sua prioridade agora' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Plano deste período' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Como investir este valor' })).toBeVisible();
+  await expect(page.getByText('Não há capital comprovadamente liberado para novos investimentos.')).toBeVisible();
   await expect(page.getByText('Capital disponível no período')).toBeVisible();
   await expect(
     page.getByRole('list', { name: 'Plano de capital do período' })
@@ -277,4 +335,12 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   expect(allocationKeys).toHaveLength(2);
   expect(allocationKeys[0]).toBeTruthy();
   expect(allocationKeys[1]).toBe(allocationKeys[0]);
+
+  await page.getByRole('button', { name: 'Salvar estratégia' }).click();
+  await expect(page.getByText('Não foi possível salvar a estratégia')).toBeVisible();
+  await page.getByRole('button', { name: 'Tentar novamente' }).last().click();
+  await expect(page.getByText('Estratégia de investimento salva no histórico.')).toBeVisible();
+  expect(orchestrationKeys).toHaveLength(2);
+  expect(orchestrationKeys[0]).toBeTruthy();
+  expect(orchestrationKeys[1]).toBe(orchestrationKeys[0]);
 });
