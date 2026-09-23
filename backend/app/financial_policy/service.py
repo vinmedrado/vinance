@@ -110,17 +110,18 @@ async def _previous_snapshot(
     return result.scalar_one_or_none()
 
 
-async def current_financial_policy_context(
+async def current_financial_policy_source_context(
     session: AsyncSession,
     *,
     household_id: int,
     user_id: int,
     evaluated_at: datetime | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Evaluate State exactly once and return it with its derived Policy.
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Evaluate State once and return State, Policy and their exact source inputs.
 
-    The paired contract is consumed by later Autopilot stages so they cannot
-    accidentally evaluate a second, slightly different Financial State.
+    The normalized inputs are returned for downstream context adapters that
+    must remain tied to the same evaluation (for example owned_assets in the
+    Investment Orchestrator). Callers must not mutate this mapping.
     """
 
     evaluated = evaluated_at or datetime.now(timezone.utc)
@@ -144,7 +145,25 @@ async def current_financial_policy_context(
         normalized_inputs=normalized_inputs,
         previous_financial_state=previous_state,
     )
-    return current_state, policy
+    return current_state, policy, normalized_inputs
+
+
+async def current_financial_policy_context(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    user_id: int,
+    evaluated_at: datetime | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Preserve the canonical paired State + Policy contract for A2/A3."""
+
+    state, policy, _ = await current_financial_policy_source_context(
+        session,
+        household_id=household_id,
+        user_id=user_id,
+        evaluated_at=evaluated_at,
+    )
+    return state, policy
 
 
 async def current_financial_policy(
