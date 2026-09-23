@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from backend.app.auth.models import User  # noqa: F401
 from backend.app.capital_allocation.models import CapitalAllocationDecision  # noqa: F401
+from backend.app.investment_orchestrator.models import (  # noqa: F401
+    InvestmentOrchestrationDecision,
+)
 from backend.app.financial.models import Expense, FinancialProfile, Income  # noqa: F401
 from backend.app.financial_policy.models import FinancialPolicyDecision  # noqa: F401
 from backend.app.financial_state.models import (  # noqa: F401

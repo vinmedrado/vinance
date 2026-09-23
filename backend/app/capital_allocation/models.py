@@ -75,6 +75,14 @@ class CapitalAllocationDecision(Base):
             "rules_version",
             name="uq_capital_allocation_policy_versions",
         ),
+        UniqueConstraint(
+            "id",
+            "financial_policy_decision_id",
+            "financial_state_snapshot_id",
+            "household_id",
+            "investment_bucket_amount",
+            name="uq_capital_allocation_orchestration_chain",
+        ),
         Index(
             "ix_capital_allocation_household_generated",
             "household_id",
