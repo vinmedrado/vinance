@@ -20,6 +20,7 @@ import {
 } from '../features/investment-workspace/components';
 import { useCurrentUser } from '../features/auth/hooks/useAuth';
 import {
+  useActionPlanDecision,
   useCurrentInvestmentOrchestration,
   useInvestmentOrchestrationDecision,
 } from '../features/financial-state/hooks/useFinancialState';
@@ -157,11 +158,15 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
   const isAutopilotMode = queryParams.get('modo') === 'autopilot';
   const householdParam = Number(queryParams.get('household_id'));
   const decisionParam = Number(queryParams.get('decision_id'));
+  const actionPlanParam = Number(queryParams.get('action_plan_id'));
   const autopilotHouseholdId = isAutopilotMode && Number.isInteger(householdParam) && householdParam > 0
     ? householdParam
     : null;
   const autopilotDecisionId = Number.isInteger(decisionParam) && decisionParam > 0
     ? decisionParam
+    : null;
+  const autopilotActionPlanId = Number.isInteger(actionPlanParam) && actionPlanParam > 0
+    ? actionPlanParam
     : null;
   const currentAutopilot = useCurrentInvestmentOrchestration(
     autopilotDecisionId === null ? autopilotHouseholdId : null,
@@ -169,6 +174,10 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
   const frozenAutopilot = useInvestmentOrchestrationDecision(
     autopilotHouseholdId,
     autopilotDecisionId,
+  );
+  const frozenActionPlan = useActionPlanDecision(
+    autopilotHouseholdId,
+    autopilotActionPlanId,
   );
   const autopilot = autopilotDecisionId === null
     ? currentAutopilot.data
@@ -223,6 +232,20 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
       {isAutopilotMode && autopilotLoading && (
         <Card title="Contexto do Financial Autopilot">
           <LoadingState label="Carregando o capital e a estratégia autorizados..." />
+        </Card>
+      )}
+      {isAutopilotMode && autopilotActionPlanId !== null && frozenActionPlan.data && (
+        <Card
+          title="Origem no plano de ação"
+          description="Contexto congelado que encaminhou você para esta análise. Nenhuma ordem é executada."
+        >
+          <p>
+            <Badge tone={frozenActionPlan.data.status === 'READY' ? 'success' : frozenActionPlan.data.status === 'BLOCKED' ? 'danger' : 'warning'}>
+              {frozenActionPlan.data.status}
+            </Badge>{' '}
+            {frozenActionPlan.data.summary.primary_action ?? 'Plano sem ação principal.'}
+          </p>
+          <p>Decisão de {new Date(frozenActionPlan.data.generated_at).toLocaleString('pt-BR')}.</p>
         </Card>
       )}
       {isAutopilotMode && autopilotError && (

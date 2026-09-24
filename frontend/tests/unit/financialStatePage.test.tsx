@@ -11,6 +11,7 @@ import {
   investmentOrchestrationQueryKey,
 } from '../../src/features/financial-state/hooks/useFinancialState';
 import type {
+  ActionPlan,
   CapitalAllocation,
   FinancialPolicy,
   FinancialState,
@@ -38,6 +39,11 @@ const service = vi.hoisted(() => ({
   createInvestmentOrchestrationDecision: vi.fn(),
   getInvestmentOrchestrationHistory: vi.fn(),
   getInvestmentOrchestrationDecision: vi.fn(),
+  getCurrentActionPlan: vi.fn(),
+  getActionPlanFromOrchestration: vi.fn(),
+  createActionPlanDecision: vi.fn(),
+  getActionPlanHistory: vi.fn(),
+  getActionPlanDecision: vi.fn(),
   createFinancialStateSnapshot: vi.fn(),
   getFinancialStateHistory: vi.fn(),
   listHouseholdIncomes: vi.fn(),
@@ -364,6 +370,127 @@ const orchestration: InvestmentOrchestration = {
   created_at: null,
 };
 
+const actionPlan: ActionPlan = {
+  action_plan_id: null,
+  household_id: 10,
+  financial_state_snapshot_id: null,
+  financial_policy_decision_id: null,
+  capital_allocation_decision_id: null,
+  investment_orchestration_decision_id: null,
+  engine_version: 'action-plan-v1',
+  rules_version: 'action-plan-rules-v1',
+  status: 'PARTIAL',
+  currency: 'BRL',
+  period: 'MONTHLY',
+  summary: {
+    authorized_financial_capital: '3000.00',
+    authorized_investment_capital: '1000.00',
+    financial_actions_total: '3000.00',
+    investment_buy_total: '0.00',
+    hold_cash_total: '100.00',
+    action_count: 2,
+    primary_action: 'Fortaleça sua reserva',
+  },
+  actions: [
+    {
+      action_id: 'allocation-001-reserve',
+      category: 'FINANCIAL',
+      action_type: 'EMERGENCY_RESERVE_CONTRIBUTION',
+      priority_rank: 1,
+      title: 'Fortaleça sua reserva',
+      description: 'Valor herdado do plano de capital.',
+      ownership_scope: 'HOUSEHOLD',
+      owner_user_id: null,
+      household_id: 10,
+      currency: 'BRL',
+      amount: '3000.00',
+      target_amount: '5000.00',
+      remaining_need: '2000.00',
+      liability_id: null,
+      goal_id: null,
+      asset_id: null,
+      symbol: null,
+      asset_class: null,
+      quantity_candidate: null,
+      price_reference: null,
+      price_timestamp: null,
+      price_source: null,
+      freshness_status: null,
+      action_status: 'ACTIONABLE',
+      severity: 'INFO',
+      reason: 'A reserva ainda está abaixo do alvo vigente.',
+      evidence: [],
+      warnings: [],
+      blockers: [],
+      missing_information: [],
+      source_engine: 'capital-allocation-v1',
+      source_decision_id: null,
+      source_reference: {},
+      generated_at: '2026-09-08T12:00:00Z',
+    },
+    {
+      action_id: 'orchestration-002-hold',
+      category: 'HOLD',
+      action_type: 'HOLD_CASH',
+      priority_rank: 2,
+      title: 'Mantenha o capital restante em caixa',
+      description: 'Capital preservado pelo Orchestrator.',
+      ownership_scope: null,
+      owner_user_id: null,
+      household_id: 10,
+      currency: 'BRL',
+      amount: '100.00',
+      target_amount: null,
+      remaining_need: null,
+      liability_id: null,
+      goal_id: null,
+      asset_id: null,
+      symbol: null,
+      asset_class: null,
+      quantity_candidate: null,
+      price_reference: null,
+      price_timestamp: null,
+      price_source: null,
+      freshness_status: null,
+      action_status: 'WAIT',
+      severity: 'INFO',
+      reason: 'Nenhuma oportunidade adicional foi aprovada.',
+      evidence: [],
+      warnings: [],
+      blockers: [],
+      missing_information: [],
+      source_engine: 'investment-orchestrator-v1',
+      source_decision_id: null,
+      source_reference: {},
+      generated_at: '2026-09-08T12:00:00Z',
+    },
+  ],
+  information_actions: [],
+  financial_actions: [],
+  investment_actions: [],
+  hold_actions: [],
+  total_financial_actions: '3000.00',
+  total_investment_actions: '0.00',
+  total_hold_cash: '100.00',
+  speculative_capital: '0.00',
+  trading_dispatch: false,
+  blockers: [],
+  warnings: [],
+  missing_information: [],
+  evidence: [],
+  rule_traces: [],
+  state_fingerprint: '1'.repeat(64),
+  policy_fingerprint: '2'.repeat(64),
+  allocation_fingerprint: '3'.repeat(64),
+  orchestration_fingerprint: '4'.repeat(64),
+  ruleset_fingerprint: '5'.repeat(64),
+  decision_fingerprint: '6'.repeat(64),
+  generated_at: '2026-09-08T12:00:00Z',
+  created_at: null,
+};
+actionPlan.financial_actions = [actionPlan.actions[0]];
+actionPlan.hold_actions = [actionPlan.actions[1]];
+
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return {
@@ -388,6 +515,19 @@ beforeEach(() => {
   service.getInvestmentOrchestrationFromAllocation.mockReset().mockResolvedValue(orchestration);
   service.getInvestmentOrchestrationHistory.mockReset().mockResolvedValue({ items: [], total: 0 });
   service.getInvestmentOrchestrationDecision.mockReset().mockResolvedValue(orchestration);
+  service.getCurrentActionPlan.mockReset().mockResolvedValue(actionPlan);
+  service.getActionPlanFromOrchestration.mockReset().mockResolvedValue(actionPlan);
+  service.getActionPlanHistory.mockReset().mockResolvedValue({ items: [], total: 0 });
+  service.getActionPlanDecision.mockReset().mockResolvedValue(actionPlan);
+  service.createActionPlanDecision.mockReset().mockResolvedValue({
+    ...actionPlan,
+    action_plan_id: 41,
+    financial_state_snapshot_id: 7,
+    financial_policy_decision_id: 17,
+    capital_allocation_decision_id: 23,
+    investment_orchestration_decision_id: 31,
+    created_at: '2026-09-08T12:00:01Z',
+  });
   service.createInvestmentOrchestrationDecision.mockReset().mockResolvedValue({
     ...orchestration,
     orchestration_id: 31,
@@ -427,6 +567,9 @@ test('usa métricas do engine e distingue ausência de zero real', async () => {
   expect(await screen.findByRole('heading', { name: 'Sua prioridade agora' })).toBeInTheDocument();
   expect(await screen.findByRole('heading', { name: 'Plano deste período' })).toBeInTheDocument();
   expect(await screen.findByRole('heading', { name: 'Como investir este valor' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Seu plano de ação' })).toBeInTheDocument();
+  expect((await screen.findAllByText('Fortaleça sua reserva')).length).toBeGreaterThanOrEqual(1);
+  expect(screen.queryByText('Comprar agora')).not.toBeInTheDocument();
   expect(screen.getByText('TEST3')).toBeInTheDocument();
   expect(screen.getByText('Comprar')).toHaveClass('vn-badge--success');
   expect(screen.getByText('COM CAPITAL ELEGÍVEL')).toHaveClass('vn-badge--success');
@@ -457,6 +600,7 @@ test('não reutiliza dados financeiros quando a identidade da sessão muda', asy
   expect(service.getCurrentFinancialState).toHaveBeenCalledTimes(2);
   expect(service.getCurrentCapitalAllocation).toHaveBeenCalledTimes(2);
   expect(service.getCurrentInvestmentOrchestration).toHaveBeenCalledTimes(2);
+  expect(service.getCurrentActionPlan).toHaveBeenCalledTimes(2);
   expect(service.listHouseholds).toHaveBeenCalledTimes(2);
 });
 
@@ -553,6 +697,18 @@ test('congela a estratégia de investimento com chave idempotente própria', asy
     'investment-orchestration-10-00000000-0000-4000-8000-000000000001',
   );
   expect(await screen.findByText('Estratégia de investimento salva no histórico.')).toBeInTheDocument();
+});
+
+test('congela o plano de ação com chave idempotente própria', async () => {
+  renderPage();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Salvar plano de ação' }));
+
+  expect(service.createActionPlanDecision).toHaveBeenCalledWith(
+    10,
+    'action-plan-10-00000000-0000-4000-8000-000000000001',
+  );
+  expect(await screen.findByText('Plano de ação salvo no histórico.')).toBeInTheDocument();
 });
 
 test('mantém a estratégia congelada no cache do household que iniciou o POST', async () => {

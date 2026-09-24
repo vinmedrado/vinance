@@ -18,14 +18,18 @@ import {
   ToggleField,
 } from '../components';
 import {
+  useActionPlanDecision,
+  useActionPlanHistory,
   useCapitalAllocationHistory,
   useCreateCapitalAllocationDecision,
+  useCreateActionPlanDecision,
   useCreateFinancialPolicyDecision,
   useCreateHouseholdExpense,
   useCreateHouseholdIncome,
   useCreateFinancialStateSnapshot,
   useCreateInvestmentOrchestrationDecision,
   useCurrentCapitalAllocation,
+  useCurrentActionPlan,
   useCurrentFinancialPolicy,
   useCurrentFinancialState,
   useCurrentInvestmentOrchestration,
@@ -36,6 +40,7 @@ import {
   useHouseholds,
   useInvestmentOrchestrationHistory,
 } from '../features/financial-state/hooks/useFinancialState';
+import { ActionPlanCard } from '../features/financial-state/components/ActionPlanCard';
 import { FinancialPolicyCard } from '../features/financial-state/components/FinancialPolicyCard';
 import { CapitalAllocationCard } from '../features/financial-state/components/CapitalAllocationCard';
 import { InvestmentOrchestrationCard } from '../features/financial-state/components/InvestmentOrchestrationCard';
@@ -166,6 +171,7 @@ export function FinancialPage() {
   const defaultHousehold = useDefaultHousehold();
   const profile = useFinancialProfile();
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<number | null>(null);
+  const [selectedActionPlanId, setSelectedActionPlanId] = useState<number | null>(null);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [incomeSaved, setIncomeSaved] = useState(false);
@@ -213,6 +219,9 @@ export function FinancialPage() {
   const allocationHistory = useCapitalAllocationHistory(selectedHouseholdId);
   const investmentOrchestration = useCurrentInvestmentOrchestration(selectedHouseholdId);
   const orchestrationHistory = useInvestmentOrchestrationHistory(selectedHouseholdId);
+  const actionPlan = useCurrentActionPlan(selectedHouseholdId);
+  const actionPlanHistory = useActionPlanHistory(selectedHouseholdId);
+  const frozenActionPlan = useActionPlanDecision(selectedHouseholdId, selectedActionPlanId);
   const incomes = useHouseholdIncomes(selectedHouseholdId);
   const expenses = useHouseholdExpenses(selectedHouseholdId);
   const createIncome = useCreateHouseholdIncome(selectedHouseholdId);
@@ -221,6 +230,7 @@ export function FinancialPage() {
   const createPolicyDecision = useCreateFinancialPolicyDecision(selectedHouseholdId);
   const createAllocationDecision = useCreateCapitalAllocationDecision(selectedHouseholdId);
   const createOrchestrationDecision = useCreateInvestmentOrchestrationDecision(selectedHouseholdId);
+  const createActionPlanDecision = useCreateActionPlanDecision(selectedHouseholdId);
   const missingProfile = (profile.error as ApiErrorShape | null)?.status === 404;
   const loadError = getActionError(
     households.error,
@@ -242,6 +252,10 @@ export function FinancialPage() {
     }, 3600);
     return () => window.clearTimeout(timer);
   }, [incomeSaved, expenseSaved]);
+
+  useEffect(() => {
+    setSelectedActionPlanId(null);
+  }, [selectedHouseholdId]);
 
   async function submitIncome(event: FormEvent) {
     event.preventDefault();
@@ -281,6 +295,8 @@ export function FinancialPage() {
     allocationHistory.refetch();
     investmentOrchestration.refetch();
     orchestrationHistory.refetch();
+    actionPlan.refetch();
+    actionPlanHistory.refetch();
     incomes.refetch();
     expenses.refetch();
     profile.refetch();
@@ -289,7 +305,7 @@ export function FinancialPage() {
   return (
     <section className="vn-page">
       <SectionHeader
-        eyebrow="Financial Autopilot · fase 4"
+        eyebrow="Financial Autopilot · fase 5"
         title="Minha situação financeira"
         description="Uma leitura objetiva da sua situação e da ordem de prioridades agora — com transparência sobre o que ainda falta informar."
         action={state ? <Button variant="secondary" onClick={() => createSnapshot.mutate()} disabled={createSnapshot.isPending}>{createSnapshot.isPending ? 'Salvando...' : 'Salvar retrato'}</Button> : undefined}
@@ -310,6 +326,7 @@ export function FinancialPage() {
       {createPolicyDecision.isSuccess && <Toast message="Decisão financeira salva no histórico." />}
       {createAllocationDecision.isSuccess && <Toast message="Plano de capital salvo no histórico." />}
       {createOrchestrationDecision.isSuccess && <Toast message="Estratégia de investimento salva no histórico." />}
+      {createActionPlanDecision.isSuccess && <Toast message="Plano de ação salvo no histórico." />}
       {incomeSaved && <Toast message="Receita cadastrada com sucesso." />}
       {expenseSaved && <Toast message="Despesa cadastrada com sucesso." />}
       {missingProfile && <OnboardingCard onCompleted={reload} />}
@@ -455,6 +472,29 @@ export function FinancialPage() {
             onRetry={() => investmentOrchestration.refetch()}
             onRetryHistory={() => orchestrationHistory.refetch()}
             onFreeze={() => createOrchestrationDecision.mutate()}
+          />
+
+          <ActionPlanCard
+            plan={selectedActionPlanId === null ? actionPlan.data : frozenActionPlan.data}
+            history={actionPlanHistory.data}
+            isLoading={selectedActionPlanId === null ? actionPlan.isLoading : frozenActionPlan.isLoading}
+            isHistoryLoading={actionPlanHistory.isLoading}
+            isFreezing={createActionPlanDecision.isPending}
+            isHistorical={selectedActionPlanId !== null}
+            errorMessage={
+              selectedActionPlanId === null
+                ? (actionPlan.error ? errorMessage(actionPlan.error) : undefined)
+                : (frozenActionPlan.error ? errorMessage(frozenActionPlan.error) : undefined)
+            }
+            historyErrorMessage={actionPlanHistory.error ? errorMessage(actionPlanHistory.error) : undefined}
+            freezeErrorMessage={createActionPlanDecision.error ? errorMessage(createActionPlanDecision.error) : undefined}
+            onRetry={() => (
+              selectedActionPlanId === null ? actionPlan.refetch() : frozenActionPlan.refetch()
+            )}
+            onRetryHistory={() => actionPlanHistory.refetch()}
+            onFreeze={() => createActionPlanDecision.mutate()}
+            onSelectHistory={setSelectedActionPlanId}
+            onShowCurrent={() => setSelectedActionPlanId(null)}
           />
 
           <Card

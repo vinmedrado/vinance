@@ -1,5 +1,7 @@
 import { api } from '../../../services/api';
 import type {
+  ActionPlan,
+  ActionPlanHistory,
   AssetPayload,
   CapitalAllocation,
   CapitalAllocationHistory,
@@ -149,6 +151,52 @@ export async function getInvestmentOrchestrationDecision(
 ) {
   const { data } = await api.get<InvestmentOrchestration>(
     `/financial/households/${householdId}/investment-orchestration/history/${orchestrationId}`,
+  );
+  return data;
+}
+
+export async function getCurrentActionPlan(householdId: number) {
+  const { data } = await api.get<ActionPlan>(
+    `/financial/households/${householdId}/action-plan`,
+  );
+  return data;
+}
+
+export async function getActionPlanFromOrchestration(
+  householdId: number,
+  orchestrationId: number,
+) {
+  const { data } = await api.get<ActionPlan>(
+    `/financial/households/${householdId}/action-plan/from-orchestration/${orchestrationId}`,
+  );
+  return data;
+}
+
+export async function createActionPlanDecision(
+  householdId: number,
+  idempotencyKey: string,
+) {
+  const { data } = await api.post<ActionPlan>(
+    `/financial/households/${householdId}/action-plan/decisions`,
+    undefined,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  );
+  return data;
+}
+
+export async function getActionPlanHistory(householdId: number) {
+  const { data } = await api.get<ActionPlanHistory>(
+    `/financial/households/${householdId}/action-plan/history`,
+  );
+  return data;
+}
+
+export async function getActionPlanDecision(
+  householdId: number,
+  actionPlanId: number,
+) {
+  const { data } = await api.get<ActionPlan>(
+    `/financial/households/${householdId}/action-plan/history/${actionPlanId}`,
   );
   return data;
 }

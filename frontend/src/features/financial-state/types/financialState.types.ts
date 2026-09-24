@@ -490,6 +490,141 @@ export type InvestmentOrchestrationHistory = {
   total: number;
 };
 
+export type ActionPlanStatus = 'BLOCKED' | 'PARTIAL' | 'READY' | 'NO_ACTION_REQUIRED';
+export type ActionPlanCategory = 'INFORMATION' | 'FINANCIAL' | 'INVESTMENT' | 'HOLD';
+export type ActionPlanActionType =
+  | 'COMPLETE_INFORMATION'
+  | 'STABILIZE_CASHFLOW'
+  | 'DEBT_PAYMENT'
+  | 'EMERGENCY_RESERVE_CONTRIBUTION'
+  | 'GOAL_CONTRIBUTION'
+  | 'INVESTMENT_BUY'
+  | 'INVESTMENT_WAIT'
+  | 'INVESTMENT_AVOID'
+  | 'HOLD_CASH'
+  | 'NO_ACTION';
+
+export type ActionPlanMessage = {
+  code: string;
+  message: string;
+  fields: string[];
+  rule_ids: string[];
+};
+
+export type ActionPlanItem = {
+  action_id: string;
+  category: ActionPlanCategory;
+  action_type: ActionPlanActionType;
+  priority_rank: number;
+  title: string;
+  description: string;
+  ownership_scope: OwnershipScope | null;
+  owner_user_id: number | string | null;
+  household_id: number;
+  currency: string | null;
+  amount: MoneyValue;
+  target_amount: MoneyValue;
+  remaining_need: MoneyValue;
+  liability_id: number | string | null;
+  goal_id: number | string | null;
+  asset_id: number | null;
+  symbol: string | null;
+  asset_class: string | null;
+  quantity_candidate: number | null;
+  price_reference: MoneyValue;
+  price_timestamp: string | null;
+  price_source: string | null;
+  freshness_status: string | null;
+  action_status: 'ACTIONABLE' | 'INFORMATIONAL' | 'WAIT' | 'AVOID' | 'BLOCKED' | 'NO_ACTION';
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  reason: string;
+  evidence: unknown[];
+  warnings: unknown[];
+  blockers: unknown[];
+  missing_information: unknown[];
+  source_engine: string;
+  source_decision_id: number | string | null;
+  source_reference: Record<string, unknown>;
+  generated_at: string;
+};
+
+export type ActionPlanSummary = {
+  authorized_financial_capital: MoneyValue;
+  authorized_investment_capital: MoneyValue;
+  financial_actions_total: string | number;
+  investment_buy_total: string | number;
+  hold_cash_total: string | number;
+  action_count: number;
+  primary_action: string | null;
+};
+
+export type ActionPlan = {
+  action_plan_id: number | null;
+  household_id: number;
+  financial_state_snapshot_id: number | null;
+  financial_policy_decision_id: number | null;
+  capital_allocation_decision_id: number | null;
+  investment_orchestration_decision_id: number | null;
+  engine_version: 'action-plan-v1';
+  rules_version: 'action-plan-rules-v1';
+  status: ActionPlanStatus;
+  currency: string | null;
+  period: 'MONTHLY' | null;
+  summary: ActionPlanSummary;
+  actions: ActionPlanItem[];
+  information_actions: ActionPlanItem[];
+  financial_actions: ActionPlanItem[];
+  investment_actions: ActionPlanItem[];
+  hold_actions: ActionPlanItem[];
+  total_financial_actions: string | number;
+  total_investment_actions: string | number;
+  total_hold_cash: string | number;
+  speculative_capital: string | number;
+  trading_dispatch: false;
+  blockers: ActionPlanMessage[];
+  warnings: ActionPlanMessage[];
+  missing_information: ActionPlanMessage[];
+  evidence: Array<Record<string, unknown>>;
+  rule_traces: Array<Record<string, unknown>>;
+  state_fingerprint: string;
+  policy_fingerprint: string | null;
+  allocation_fingerprint: string | null;
+  orchestration_fingerprint: string | null;
+  ruleset_fingerprint: string;
+  decision_fingerprint: string;
+  generated_at: string;
+  created_at: string | null;
+};
+
+export type ActionPlanDecisionSummary = {
+  action_plan_id: number;
+  household_id: number;
+  financial_state_snapshot_id: number;
+  financial_policy_decision_id: number;
+  capital_allocation_decision_id: number;
+  investment_orchestration_decision_id: number;
+  engine_version: string;
+  rules_version: string;
+  status: ActionPlanStatus;
+  currency: string;
+  period: 'MONTHLY';
+  primary_action: string | null;
+  action_titles: string[];
+  action_count: number;
+  investment_budget: string | number;
+  total_financial_actions: string | number;
+  total_investment_actions: string | number;
+  total_hold_cash: string | number;
+  decision_fingerprint: string;
+  generated_at: string;
+  created_at: string;
+};
+
+export type ActionPlanHistory = {
+  items: ActionPlanDecisionSummary[];
+  total: number;
+};
+
 export type IncomePayload = {
   ownership_scope: OwnershipScope;
   description: string;

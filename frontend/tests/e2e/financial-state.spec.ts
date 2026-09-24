@@ -199,16 +199,85 @@ const investmentOrchestration = {
   generated_at: '2026-09-08T12:00:00Z', created_at: null,
 };
 
+const actionPlan = {
+  action_plan_id: null,
+  household_id: 10,
+  financial_state_snapshot_id: null,
+  financial_policy_decision_id: null,
+  capital_allocation_decision_id: null,
+  investment_orchestration_decision_id: null,
+  engine_version: 'action-plan-v1',
+  rules_version: 'action-plan-rules-v1',
+  status: 'PARTIAL',
+  currency: 'BRL',
+  period: 'MONTHLY',
+  summary: {
+    authorized_financial_capital: '3000.00',
+    authorized_investment_capital: '0.00',
+    financial_actions_total: '3000.00',
+    investment_buy_total: '0.00',
+    hold_cash_total: '0.00',
+    action_count: 2,
+    primary_action: 'Fortaleça sua reserva',
+  },
+  actions: [
+    {
+      action_id: 'allocation-001-reserve', category: 'FINANCIAL',
+      action_type: 'EMERGENCY_RESERVE_CONTRIBUTION', priority_rank: 1,
+      title: 'Fortaleça sua reserva', description: 'Valor definido pelo plano de capital.',
+      ownership_scope: 'HOUSEHOLD', owner_user_id: null, household_id: 10,
+      currency: 'BRL', amount: '3000.00', target_amount: '5000.00', remaining_need: '2000.00',
+      liability_id: null, goal_id: null, asset_id: null, symbol: null, asset_class: null,
+      quantity_candidate: null, price_reference: null, price_timestamp: null,
+      price_source: null, freshness_status: null, action_status: 'ACTIONABLE', severity: 'INFO',
+      reason: 'A reserva permanece abaixo do alvo vigente.', evidence: [], warnings: [], blockers: [],
+      missing_information: [], source_engine: 'capital-allocation-v1', source_decision_id: null,
+      source_reference: {}, generated_at: '2026-09-08T12:00:00Z',
+    },
+    {
+      action_id: 'orchestration-002-wait', category: 'INVESTMENT',
+      action_type: 'INVESTMENT_WAIT', priority_rank: 2,
+      title: 'TEST3', description: 'Aguardar autorização financeira para investir.',
+      ownership_scope: null, owner_user_id: null, household_id: 10,
+      currency: 'BRL', amount: null, target_amount: null, remaining_need: null,
+      liability_id: null, goal_id: null, asset_id: 1, symbol: 'TEST3', asset_class: 'ACOES',
+      quantity_candidate: null, price_reference: '100.00',
+      price_timestamp: '2026-09-08T12:00:00Z', price_source: 'fixture', freshness_status: 'FRESH',
+      action_status: 'WAIT', severity: 'WARNING', reason: 'O gate financeiro está bloqueado.',
+      evidence: [], warnings: [], blockers: [], missing_information: [],
+      source_engine: 'investment-orchestrator-v1', source_decision_id: null,
+      source_reference: {}, generated_at: '2026-09-08T12:00:00Z',
+    },
+  ],
+  information_actions: [],
+  financial_actions: [],
+  investment_actions: [],
+  hold_actions: [],
+  total_financial_actions: '3000.00',
+  total_investment_actions: '0.00',
+  total_hold_cash: '0.00',
+  speculative_capital: '0.00',
+  trading_dispatch: false,
+  blockers: [], warnings: [], missing_information: [], evidence: [], rule_traces: [],
+  state_fingerprint: '1'.repeat(64), policy_fingerprint: '2'.repeat(64),
+  allocation_fingerprint: '3'.repeat(64), orchestration_fingerprint: '4'.repeat(64),
+  ruleset_fingerprint: '5'.repeat(64), decision_fingerprint: '6'.repeat(64),
+  generated_at: '2026-09-08T12:00:00Z', created_at: null,
+};
+
 test('financial state preserva ausência, ownership e idempotência de snapshot', async ({ page }) => {
   const incomePayloads: unknown[] = [];
   const snapshotKeys: string[] = [];
   const policyKeys: string[] = [];
   const allocationKeys: string[] = [];
   const orchestrationKeys: string[] = [];
+  const actionPlanKeys: string[] = [];
   let snapshotAttempts = 0;
   let policyAttempts = 0;
   let allocationAttempts = 0;
   let orchestrationAttempts = 0;
+  let actionPlanAttempts = 0;
+  let actionPlanSaved = false;
 
   await page.route('**/api/v1/me', (route) => json(route, authenticatedUser));
   await page.route('**/api/v1/financial/**', async (route) => {
@@ -218,6 +287,63 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
     if (path.endsWith('/financial/profile')) return json(route, { id: 1 });
     if (path.endsWith('/households/default')) return json(route, household);
     if (path.endsWith('/financial/households')) return json(route, [household]);
+    if (path.endsWith('/households/10/action-plan/history/41')) {
+      return json(route, {
+        ...actionPlan,
+        action_plan_id: 41,
+        financial_state_snapshot_id: 7,
+        financial_policy_decision_id: 17,
+        capital_allocation_decision_id: 23,
+        investment_orchestration_decision_id: 31,
+        created_at: '2026-09-08T12:00:01Z',
+      });
+    }
+    if (path.endsWith('/households/10/action-plan/history')) {
+      return json(route, actionPlanSaved ? {
+        items: [{
+          action_plan_id: 41,
+          household_id: 10,
+          financial_state_snapshot_id: 7,
+          financial_policy_decision_id: 17,
+          capital_allocation_decision_id: 23,
+          investment_orchestration_decision_id: 31,
+          engine_version: 'action-plan-v1',
+          rules_version: 'action-plan-rules-v1',
+          status: 'PARTIAL',
+          currency: 'BRL',
+          period: 'MONTHLY',
+          primary_action: 'Fortaleça sua reserva',
+          action_titles: ['Fortaleça sua reserva', 'TEST3'],
+          action_count: 2,
+          investment_budget: '0.00',
+          total_financial_actions: '3000.00',
+          total_investment_actions: '0.00',
+          total_hold_cash: '0.00',
+          decision_fingerprint: '6'.repeat(64),
+          generated_at: '2026-09-08T12:00:00Z',
+          created_at: '2026-09-08T12:00:01Z',
+        }],
+        total: 1,
+      } : { items: [], total: 0 });
+    }
+    if (path.endsWith('/households/10/action-plan/decisions')) {
+      actionPlanAttempts += 1;
+      actionPlanKeys.push(request.headers()['idempotency-key']);
+      if (actionPlanAttempts === 1) {
+        return json(route, { detail: 'temporariamente indisponível' }, 503);
+      }
+      actionPlanSaved = true;
+      return json(route, {
+        ...actionPlan,
+        action_plan_id: 41,
+        financial_state_snapshot_id: 7,
+        financial_policy_decision_id: 17,
+        capital_allocation_decision_id: 23,
+        investment_orchestration_decision_id: 31,
+        created_at: '2026-09-08T12:00:01Z',
+      }, 201);
+    }
+    if (path.endsWith('/households/10/action-plan')) return json(route, actionPlan);
     if (path.endsWith('/households/10/investment-orchestration/history')) {
       return json(route, { items: [], total: 0 });
     }
@@ -291,6 +417,9 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await expect(page.getByRole('heading', { name: 'Sua prioridade agora' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Plano deste período' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Como investir este valor' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Seu plano de ação' })).toBeVisible();
+  await expect(page.getByTestId('action-plan-item-EMERGENCY_RESERVE_CONTRIBUTION')).toContainText('Fortaleça sua reserva');
+  await expect(page.getByTestId('action-plan-item-EMERGENCY_RESERVE_CONTRIBUTION')).toContainText('3.000,00');
   await expect(page.getByText('Não há capital comprovadamente liberado para novos investimentos.')).toBeVisible();
   await expect(page.getByText('Capital disponível no período')).toBeVisible();
   await expect(
@@ -328,7 +457,7 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   expect(policyKeys[0]).toBeTruthy();
   expect(policyKeys[1]).toBe(policyKeys[0]);
 
-  await page.getByRole('button', { name: 'Salvar plano' }).click();
+  await page.getByRole('button', { name: 'Salvar plano', exact: true }).click();
   await expect(page.getByText('Não foi possível salvar o plano')).toBeVisible();
   await page.getByRole('button', { name: 'Tentar novamente' }).last().click();
   await expect(page.getByText('Plano de capital salvo no histórico.')).toBeVisible();
@@ -343,4 +472,18 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   expect(orchestrationKeys).toHaveLength(2);
   expect(orchestrationKeys[0]).toBeTruthy();
   expect(orchestrationKeys[1]).toBe(orchestrationKeys[0]);
+
+  await page.getByRole('button', { name: 'Salvar plano de ação' }).click();
+  await expect(page.getByText('Não foi possível salvar o plano de ação')).toBeVisible();
+  await page.getByRole('button', { name: 'Tentar novamente' }).last().click();
+  await expect(page.getByText('Plano de ação salvo no histórico.')).toBeVisible();
+  expect(actionPlanKeys).toHaveLength(2);
+  expect(actionPlanKeys[0]).toBeTruthy();
+  expect(actionPlanKeys[1]).toBe(actionPlanKeys[0]);
+
+  await expect(page.getByText(/capital autorizado para investir/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Ver plano congelado' }).click();
+  await expect(page.getByText('PLANO CONGELADO', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Ver oportunidade em Investir' }).click();
+  await expect(page).toHaveURL(/\/investir\?.*action_plan_id=41/);
 });
