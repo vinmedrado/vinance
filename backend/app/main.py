@@ -52,6 +52,11 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+    if (
+        request.url.path.startswith("/api/v1/financial/households/")
+        and "/action-plan" in request.url.path
+    ):
+        response.headers["Cache-Control"] = "private, no-store"
     return response
 
 
