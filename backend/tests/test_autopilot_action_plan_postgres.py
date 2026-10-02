@@ -18,6 +18,7 @@ from backend.app.financial_state import service as state_service
 from backend.app.financial_state.models import FinancialStateSnapshot
 from backend.app.investment_orchestrator.models import InvestmentOrchestrationDecision
 from backend.tests.test_autopilot_investment_orchestrator_postgres import (
+    TEST_EVALUATED_AT,
     _complete_household,
 )
 
@@ -43,7 +44,10 @@ async def test_real_postgres_action_plan_audit_idempotency_and_isolation() -> No
         try:
             owner, outsider, household = await _complete_household(session)
             current = await action_plan_service.current_action_plan(
-                session, household_id=household.id, user_id=owner.id
+                session,
+                household_id=household.id,
+                user_id=owner.id,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             assert current["status"] in {"PARTIAL", "READY"}
             assert current["total_investment_actions"] <= current["summary"][
@@ -63,12 +67,14 @@ async def test_real_postgres_action_plan_audit_idempotency_and_isolation() -> No
                 household_id=household.id,
                 user_id=owner.id,
                 idempotency_key=key,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             retry = await action_plan_service.create_action_plan_decision(
                 session,
                 household_id=household.id,
                 user_id=owner.id,
                 idempotency_key=key,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             assert retry["action_plan_id"] == frozen["action_plan_id"]
             assert retry["decision_fingerprint"] == frozen["decision_fingerprint"]

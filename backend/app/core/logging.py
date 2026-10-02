@@ -31,6 +31,14 @@ _STRUCTURED_FIELDS = (
     "cooldown_suppressed",
     "duplicates_prevented",
     "errors",
+    "household_id",
+    "continuous_decision_id",
+    "materiality",
+    "change_count",
+    "reevaluation_scope",
+    "no_change",
+    "failures",
+    "scheduled",
 )
 _BEARER_PATTERN = re.compile(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+")
 _SENSITIVE_VALUE_PATTERN = re.compile(

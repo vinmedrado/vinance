@@ -37,6 +37,7 @@ celery_app = Celery(
         "backend.app.intelligence.scheduler.tasks",
         "backend.app.investment_performance.tasks",
         "backend.app.investment_alerts.tasks",
+        "backend.app.continuous_autopilot.tasks",
     ],
 )
 
@@ -76,6 +77,7 @@ celery_app.conf.update(
         "intelligence.train_ml_baselines_weekly": {"queue": "intelligence"},
         "investment_performance.evaluate_due": {"queue": "intelligence"},
         "investment_alerts.evaluate_subscriptions": {"queue": "intelligence"},
+        "continuous_autopilot.evaluate_due": {"queue": "intelligence"},
     },
     beat_schedule={
         "market-sync-macro-daily": {
@@ -125,6 +127,11 @@ celery_app.conf.update(
         "investment-alerts-evaluate-daily-after-intelligence": {
             "task": "investment_alerts.evaluate_subscriptions",
             "schedule": crontab(hour=22, minute=10),
+            "options": {"queue": "intelligence"},
+        },
+        "continuous-autopilot-evaluate-daily": {
+            "task": "continuous_autopilot.evaluate_due",
+            "schedule": crontab(hour=22, minute=25),
             "options": {"queue": "intelligence"},
         },
         "intelligence-compute-all-market-features-daily": {

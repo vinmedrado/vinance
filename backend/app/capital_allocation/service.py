@@ -206,6 +206,8 @@ async def create_capital_allocation_decision(
     household_id: int,
     user_id: int,
     idempotency_key: str | None,
+    evaluated_at: datetime | None = None,
+    commit: bool = True,
 ) -> dict[str, Any]:
     """Freeze one immutable State -> Policy -> Allocation decision chain."""
 
@@ -227,12 +229,16 @@ async def create_capital_allocation_decision(
         if idempotency_key
         else None
     )
-    policy = await policy_service.create_policy_decision(
-        session,
-        household_id=household_id,
-        user_id=user_id,
-        idempotency_key=policy_key,
-    )
+    policy_kwargs: dict[str, Any] = {
+        "household_id": household_id,
+        "user_id": user_id,
+        "idempotency_key": policy_key,
+    }
+    if evaluated_at is not None:
+        policy_kwargs["evaluated_at"] = evaluated_at
+    if not commit:
+        policy_kwargs["commit"] = False
+    policy = await policy_service.create_policy_decision(session, **policy_kwargs)
     policy_id = int(policy["policy_id"])
     if idempotency_key:
         existing_for_policy = await _decision_by_policy(session, policy_id=policy_id)
@@ -269,6 +275,10 @@ async def create_capital_allocation_decision(
         generated_at=allocation["generated_at"],
     )
     session.add(decision)
+    if not commit:
+        await session.flush()
+        await session.refresh(decision)
+        return _decision_read(decision)
     try:
         await session.commit()
     except IntegrityError:

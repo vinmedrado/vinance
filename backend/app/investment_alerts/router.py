@@ -155,9 +155,14 @@ async def alerts_list(
     page_size: int = Query(default=10, ge=1, le=50),
     asset: str | None = Query(default=None, min_length=1, max_length=32, pattern=r"^[A-Za-z0-9.\-]+$"),
     alert_type: Literal[
-        "NEW_OPPORTUNITY", "ACTION_CHANGE", "SCORE_CHANGE", "CONFIDENCE_CHANGE", "RISK_CHANGE"
+        "NEW_OPPORTUNITY",
+        "ACTION_CHANGE",
+        "SCORE_CHANGE",
+        "CONFIDENCE_CHANGE",
+        "RISK_CHANGE",
+        "CONTINUOUS_AUTOPILOT_CHANGE",
     ] | None = Query(default=None),
-    severity: Literal["INFO", "MEDIUM", "HIGH"] | None = Query(default=None),
+    severity: Literal["INFO", "MEDIUM", "HIGH", "CRITICAL"] | None = Query(default=None),
     unread_only: bool = Query(default=False),
     date_from: datetime | None = Query(default=None),
     date_to: datetime | None = Query(default=None),

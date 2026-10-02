@@ -44,6 +44,7 @@ from backend.app.investment_orchestrator.schemas import InvestmentOrchestrationR
 
 
 TEST_DATABASE_URL = os.getenv("AUTOPILOT_TEST_DATABASE_URL")
+TEST_EVALUATED_AT = datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc)
 pytestmark = pytest.mark.skipif(
     not TEST_DATABASE_URL,
     reason="set AUTOPILOT_TEST_DATABASE_URL to an isolated PostgreSQL database",
@@ -219,7 +220,10 @@ async def test_real_postgres_orchestration_audit_idempotency_and_isolation() -> 
         try:
             owner, outsider, household = await _complete_household(session)
             current = await orchestration_service.current_investment_orchestration(
-                session, household_id=household.id, user_id=owner.id
+                session,
+                household_id=household.id,
+                user_id=owner.id,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             assert current["status"] in {"LIMITED", "ACTIVE"}
             assert current["investment_budget"] == Decimal("4000.00")
@@ -233,12 +237,14 @@ async def test_real_postgres_orchestration_audit_idempotency_and_isolation() -> 
                 household_id=household.id,
                 user_id=owner.id,
                 idempotency_key=key,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             retry = await orchestration_service.create_investment_orchestration_decision(
                 session,
                 household_id=household.id,
                 user_id=owner.id,
                 idempotency_key=key,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             assert retry["orchestration_id"] == frozen["orchestration_id"]
             assert retry["decision_fingerprint"] == frozen["decision_fingerprint"]

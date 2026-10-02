@@ -338,7 +338,7 @@ def test_inbox_aplica_paginacao_filtros_owner_e_contador_global_de_nao_lidos(mon
     [
         {"asset": "GARE11' OR 1=1 --"},
         {"alert_type": "DROP_TABLE"},
-        {"severity": "CRITICAL"},
+        {"severity": "URGENT"},
         {"page_size": 5000},
         {"date_from": "2026-08-01T00:00:00", "date_to": "2026-08-02T00:00:00Z"},
         {"date_from": "2026-08-03T00:00:00Z", "date_to": "2026-08-02T00:00:00Z"},

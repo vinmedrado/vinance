@@ -58,6 +58,24 @@ async def current_action_plan(
 ) -> dict[str, Any]:
     """Evaluate the live A1 -> A5 chain without persisting it."""
 
+    plan, _ = await current_action_plan_source_context(
+        session,
+        household_id=household_id,
+        user_id=user_id,
+        evaluated_at=evaluated_at,
+    )
+    return plan
+
+
+async def current_action_plan_source_context(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    user_id: int,
+    evaluated_at: datetime | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return live A5 plus the exact A1 -> A4 values used to derive it."""
+
     state, policy, normalized_inputs = (
         await policy_service.current_financial_policy_source_context(
             session,
@@ -75,7 +93,68 @@ async def current_action_plan(
         normalized_inputs=normalized_inputs,
         generated_at=evaluated_at,
     )
-    return _calculate(state, policy, allocation, orchestration)
+    plan = _calculate(state, policy, allocation, orchestration)
+    return plan, {
+        "state": state,
+        "policy": policy,
+        "allocation": allocation,
+        "orchestration": orchestration,
+    }
+
+
+async def action_plan_from_allocation_decision(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    allocation_id: int,
+    user_id: int,
+    evaluated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Evaluate live A4 -> A5 while preserving the frozen A1 -> A3 chain."""
+
+    plan, _ = await action_plan_from_allocation_source_context(
+        session,
+        household_id=household_id,
+        allocation_id=allocation_id,
+        user_id=user_id,
+        evaluated_at=evaluated_at,
+    )
+    return plan
+
+
+async def action_plan_from_allocation_source_context(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    allocation_id: int,
+    user_id: int,
+    evaluated_at: datetime | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return live A4 -> A5 plus the reused immutable A1 -> A3 context."""
+
+    state, policy, allocation, normalized_inputs = (
+        await orchestration_service._chain_from_allocation(
+            session,
+            household_id=household_id,
+            allocation_id=allocation_id,
+            user_id=user_id,
+        )
+    )
+    orchestration = await orchestration_service._evaluate(
+        session,
+        state=state,
+        policy=policy,
+        allocation=allocation,
+        normalized_inputs=normalized_inputs,
+        generated_at=evaluated_at,
+    )
+    plan = _calculate(state, policy, allocation, orchestration)
+    return plan, {
+        "state": state,
+        "policy": policy,
+        "allocation": allocation,
+        "orchestration": orchestration,
+    }
 
 
 async def _chain_from_orchestration(
@@ -251,56 +330,16 @@ async def _decision_by_orchestration(
     return result.scalar_one_or_none()
 
 
-async def create_action_plan_decision(
+async def _persist_action_plan(
     session: AsyncSession,
     *,
     household_id: int,
     user_id: int,
+    orchestration: Mapping[str, Any],
+    plan: Mapping[str, Any],
     idempotency_key: str | None,
+    commit: bool,
 ) -> dict[str, Any]:
-    """Freeze one immutable A1 -> A5 decision chain."""
-
-    await state_service.get_household_access(
-        session, household_id=household_id, user_id=user_id
-    )
-    if idempotency_key:
-        existing = await _decision_by_idempotency(
-            session,
-            household_id=household_id,
-            idempotency_key=idempotency_key,
-        )
-        if existing is not None:
-            return _decision_read(existing)
-
-    orchestration_key = (
-        "action-plan-v1:"
-        + hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
-        if idempotency_key
-        else None
-    )
-    orchestration = (
-        await orchestration_service.create_investment_orchestration_decision(
-            session,
-            household_id=household_id,
-            user_id=user_id,
-            idempotency_key=orchestration_key,
-        )
-    )
-    orchestration_id = int(orchestration["orchestration_id"])
-    existing_for_orchestration = await _decision_by_orchestration(
-        session, orchestration_id=orchestration_id
-    )
-    if existing_for_orchestration is not None:
-        return _decision_read(existing_for_orchestration)
-
-    state, policy, allocation, orchestration = await _chain_from_orchestration(
-        session,
-        household_id=household_id,
-        orchestration_id=orchestration_id,
-        user_id=user_id,
-    )
-    plan = _calculate(state, policy, allocation, orchestration)
-    payload = _json_value(plan)
     summary = plan["summary"]
     if (
         plan.get("currency") is None
@@ -316,6 +355,7 @@ async def create_action_plan_decision(
         raise state_service.FinancialStateValidationError(
             "a frozen Action Plan requires a complete monetary chain"
         )
+    payload = _json_value(plan)
     decision = ActionPlanDecision(
         household_id=household_id,
         financial_state_snapshot_id=int(plan["financial_state_snapshot_id"]),
@@ -349,6 +389,10 @@ async def create_action_plan_decision(
         generated_at=plan["generated_at"],
     )
     session.add(decision)
+    if not commit:
+        await session.flush()
+        await session.refresh(decision)
+        return _decision_read(decision)
     try:
         await session.commit()
     except IntegrityError:
@@ -362,13 +406,125 @@ async def create_action_plan_decision(
             )
         if concurrent is None:
             concurrent = await _decision_by_orchestration(
-                session, orchestration_id=orchestration_id
+                session,
+                orchestration_id=int(plan["investment_orchestration_decision_id"]),
             )
         if concurrent is None:
             raise
         return _decision_read(concurrent)
     await session.refresh(decision)
     return _decision_read(decision)
+
+
+async def create_action_plan_from_orchestration_decision(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    orchestration_id: int,
+    user_id: int,
+    idempotency_key: str | None,
+    commit: bool = True,
+) -> dict[str, Any]:
+    """Freeze only A5 against an existing immutable A4 decision."""
+
+    await state_service.get_household_access(
+        session, household_id=household_id, user_id=user_id
+    )
+    if idempotency_key:
+        existing = await _decision_by_idempotency(
+            session,
+            household_id=household_id,
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            return _decision_read(existing)
+    existing_for_orchestration = await _decision_by_orchestration(
+        session, orchestration_id=orchestration_id
+    )
+    if existing_for_orchestration is not None:
+        return _decision_read(existing_for_orchestration)
+    state, policy, allocation, orchestration = await _chain_from_orchestration(
+        session,
+        household_id=household_id,
+        orchestration_id=orchestration_id,
+        user_id=user_id,
+    )
+    plan = _calculate(state, policy, allocation, orchestration)
+    return await _persist_action_plan(
+        session,
+        household_id=household_id,
+        user_id=user_id,
+        orchestration=orchestration,
+        plan=plan,
+        idempotency_key=idempotency_key,
+        commit=commit,
+    )
+
+
+async def create_action_plan_decision(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    user_id: int,
+    idempotency_key: str | None,
+    evaluated_at: datetime | None = None,
+    commit: bool = True,
+) -> dict[str, Any]:
+    """Freeze one immutable A1 -> A5 decision chain."""
+
+    await state_service.get_household_access(
+        session, household_id=household_id, user_id=user_id
+    )
+    if idempotency_key:
+        existing = await _decision_by_idempotency(
+            session,
+            household_id=household_id,
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            return _decision_read(existing)
+
+    orchestration_key = (
+        "action-plan-v1:"
+        + hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
+        if idempotency_key
+        else None
+    )
+    orchestration_kwargs: dict[str, Any] = {
+        "household_id": household_id,
+        "user_id": user_id,
+        "idempotency_key": orchestration_key,
+    }
+    if evaluated_at is not None:
+        orchestration_kwargs["evaluated_at"] = evaluated_at
+    if not commit:
+        orchestration_kwargs["commit"] = False
+    orchestration = await orchestration_service.create_investment_orchestration_decision(
+        session, **orchestration_kwargs
+    )
+    orchestration_id = int(orchestration["orchestration_id"])
+    existing_for_orchestration = await _decision_by_orchestration(
+        session, orchestration_id=orchestration_id
+    )
+    if existing_for_orchestration is not None:
+        return _decision_read(existing_for_orchestration)
+
+    state, policy, allocation, orchestration = await _chain_from_orchestration(
+        session,
+        household_id=household_id,
+        orchestration_id=orchestration_id,
+        user_id=user_id,
+    )
+    plan = _calculate(state, policy, allocation, orchestration)
+    return await _persist_action_plan(
+        session,
+        household_id=household_id,
+        user_id=user_id,
+        orchestration=orchestration,
+        plan=plan,
+        idempotency_key=idempotency_key,
+        commit=commit,
+    )
 
 
 async def action_plan_history(

@@ -86,6 +86,11 @@ class ActionPlanDecision(Base):
             "rules_version",
             name="uq_action_plan_orchestration_versions",
         ),
+        UniqueConstraint(
+            "id",
+            "household_id",
+            name="uq_action_plan_id_household",
+        ),
         Index(
             "ix_action_plan_household_generated",
             "household_id",

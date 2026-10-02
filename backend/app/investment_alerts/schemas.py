@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.app.investment_alerts.rules import (
     DEFAULT_COOLDOWN_MINUTES,
@@ -94,14 +94,26 @@ class AlertItem(BaseModel):
 
     alert_id: str
     subscription_id: int | None = None
-    decision_id: str
-    asset: str
+    decision_id: str | None = None
+    asset: str | None = None
+    source_domain: str = "INVESTMENT"
+    source_reference: str | None = None
+    household_id: int | None = None
+    continuous_decision_id: int | None = None
+    ownership_scope: str | None = None
+    owner_user_id: int | None = None
     alert_type: str
     severity: str
     delivery_channel: str
     message: str
     created_at: datetime
     read_at: datetime | None = None
+
+    @field_validator("source_domain", mode="before")
+    @classmethod
+    def legacy_source_domain(cls, value: Any) -> str:
+        # ORM objects created before flush do not receive SQLAlchemy defaults.
+        return str(value or "INVESTMENT")
 
 
 class AlertDetail(AlertItem):

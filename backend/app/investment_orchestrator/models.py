@@ -68,7 +68,8 @@ class InvestmentOrchestrationDecision(Base):
             "capital_allocation_decision_id",
             "engine_version",
             "rules_version",
-            name="uq_investment_orchestration_allocation_versions",
+            "market_context_fingerprint",
+            name="uq_investment_orchestration_allocation_market",
         ),
         UniqueConstraint(
             "id",

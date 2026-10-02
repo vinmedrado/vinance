@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -34,6 +34,7 @@ from backend.app.financial_state.schemas import (
 
 
 TEST_DATABASE_URL = os.getenv("AUTOPILOT_TEST_DATABASE_URL")
+TEST_EVALUATED_AT = datetime(2026, 9, 9, 12, 0, tzinfo=timezone.utc)
 pytestmark = pytest.mark.skipif(
     not TEST_DATABASE_URL,
     reason="set AUTOPILOT_TEST_DATABASE_URL to an isolated PostgreSQL database",
@@ -170,6 +171,7 @@ async def test_real_postgres_allocation_audit_idempotency_and_isolation() -> Non
                 session,
                 household_id=household.id,
                 user_id=owner.id,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             assert current["allocation_status"] == "SURPLUS"
             assert current["allocatable_capital"] == Decimal("4000.00")
@@ -182,12 +184,14 @@ async def test_real_postgres_allocation_audit_idempotency_and_isolation() -> Non
                 household_id=household.id,
                 user_id=owner.id,
                 idempotency_key=idempotency_key,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             frozen_retry = await allocation_service.create_capital_allocation_decision(
                 session,
                 household_id=household.id,
                 user_id=owner.id,
                 idempotency_key=idempotency_key,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             assert frozen_retry["allocation_id"] == frozen["allocation_id"]
             assert frozen_retry["decision_fingerprint"] == frozen["decision_fingerprint"]

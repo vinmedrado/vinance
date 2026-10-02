@@ -285,6 +285,8 @@ async def create_policy_decision(
     household_id: int,
     user_id: int,
     idempotency_key: str | None,
+    evaluated_at: datetime | None = None,
+    commit: bool = True,
 ) -> dict[str, Any]:
     """Freeze policy-v1 against a newly captured immutable State v1 snapshot."""
 
@@ -306,12 +308,16 @@ async def create_policy_decision(
         if idempotency_key
         else None
     )
-    snapshot = await state_service.create_snapshot(
-        session,
-        household_id=household_id,
-        user_id=user_id,
-        idempotency_key=snapshot_key,
-    )
+    snapshot_kwargs: dict[str, Any] = {
+        "household_id": household_id,
+        "user_id": user_id,
+        "idempotency_key": snapshot_key,
+    }
+    if evaluated_at is not None:
+        snapshot_kwargs["evaluated_at"] = evaluated_at
+    if not commit:
+        snapshot_kwargs["commit"] = False
+    snapshot = await state_service.create_snapshot(session, **snapshot_kwargs)
     policy = await financial_policy_from_state_snapshot(
         session,
         household_id=household_id,
@@ -335,6 +341,10 @@ async def create_policy_decision(
         generated_at=snapshot.evaluated_at,
     )
     session.add(decision)
+    if not commit:
+        await session.flush()
+        await session.refresh(decision)
+        return _decision_read(decision)
     try:
         await session.commit()
     except IntegrityError:

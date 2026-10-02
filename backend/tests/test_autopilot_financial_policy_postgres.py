@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -33,6 +33,7 @@ from backend.app.financial_state.schemas import (
 
 
 TEST_DATABASE_URL = os.getenv("AUTOPILOT_TEST_DATABASE_URL")
+TEST_EVALUATED_AT = datetime(2026, 9, 9, 12, 0, tzinfo=timezone.utc)
 pytestmark = pytest.mark.skipif(
     not TEST_DATABASE_URL,
     reason="set AUTOPILOT_TEST_DATABASE_URL to an isolated PostgreSQL database",
@@ -160,6 +161,7 @@ async def test_real_postgres_policy_current_history_and_household_isolation() ->
                 session,
                 household_id=household.id,
                 user_id=owner.id,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             assert ready["policy_state"] == "INVESTMENT_READY"
             assert ready["investment_readiness"] == "READY"
@@ -170,12 +172,14 @@ async def test_real_postgres_policy_current_history_and_household_isolation() ->
                 household_id=household.id,
                 user_id=owner.id,
                 idempotency_key=policy_key,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             frozen_retry = await policy_service.create_policy_decision(
                 session,
                 household_id=household.id,
                 user_id=owner.id,
                 idempotency_key=policy_key,
+                evaluated_at=TEST_EVALUATED_AT,
             )
             assert frozen_retry["policy_id"] == frozen["policy_id"]
             assert frozen_retry["decision_fingerprint"] == frozen["decision_fingerprint"]
@@ -225,6 +229,7 @@ async def test_real_postgres_policy_current_history_and_household_isolation() ->
                 household_id=household.id,
                 user_id=owner.id,
                 idempotency_key=f"policy-baseline-{uuid4()}",
+                evaluated_at=TEST_EVALUATED_AT + timedelta(seconds=1),
             )
             snapshot_count = await session.scalar(
                 select(func.count(FinancialStateSnapshot.id)).where(

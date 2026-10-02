@@ -11,6 +11,7 @@ from backend.app.investment_orchestrator.router import (
     router as investment_orchestrator_router,
 )
 from backend.app.action_plan.router import router as action_plan_router
+from backend.app.continuous_autopilot.router import router as continuous_autopilot_router
 from backend.app.catalog.router import router as catalog_router
 from backend.app.market.router import router as market_router
 from backend.app.intelligence.router import router as intelligence_router
@@ -27,6 +28,7 @@ api_router.include_router(financial_policy_router)
 api_router.include_router(capital_allocation_router)
 api_router.include_router(investment_orchestrator_router)
 api_router.include_router(action_plan_router)
+api_router.include_router(continuous_autopilot_router)
 api_router.include_router(catalog_router)
 api_router.include_router(market_router)
 api_router.include_router(intelligence_router)

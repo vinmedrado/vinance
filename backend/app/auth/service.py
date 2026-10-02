@@ -39,6 +39,13 @@ async def create_user(session: AsyncSession, payload: UserCreate) -> User:
             is_default=True,
         )
     )
+    from backend.app.continuous_autopilot.service import mark_household_dirty
+
+    await mark_household_dirty(
+        session,
+        household_id=household.id,
+        category="HOUSEHOLD",
+    )
     await session.commit()
     await session.refresh(user)
     return user

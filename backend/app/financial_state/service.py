@@ -51,6 +51,27 @@ class FinancialStateValidationError(FinancialStateDomainError):
 
 ResourceModel = TypeVar("ResourceModel", Income, Expense, FinancialLiability, OwnedAsset, FinancialGoal)
 
+_RESOURCE_CHANGE_CATEGORY: dict[type[Any], str] = {
+    Income: "FINANCIAL_DATA",
+    Expense: "FINANCIAL_DATA",
+    FinancialLiability: "DEBT",
+    OwnedAsset: "ASSETS",
+    FinancialGoal: "GOALS",
+}
+
+
+async def _mark_continuous_dirty(
+    session: AsyncSession, *, household_id: int, category: str
+) -> None:
+    # Local import prevents a module cycle: A6 consumes this canonical service.
+    from backend.app.continuous_autopilot.service import mark_household_dirty
+
+    await mark_household_dirty(
+        session,
+        household_id=household_id,
+        category=category,
+    )
+
 
 async def get_household_access(
     session: AsyncSession,
@@ -154,6 +175,9 @@ async def create_household(
             is_default=False,
         )
     )
+    await _mark_continuous_dirty(
+        session, household_id=household.id, category="HOUSEHOLD"
+    )
     await session.commit()
     await session.refresh(household)
     return household
@@ -175,6 +199,9 @@ async def update_household(
     for field, value in values.items():
         if value is not None:
             setattr(household, field, value)
+    await _mark_continuous_dirty(
+        session, household_id=household_id, category="HOUSEHOLD"
+    )
     await session.commit()
     await session.refresh(household)
     return household
@@ -307,6 +334,9 @@ async def add_member(
         membership.role = payload.role
         membership.status = "ACTIVE"
         membership.is_default = payload.is_default
+    await _mark_continuous_dirty(
+        session, household_id=household_id, category="HOUSEHOLD"
+    )
     await session.commit()
     await session.refresh(membership)
     return await _member_read(session, membership)
@@ -373,6 +403,9 @@ async def update_member(
     if membership.status == "REMOVED":
         membership.is_default = False
         await _restore_personal_default(session, user_id=membership.user_id)
+    await _mark_continuous_dirty(
+        session, household_id=household_id, category="HOUSEHOLD"
+    )
     await session.commit()
     await session.refresh(membership)
     return await _member_read(session, membership)
@@ -446,6 +479,11 @@ async def create_resource(
         )
     record = model(household_id=household_id, user_id=user_id, **values)
     session.add(record)
+    await _mark_continuous_dirty(
+        session,
+        household_id=household_id,
+        category=_RESOURCE_CHANGE_CATEGORY[model],
+    )
     await session.commit()
     await session.refresh(record)
     return record
@@ -513,6 +551,11 @@ async def update_resource(
             raise FinancialStateValidationError("name or asset_catalog_id is required")
     for field, value in values.items():
         setattr(record, field, value)
+    await _mark_continuous_dirty(
+        session,
+        household_id=household_id,
+        category=_RESOURCE_CHANGE_CATEGORY[model],
+    )
     await session.commit()
     await session.refresh(record)
     return record
@@ -535,6 +578,11 @@ async def delete_resource(
     if not _can_mutate_record(record, membership, user_id):
         raise HouseholdPermissionError("financial resource permission denied")
     await session.delete(record)
+    await _mark_continuous_dirty(
+        session,
+        household_id=household_id,
+        category=_RESOURCE_CHANGE_CATEGORY[model],
+    )
     await session.commit()
 
 
@@ -745,6 +793,8 @@ async def create_snapshot(
     household_id: int,
     user_id: int,
     idempotency_key: str | None,
+    evaluated_at: datetime | None = None,
+    commit: bool = True,
 ) -> FinancialStateSnapshot:
     await get_household_access(session, household_id=household_id, user_id=user_id)
     if idempotency_key:
@@ -757,7 +807,7 @@ async def create_snapshot(
         existing = existing_result.scalar_one_or_none()
         if existing is not None:
             return existing
-    evaluated_at = datetime.now(timezone.utc)
+    evaluated_at = evaluated_at or datetime.now(timezone.utc)
     normalized_inputs = await build_normalized_inputs(
         session, household_id=household_id, user_id=user_id
     )
@@ -781,6 +831,10 @@ async def create_snapshot(
         idempotency_key=idempotency_key,
     )
     session.add(snapshot)
+    if not commit:
+        await session.flush()
+        await session.refresh(snapshot)
+        return snapshot
     try:
         await session.commit()
     except IntegrityError:

@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     JSON,
@@ -122,12 +123,63 @@ class InvestmentAlert(Base):
         UniqueConstraint("alert_id", name="uq_investment_alerts_alert_id"),
         UniqueConstraint("deduplication_key", name="uq_investment_alerts_deduplication_key"),
         CheckConstraint(
-            "alert_type IN ('NEW_OPPORTUNITY','ACTION_CHANGE','SCORE_CHANGE','CONFIDENCE_CHANGE','RISK_CHANGE')",
+            "alert_type IN ('NEW_OPPORTUNITY','ACTION_CHANGE','SCORE_CHANGE',"
+            "'CONFIDENCE_CHANGE','RISK_CHANGE','CONTINUOUS_AUTOPILOT_CHANGE')",
             name="ck_investment_alerts_type",
         ),
         CheckConstraint(
-            "severity IN ('INFO','MEDIUM','HIGH')",
+            "severity IN ('INFO','MEDIUM','HIGH','CRITICAL')",
             name="ck_investment_alerts_severity",
+        ),
+        CheckConstraint(
+            "source_domain IN ('INVESTMENT','CONTINUOUS_AUTOPILOT')",
+            name="ck_investment_alerts_source_domain",
+        ),
+        CheckConstraint(
+            "(source_domain = 'INVESTMENT' AND decision_id IS NOT NULL "
+            "AND asset IS NOT NULL AND continuous_decision_id IS NULL "
+            "AND household_id IS NULL AND ownership_scope IS NULL "
+            "AND owner_user_id IS NULL "
+            "AND alert_type <> 'CONTINUOUS_AUTOPILOT_CHANGE') OR "
+            "(source_domain = 'CONTINUOUS_AUTOPILOT' AND decision_id IS NULL "
+            "AND asset IS NULL AND continuous_decision_id IS NOT NULL "
+            "AND household_id IS NOT NULL AND subscription_id IS NULL "
+            "AND ownership_scope IS NOT NULL AND source_reference IS NOT NULL "
+            "AND alert_type = 'CONTINUOUS_AUTOPILOT_CHANGE')",
+            name="ck_investment_alerts_source_contract",
+        ),
+        CheckConstraint(
+            "ownership_scope IS NULL OR ownership_scope IN ('PERSONAL','HOUSEHOLD')",
+            name="ck_investment_alerts_ownership_scope",
+        ),
+        CheckConstraint(
+            "ownership_scope <> 'PERSONAL' OR owner_user_id IS NOT NULL",
+            name="ck_investment_alerts_personal_owner",
+        ),
+        CheckConstraint(
+            "ownership_scope <> 'HOUSEHOLD' OR owner_user_id IS NULL",
+            name="ck_investment_alerts_household_owner",
+        ),
+        ForeignKeyConstraint(
+            ["continuous_decision_id", "household_id"],
+            [
+                "continuous_autopilot_decisions.id",
+                "continuous_autopilot_decisions.household_id",
+            ],
+            name="fk_investment_alerts_continuous_household",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["household_id", "user_id"],
+            ["household_members.household_id", "household_members.user_id"],
+            name="fk_investment_alerts_recipient_membership",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["household_id", "owner_user_id"],
+            ["household_members.household_id", "household_members.user_id"],
+            name="fk_investment_alerts_owner_membership",
+            ondelete="RESTRICT",
         ),
         CheckConstraint("delivery_channel = 'IN_APP'", name="ck_investment_alerts_channel"),
         Index("ix_investment_alerts_user_created", "user_id", "created_at"),
@@ -135,6 +187,16 @@ class InvestmentAlert(Base):
         Index("ix_investment_alerts_user_asset", "user_id", "asset", "created_at"),
         Index("ix_investment_alerts_user_type", "user_id", "alert_type", "created_at"),
         Index("ix_investment_alerts_user_severity", "user_id", "severity", "created_at"),
+        Index(
+            "ix_investment_alerts_household_created",
+            "household_id",
+            "created_at",
+        ),
+        Index(
+            "ix_investment_alerts_continuous_decision",
+            "continuous_decision_id",
+            "user_id",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -144,10 +206,22 @@ class InvestmentAlert(Base):
     subscription_id: Mapped[int | None] = mapped_column(
         ForeignKey("investment_alert_subscriptions.id", ondelete="SET NULL"), nullable=True
     )
-    decision_id: Mapped[str] = mapped_column(
-        ForeignKey("investment_decision_audits.decision_id", ondelete="RESTRICT"), nullable=False
+    decision_id: Mapped[str | None] = mapped_column(
+        ForeignKey("investment_decision_audits.decision_id", ondelete="RESTRICT"), nullable=True
     )
-    asset: Mapped[str] = mapped_column(String(32), nullable=False)
+    asset: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_domain: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="INVESTMENT"
+    )
+    source_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    household_id: Mapped[int | None] = mapped_column(
+        ForeignKey("households.id", ondelete="RESTRICT"), nullable=True
+    )
+    continuous_decision_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ownership_scope: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    owner_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     alert_type: Mapped[str] = mapped_column(String(32), nullable=False)
     severity: Mapped[str] = mapped_column(String(16), nullable=False)
     delivery_channel: Mapped[str] = mapped_column(

@@ -22,6 +22,11 @@ async def create_income(session: AsyncSession, *, user_id: int, payload: IncomeC
         **payload.model_dump(),
     )
     session.add(income)
+    from backend.app.continuous_autopilot.service import mark_household_dirty
+
+    await mark_household_dirty(
+        session, household_id=household.id, category="FINANCIAL_DATA"
+    )
     await session.commit()
     await session.refresh(income)
     return income
@@ -51,6 +56,11 @@ async def create_expense(session: AsyncSession, *, user_id: int, payload: Expens
         **payload.model_dump(),
     )
     session.add(expense)
+    from backend.app.continuous_autopilot.service import mark_household_dirty
+
+    await mark_household_dirty(
+        session, household_id=household.id, category="FINANCIAL_DATA"
+    )
     await session.commit()
     await session.refresh(expense)
     return expense
@@ -84,6 +94,13 @@ async def upsert_financial_profile(
     else:
         for field, value in values.items():
             setattr(profile, field, value)
+    from backend.app.continuous_autopilot.service import mark_user_households_dirty
+
+    await mark_user_households_dirty(
+        session,
+        user_id=user_id,
+        category="PROFILE",
+    )
     await session.commit()
     await session.refresh(profile)
     return profile

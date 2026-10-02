@@ -238,6 +238,46 @@ async def test_freeze_persists_exact_chain_and_zero_speculation(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_freeze_propagates_explicit_evaluation_time(monkeypatch) -> None:
+    state, policy, allocation, orchestration = _frozen_chain()
+    session = _Session()
+    captured = {}
+
+    async def access(*_args, **_kwargs):
+        return None
+
+    async def no_existing(*_args, **_kwargs):
+        return None
+
+    async def freeze_orchestration(*_args, **kwargs):
+        captured.update(kwargs)
+        return orchestration
+
+    async def chain(*_args, **_kwargs):
+        return state, policy, allocation, orchestration
+
+    monkeypatch.setattr(state_service, "get_household_access", access)
+    monkeypatch.setattr(service, "_decision_by_idempotency", no_existing)
+    monkeypatch.setattr(service, "_decision_by_orchestration", no_existing)
+    monkeypatch.setattr(
+        orchestration_service,
+        "create_investment_orchestration_decision",
+        freeze_orchestration,
+    )
+    monkeypatch.setattr(service, "_chain_from_orchestration", chain)
+
+    await service.create_action_plan_decision(
+        session,
+        household_id=10,
+        user_id=91,
+        idempotency_key="continuous-autopilot-chain",
+        evaluated_at=NOW,
+    )
+
+    assert captured["evaluated_at"] == NOW
+
+
+@pytest.mark.asyncio
 async def test_history_and_detail_authorize_without_replaying(monkeypatch) -> None:
     decision = _decision()
     accesses = []

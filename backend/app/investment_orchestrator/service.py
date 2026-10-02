@@ -188,6 +188,7 @@ async def investment_orchestration_from_allocation_decision(
     household_id: int,
     allocation_id: int,
     user_id: int,
+    evaluated_at: datetime | None = None,
 ) -> dict[str, Any]:
     state, policy, allocation, normalized_inputs = await _chain_from_allocation(
         session,
@@ -201,6 +202,7 @@ async def investment_orchestration_from_allocation_decision(
         policy=policy,
         allocation=allocation,
         normalized_inputs=normalized_inputs,
+        generated_at=evaluated_at,
     )
 
 
@@ -294,8 +296,156 @@ async def _decision_by_allocation(
             InvestmentOrchestrationDecision.engine_version == ENGINE_VERSION,
             InvestmentOrchestrationDecision.rules_version == RULES_VERSION,
         )
+        .order_by(
+            InvestmentOrchestrationDecision.generated_at.desc(),
+            InvestmentOrchestrationDecision.id.desc(),
+        )
+        .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def _decision_by_allocation_market(
+    session: AsyncSession,
+    *,
+    allocation_id: int,
+    market_context_fingerprint: str,
+) -> InvestmentOrchestrationDecision | None:
+    result = await session.execute(
+        select(InvestmentOrchestrationDecision).where(
+            InvestmentOrchestrationDecision.capital_allocation_decision_id
+            == allocation_id,
+            InvestmentOrchestrationDecision.engine_version == ENGINE_VERSION,
+            InvestmentOrchestrationDecision.rules_version == RULES_VERSION,
+            InvestmentOrchestrationDecision.market_context_fingerprint
+            == market_context_fingerprint,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _persist_orchestration(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    user_id: int,
+    orchestration: Mapping[str, Any],
+    idempotency_key: str | None,
+    commit: bool,
+    check_existing_market: bool = True,
+) -> dict[str, Any]:
+    allocation_id = int(orchestration["capital_allocation_decision_id"])
+    market_fingerprint = str(orchestration["market_context_fingerprint"])
+    if check_existing_market:
+        existing = await _decision_by_allocation_market(
+            session,
+            allocation_id=allocation_id,
+            market_context_fingerprint=market_fingerprint,
+        )
+        if existing is not None:
+            return _decision_read(existing)
+
+    payload = _json_value(orchestration)
+    decision = InvestmentOrchestrationDecision(
+        household_id=household_id,
+        financial_state_snapshot_id=int(orchestration["financial_state_snapshot_id"]),
+        financial_policy_decision_id=int(
+            orchestration["financial_policy_decision_id"]
+        ),
+        capital_allocation_decision_id=allocation_id,
+        created_by_user_id=user_id,
+        engine_version=orchestration["engine_version"],
+        rules_version=orchestration["rules_version"],
+        status=orchestration["status"],
+        currency=orchestration["currency"],
+        investment_budget=orchestration["investment_budget"],
+        suggested_capital=orchestration["suggested_capital"],
+        remaining_investment_cash=orchestration["remaining_investment_cash"],
+        speculative_capital=orchestration["speculative_capital"],
+        state_fingerprint=orchestration["state_fingerprint"],
+        policy_fingerprint=orchestration["policy_fingerprint"],
+        allocation_fingerprint=orchestration["allocation_fingerprint"],
+        market_context_fingerprint=market_fingerprint,
+        ruleset_fingerprint=orchestration["ruleset_fingerprint"],
+        decision_fingerprint=orchestration["decision_fingerprint"],
+        decision_payload=payload,
+        idempotency_key=idempotency_key,
+        generated_at=orchestration["generated_at"],
+    )
+    session.add(decision)
+    if not commit:
+        await session.flush()
+        await session.refresh(decision)
+        return _decision_read(decision)
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        concurrent: InvestmentOrchestrationDecision | None = None
+        if idempotency_key:
+            concurrent = await _decision_by_idempotency(
+                session,
+                household_id=household_id,
+                idempotency_key=idempotency_key,
+            )
+        if concurrent is None:
+            concurrent = await _decision_by_allocation_market(
+                session,
+                allocation_id=allocation_id,
+                market_context_fingerprint=market_fingerprint,
+            )
+        if concurrent is None:
+            raise
+        return _decision_read(concurrent)
+    await session.refresh(decision)
+    return _decision_read(decision)
+
+
+async def create_investment_orchestration_from_allocation_decision(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    allocation_id: int,
+    user_id: int,
+    idempotency_key: str | None,
+    evaluated_at: datetime | None = None,
+    commit: bool = True,
+) -> dict[str, Any]:
+    """Freeze only A4 against an existing immutable A3 decision."""
+
+    await state_service.get_household_access(
+        session, household_id=household_id, user_id=user_id
+    )
+    if idempotency_key:
+        existing = await _decision_by_idempotency(
+            session,
+            household_id=household_id,
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            return _decision_read(existing)
+    state, policy, allocation, normalized_inputs = await _chain_from_allocation(
+        session,
+        household_id=household_id,
+        allocation_id=allocation_id,
+        user_id=user_id,
+    )
+    orchestration = await _evaluate(
+        session,
+        state=state,
+        policy=policy,
+        allocation=allocation,
+        normalized_inputs=normalized_inputs,
+        generated_at=evaluated_at,
+    )
+    return await _persist_orchestration(
+        session,
+        household_id=household_id,
+        user_id=user_id,
+        orchestration=orchestration,
+        idempotency_key=idempotency_key,
+        commit=commit,
+    )
 
 
 async def create_investment_orchestration_decision(
@@ -304,6 +454,8 @@ async def create_investment_orchestration_decision(
     household_id: int,
     user_id: int,
     idempotency_key: str | None,
+    evaluated_at: datetime | None = None,
+    commit: bool = True,
 ) -> dict[str, Any]:
     """Freeze one immutable A1 -> A2 -> A3 -> A4 decision chain."""
 
@@ -325,11 +477,17 @@ async def create_investment_orchestration_decision(
         if idempotency_key
         else None
     )
+    allocation_kwargs: dict[str, Any] = {
+        "household_id": household_id,
+        "user_id": user_id,
+        "idempotency_key": allocation_key,
+    }
+    if evaluated_at is not None:
+        allocation_kwargs["evaluated_at"] = evaluated_at
+    if not commit:
+        allocation_kwargs["commit"] = False
     allocation = await allocation_service.create_capital_allocation_decision(
-        session,
-        household_id=household_id,
-        user_id=user_id,
-        idempotency_key=allocation_key,
+        session, **allocation_kwargs
     )
     allocation_id = int(allocation["allocation_id"])
     existing_for_allocation = await _decision_by_allocation(
@@ -344,63 +502,24 @@ async def create_investment_orchestration_decision(
         allocation_id=allocation_id,
         user_id=user_id,
     )
-    orchestration = await _evaluate(
+    evaluate_kwargs: dict[str, Any] = {
+        "state": state,
+        "policy": policy,
+        "allocation": allocation,
+        "normalized_inputs": normalized_inputs,
+    }
+    if evaluated_at is not None:
+        evaluate_kwargs["generated_at"] = evaluated_at
+    orchestration = await _evaluate(session, **evaluate_kwargs)
+    return await _persist_orchestration(
         session,
-        state=state,
-        policy=policy,
-        allocation=allocation,
-        normalized_inputs=normalized_inputs,
-    )
-    payload = _json_value(orchestration)
-    decision = InvestmentOrchestrationDecision(
         household_id=household_id,
-        financial_state_snapshot_id=int(orchestration["financial_state_snapshot_id"]),
-        financial_policy_decision_id=int(
-            orchestration["financial_policy_decision_id"]
-        ),
-        capital_allocation_decision_id=int(
-            orchestration["capital_allocation_decision_id"]
-        ),
-        created_by_user_id=user_id,
-        engine_version=orchestration["engine_version"],
-        rules_version=orchestration["rules_version"],
-        status=orchestration["status"],
-        currency=orchestration["currency"],
-        investment_budget=orchestration["investment_budget"],
-        suggested_capital=orchestration["suggested_capital"],
-        remaining_investment_cash=orchestration["remaining_investment_cash"],
-        speculative_capital=orchestration["speculative_capital"],
-        state_fingerprint=orchestration["state_fingerprint"],
-        policy_fingerprint=orchestration["policy_fingerprint"],
-        allocation_fingerprint=orchestration["allocation_fingerprint"],
-        market_context_fingerprint=orchestration["market_context_fingerprint"],
-        ruleset_fingerprint=orchestration["ruleset_fingerprint"],
-        decision_fingerprint=orchestration["decision_fingerprint"],
-        decision_payload=payload,
+        user_id=user_id,
+        orchestration=orchestration,
         idempotency_key=idempotency_key,
-        generated_at=orchestration["generated_at"],
+        commit=commit,
+        check_existing_market=False,
     )
-    session.add(decision)
-    try:
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        concurrent: InvestmentOrchestrationDecision | None = None
-        if idempotency_key:
-            concurrent = await _decision_by_idempotency(
-                session,
-                household_id=household_id,
-                idempotency_key=idempotency_key,
-            )
-        if concurrent is None:
-            concurrent = await _decision_by_allocation(
-                session, allocation_id=allocation_id
-            )
-        if concurrent is None:
-            raise
-        return _decision_read(concurrent)
-    await session.refresh(decision)
-    return _decision_read(decision)
 
 
 async def investment_orchestration_history(
