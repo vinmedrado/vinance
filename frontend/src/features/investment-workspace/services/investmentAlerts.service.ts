@@ -23,8 +23,9 @@ const ALERT_TYPES = new Set<InvestmentAlertType>([
   'SCORE_CHANGE',
   'CONFIDENCE_CHANGE',
   'RISK_CHANGE',
+  'CONTINUOUS_AUTOPILOT_CHANGE',
 ]);
-const ALERT_SEVERITIES = new Set<InvestmentAlertSeverity>(['INFO', 'MEDIUM', 'HIGH']);
+const ALERT_SEVERITIES = new Set<InvestmentAlertSeverity>(['INFO', 'MEDIUM', 'HIGH', 'CRITICAL']);
 
 function invalidResponse(message: string) {
   return new ApiRequestError(502, message, 'INVALID_RESPONSE');
@@ -168,9 +169,23 @@ export function normalizeInvestmentAlertSubscriptions(value: unknown): Investmen
 function normalizeAlertItem(value: unknown): InvestmentAlertItem {
   if (!isRecord(value)) throw invalidResponse('A API retornou um alerta inválido.');
   const alertId = uuidValue(value.alert_id);
-  const decisionId = uuidValue(value.decision_id);
+  const sourceDomain = textValue(value.source_domain)?.toUpperCase() ?? 'INVESTMENT';
+  const isContinuous = sourceDomain === 'CONTINUOUS_AUTOPILOT';
+  const decisionId = value.decision_id === null ? null : uuidValue(value.decision_id);
   const subscriptionId = value.subscription_id === null ? null : positiveInteger(value.subscription_id);
-  const asset = assetValue(value.asset);
+  const asset = value.asset === null ? null : assetValue(value.asset);
+  const householdId = value.household_id === null || value.household_id === undefined
+    ? null
+    : positiveInteger(value.household_id);
+  const continuousDecisionId = value.continuous_decision_id === null || value.continuous_decision_id === undefined
+    ? null
+    : positiveInteger(value.continuous_decision_id);
+  const ownershipScope = value.ownership_scope === null || value.ownership_scope === undefined
+    ? null
+    : (textValue(value.ownership_scope)?.toUpperCase() ?? null);
+  const ownerUserId = value.owner_user_id === null || value.owner_user_id === undefined
+    ? null
+    : positiveInteger(value.owner_user_id);
   const alertType = alertTypeValue(value.alert_type);
   const severity = alertSeverityValue(value.severity);
   const deliveryChannel = textValue(value.delivery_channel)?.toUpperCase();
@@ -180,9 +195,21 @@ function normalizeAlertItem(value: unknown): InvestmentAlertItem {
 
   if (
     !alertId
-    || !decisionId
+    || !['INVESTMENT', 'CONTINUOUS_AUTOPILOT'].includes(sourceDomain)
+    || (!isContinuous && (!decisionId || !asset))
+    || (isContinuous && (
+      decisionId !== null
+      || asset !== null
+      || !householdId
+      || !continuousDecisionId
+      || subscriptionId !== null
+      || alertType !== 'CONTINUOUS_AUTOPILOT_CHANGE'
+      || !textValue(value.source_reference)
+      || ownershipScope === null
+    ))
     || (value.subscription_id !== null && subscriptionId === undefined)
-    || !asset
+    || (ownershipScope !== null && !['PERSONAL', 'HOUSEHOLD'].includes(ownershipScope))
+    || (ownershipScope === 'PERSONAL' && !ownerUserId)
     || !alertType
     || !severity
     || deliveryChannel !== 'IN_APP'
@@ -198,6 +225,12 @@ function normalizeAlertItem(value: unknown): InvestmentAlertItem {
     subscription_id: subscriptionId,
     decision_id: decisionId,
     asset,
+    source_domain: sourceDomain as 'INVESTMENT' | 'CONTINUOUS_AUTOPILOT',
+    source_reference: value.source_reference === null ? null : textValue(value.source_reference),
+    household_id: householdId,
+    continuous_decision_id: continuousDecisionId,
+    ownership_scope: ownershipScope as 'PERSONAL' | 'HOUSEHOLD' | null,
+    owner_user_id: ownerUserId,
     alert_type: alertType,
     severity,
     delivery_channel: 'IN_APP',

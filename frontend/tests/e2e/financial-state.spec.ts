@@ -265,6 +265,75 @@ const actionPlan = {
   generated_at: '2026-09-08T12:00:00Z', created_at: null,
 };
 
+const continuousBase = {
+  continuous_decision_id: null,
+  household_id: 10,
+  previous_action_plan_id: null,
+  current_action_plan_id: null,
+  engine_version: 'continuous-autopilot-v1',
+  rules_version: 'continuous-autopilot-rules-v1',
+  status: 'REEVALUATION_REQUIRED',
+  materiality: 'NONE',
+  alert_decision: 'NO_ALERT',
+  reevaluation_scope: 'FULL_CHAIN',
+  change_categories: ['HOUSEHOLD'],
+  detected_changes: [],
+  plan_diff: {
+    previous_action_plan_id: null, current_action_plan_id: null,
+    added_actions: [], removed_actions: [], changed_actions: [], unchanged_actions: [],
+    financial_delta: '0.00', investment_delta: '0.00', hold_cash_delta: '0.00',
+    priority_changes: [], status_change: null, materiality: 'NONE',
+    summary: 'Uma avaliação inicial ainda é necessária.',
+  },
+  alert: null,
+  blockers: [], warnings: [], missing_information: [], evidence: [], rule_traces: [], ruleset: {},
+  previous_fingerprint: null, current_fingerprint: null,
+  ruleset_fingerprint: '7'.repeat(64), decision_fingerprint: '8'.repeat(64),
+  dedupe_key: '9'.repeat(64), generated_at: '2026-09-08T12:00:00Z',
+  observed_at: '2026-09-08T12:00:00Z', created_at: null,
+};
+
+const continuousChanged = {
+  ...continuousBase,
+  continuous_decision_id: 51,
+  previous_action_plan_id: 40,
+  current_action_plan_id: 41,
+  status: 'CHANGED',
+  materiality: 'HIGH',
+  alert_decision: 'IMPORTANT',
+  change_categories: ['FINANCIAL_DATA'],
+  detected_changes: [{
+    change_id: 'income-change', change_type: 'ACTION_CHANGED', category: 'FINANCIAL_DATA',
+    entity_type: 'ACTION_PLAN_ACTION', entity_id: 'reserve', previous_value: '600.00',
+    current_value: '500.00', delta: '-100.00', delta_percent: null,
+    severity: 'IMPORTANT', materiality: 'HIGH',
+    reason: 'A capacidade mensal de investimento mudou.', source: 'action-plan-v1',
+    observed_at: '2026-09-08T13:00:00Z', as_of: '2026-09-08T13:00:00Z',
+    previous_fingerprint: 'a'.repeat(64), current_fingerprint: 'b'.repeat(64),
+    ownership_scope: 'HOUSEHOLD', owner_user_id: null,
+  }],
+  plan_diff: {
+    previous_action_plan_id: 40, current_action_plan_id: 41,
+    added_actions: [], removed_actions: [], changed_actions: [{ action_id: 'reserve' }],
+    unchanged_actions: [], financial_delta: '-100.00', investment_delta: '-200.00',
+    hold_cash_delta: '0.00', priority_changes: [], status_change: null,
+    materiality: 'HIGH', summary: 'O plano foi atualizado após uma mudança financeira.',
+  },
+  alert: {
+    severity: 'IMPORTANT', category: 'FINANCIAL_DATA', title: 'Seu plano financeiro mudou',
+    summary: 'Sua capacidade mensal de investimento caiu.',
+    what_changed: ['Capacidade mensal'],
+    why_it_matters: 'O capital autorizado para novos investimentos ficou menor.',
+    recommended_action: 'Revise o novo plano antes de agir.',
+    previous_reference: { action_plan_id: 40 }, current_reference: { action_plan_id: 41 },
+    dedupe_key: 'c'.repeat(64),
+  },
+  previous_fingerprint: 'a'.repeat(64), current_fingerprint: 'b'.repeat(64),
+  decision_fingerprint: 'd'.repeat(64), dedupe_key: 'e'.repeat(64),
+  generated_at: '2026-09-08T13:00:00Z', observed_at: '2026-09-08T13:00:00Z',
+  created_at: '2026-09-08T13:00:01Z',
+};
+
 test('financial state preserva ausência, ownership e idempotência de snapshot', async ({ page }) => {
   const incomePayloads: unknown[] = [];
   const snapshotKeys: string[] = [];
@@ -272,12 +341,15 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   const allocationKeys: string[] = [];
   const orchestrationKeys: string[] = [];
   const actionPlanKeys: string[] = [];
+  const continuousKeys: string[] = [];
   let snapshotAttempts = 0;
   let policyAttempts = 0;
   let allocationAttempts = 0;
   let orchestrationAttempts = 0;
   let actionPlanAttempts = 0;
+  let continuousAttempts = 0;
   let actionPlanSaved = false;
+  let continuousEvaluated = false;
 
   await page.route('**/api/v1/me', (route) => json(route, authenticatedUser));
   await page.route('**/api/v1/financial/**', async (route) => {
@@ -287,6 +359,34 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
     if (path.endsWith('/financial/profile')) return json(route, { id: 1 });
     if (path.endsWith('/households/default')) return json(route, household);
     if (path.endsWith('/financial/households')) return json(route, [household]);
+    if (path.endsWith('/households/10/continuous-autopilot/history/51')) {
+      return json(route, continuousChanged);
+    }
+    if (path.endsWith('/households/10/continuous-autopilot/history')) {
+      return json(route, continuousEvaluated ? {
+        items: [{
+          continuous_decision_id: 51, household_id: 10, previous_action_plan_id: 40,
+          current_action_plan_id: 41, status: 'CHANGED', materiality: 'HIGH',
+          alert_decision: 'IMPORTANT', title: 'Seu plano financeiro mudou',
+          summary: 'Sua capacidade mensal de investimento caiu.', change_count: 1,
+          decision_fingerprint: 'd'.repeat(64), observed_at: '2026-09-08T13:00:00Z',
+          generated_at: '2026-09-08T13:00:00Z', created_at: '2026-09-08T13:00:01Z',
+        }],
+        total: 1,
+      } : { items: [], total: 0 });
+    }
+    if (path.endsWith('/households/10/continuous-autopilot/evaluate')) {
+      continuousAttempts += 1;
+      continuousKeys.push(request.headers()['idempotency-key']);
+      if (continuousAttempts === 1) {
+        return json(route, { detail: 'temporariamente indisponível' }, 503);
+      }
+      continuousEvaluated = true;
+      return json(route, continuousChanged);
+    }
+    if (path.endsWith('/households/10/continuous-autopilot')) {
+      return json(route, continuousEvaluated ? continuousChanged : continuousBase);
+    }
     if (path.endsWith('/households/10/action-plan/history/41')) {
       return json(route, {
         ...actionPlan,
@@ -418,6 +518,8 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await expect(page.getByRole('heading', { name: 'Plano deste período' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Como investir este valor' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Seu plano de ação' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Seu Autopilot' })).toBeVisible();
+  await expect(page.getByText('REAVALIAÇÃO NECESSÁRIA')).toBeVisible();
   await expect(page.getByTestId('action-plan-item-EMERGENCY_RESERVE_CONTRIBUTION')).toContainText('Fortaleça sua reserva');
   await expect(page.getByTestId('action-plan-item-EMERGENCY_RESERVE_CONTRIBUTION')).toContainText('3.000,00');
   await expect(page.getByText('Não há capital comprovadamente liberado para novos investimentos.')).toBeVisible();
@@ -432,6 +534,19 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await expect(page.getByText(/Investir somente o capital excedente/)).toBeVisible();
   await expect(page.getByText(/Variáveis: Não informado/)).toBeVisible();
   await expect(page.getByText(/Dívidas:.*0,00/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Avaliar agora' }).click();
+  await expect(page.getByText('Não foi possível concluir a avaliação')).toBeVisible();
+  await page.getByRole('button', { name: 'Tentar novamente' }).last().click();
+  await expect(page.getByText('Autopilot avaliado com segurança.')).toBeVisible();
+  await expect(page.getByText('SEU PLANO MUDOU')).toBeVisible();
+  await expect(page.getByText('O capital autorizado para novos investimentos ficou menor.')).toBeVisible();
+  expect(continuousKeys).toHaveLength(2);
+  expect(continuousKeys[0]).toBeTruthy();
+  expect(continuousKeys[1]).toBe(continuousKeys[0]);
+  await page.getByRole('button', { name: 'Ver o que mudou' }).click();
+  await expect(page.getByText('AVALIAÇÃO CONGELADA')).toBeVisible();
+  await page.getByRole('button', { name: 'Voltar ao status atual' }).click();
 
   await page.getByRole('button', { name: 'Nova receita' }).click();
   await page.getByLabel('Descrição').fill('Renda compartilhada');

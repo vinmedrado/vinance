@@ -5,6 +5,8 @@ import type {
   AssetPayload,
   CapitalAllocation,
   CapitalAllocationHistory,
+  ContinuousAutopilot,
+  ContinuousAutopilotHistory,
   ExpensePayload,
   FinancialState,
   FinancialStateHistory,
@@ -197,6 +199,42 @@ export async function getActionPlanDecision(
 ) {
   const { data } = await api.get<ActionPlan>(
     `/financial/households/${householdId}/action-plan/history/${actionPlanId}`,
+  );
+  return data;
+}
+
+export async function getCurrentContinuousAutopilot(householdId: number) {
+  const { data } = await api.get<ContinuousAutopilot>(
+    `/financial/households/${householdId}/continuous-autopilot`,
+  );
+  return data;
+}
+
+export async function evaluateContinuousAutopilot(
+  householdId: number,
+  idempotencyKey: string,
+) {
+  const { data } = await api.post<ContinuousAutopilot>(
+    `/financial/households/${householdId}/continuous-autopilot/evaluate`,
+    {},
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  );
+  return data;
+}
+
+export async function getContinuousAutopilotHistory(householdId: number) {
+  const { data } = await api.get<ContinuousAutopilotHistory>(
+    `/financial/households/${householdId}/continuous-autopilot/history`,
+  );
+  return data;
+}
+
+export async function getContinuousAutopilotDecision(
+  householdId: number,
+  decisionId: number,
+) {
+  const { data } = await api.get<ContinuousAutopilot>(
+    `/financial/households/${householdId}/continuous-autopilot/history/${decisionId}`,
   );
   return data;
 }

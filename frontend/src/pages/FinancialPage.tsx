@@ -21,6 +21,8 @@ import {
   useActionPlanDecision,
   useActionPlanHistory,
   useCapitalAllocationHistory,
+  useContinuousAutopilotDecision,
+  useContinuousAutopilotHistory,
   useCreateCapitalAllocationDecision,
   useCreateActionPlanDecision,
   useCreateFinancialPolicyDecision,
@@ -28,6 +30,7 @@ import {
   useCreateHouseholdIncome,
   useCreateFinancialStateSnapshot,
   useCreateInvestmentOrchestrationDecision,
+  useCurrentContinuousAutopilot,
   useCurrentCapitalAllocation,
   useCurrentActionPlan,
   useCurrentFinancialPolicy,
@@ -39,11 +42,13 @@ import {
   useHouseholdIncomes,
   useHouseholds,
   useInvestmentOrchestrationHistory,
+  useEvaluateContinuousAutopilot,
 } from '../features/financial-state/hooks/useFinancialState';
 import { ActionPlanCard } from '../features/financial-state/components/ActionPlanCard';
 import { FinancialPolicyCard } from '../features/financial-state/components/FinancialPolicyCard';
 import { CapitalAllocationCard } from '../features/financial-state/components/CapitalAllocationCard';
 import { InvestmentOrchestrationCard } from '../features/financial-state/components/InvestmentOrchestrationCard';
+import { ContinuousAutopilotCard } from '../features/financial-state/components/ContinuousAutopilotCard';
 import type { DataQuality, MoneyValue, OwnershipScope } from '../features/financial-state/types/financialState.types';
 import { useFinancialProfile } from '../features/financial/hooks/useFinancial';
 import type { ApiErrorShape } from '../services/api';
@@ -172,6 +177,7 @@ export function FinancialPage() {
   const profile = useFinancialProfile();
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<number | null>(null);
   const [selectedActionPlanId, setSelectedActionPlanId] = useState<number | null>(null);
+  const [selectedContinuousDecisionId, setSelectedContinuousDecisionId] = useState<number | null>(null);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [incomeSaved, setIncomeSaved] = useState(false);
@@ -222,6 +228,12 @@ export function FinancialPage() {
   const actionPlan = useCurrentActionPlan(selectedHouseholdId);
   const actionPlanHistory = useActionPlanHistory(selectedHouseholdId);
   const frozenActionPlan = useActionPlanDecision(selectedHouseholdId, selectedActionPlanId);
+  const continuousAutopilot = useCurrentContinuousAutopilot(selectedHouseholdId);
+  const continuousHistory = useContinuousAutopilotHistory(selectedHouseholdId);
+  const frozenContinuousDecision = useContinuousAutopilotDecision(
+    selectedHouseholdId,
+    selectedContinuousDecisionId,
+  );
   const incomes = useHouseholdIncomes(selectedHouseholdId);
   const expenses = useHouseholdExpenses(selectedHouseholdId);
   const createIncome = useCreateHouseholdIncome(selectedHouseholdId);
@@ -231,6 +243,7 @@ export function FinancialPage() {
   const createAllocationDecision = useCreateCapitalAllocationDecision(selectedHouseholdId);
   const createOrchestrationDecision = useCreateInvestmentOrchestrationDecision(selectedHouseholdId);
   const createActionPlanDecision = useCreateActionPlanDecision(selectedHouseholdId);
+  const evaluateContinuousAutopilot = useEvaluateContinuousAutopilot(selectedHouseholdId);
   const missingProfile = (profile.error as ApiErrorShape | null)?.status === 404;
   const loadError = getActionError(
     households.error,
@@ -255,6 +268,7 @@ export function FinancialPage() {
 
   useEffect(() => {
     setSelectedActionPlanId(null);
+    setSelectedContinuousDecisionId(null);
   }, [selectedHouseholdId]);
 
   async function submitIncome(event: FormEvent) {
@@ -297,6 +311,8 @@ export function FinancialPage() {
     orchestrationHistory.refetch();
     actionPlan.refetch();
     actionPlanHistory.refetch();
+    continuousAutopilot.refetch();
+    continuousHistory.refetch();
     incomes.refetch();
     expenses.refetch();
     profile.refetch();
@@ -305,7 +321,7 @@ export function FinancialPage() {
   return (
     <section className="vn-page">
       <SectionHeader
-        eyebrow="Financial Autopilot · fase 5"
+        eyebrow="Financial Autopilot · fase 6"
         title="Minha situação financeira"
         description="Uma leitura objetiva da sua situação e da ordem de prioridades agora — com transparência sobre o que ainda falta informar."
         action={state ? <Button variant="secondary" onClick={() => createSnapshot.mutate()} disabled={createSnapshot.isPending}>{createSnapshot.isPending ? 'Salvando...' : 'Salvar retrato'}</Button> : undefined}
@@ -327,6 +343,7 @@ export function FinancialPage() {
       {createAllocationDecision.isSuccess && <Toast message="Plano de capital salvo no histórico." />}
       {createOrchestrationDecision.isSuccess && <Toast message="Estratégia de investimento salva no histórico." />}
       {createActionPlanDecision.isSuccess && <Toast message="Plano de ação salvo no histórico." />}
+      {evaluateContinuousAutopilot.isSuccess && <Toast message="Autopilot avaliado com segurança." />}
       {incomeSaved && <Toast message="Receita cadastrada com sucesso." />}
       {expenseSaved && <Toast message="Despesa cadastrada com sucesso." />}
       {missingProfile && <OnboardingCard onCompleted={reload} />}
@@ -474,27 +491,66 @@ export function FinancialPage() {
             onFreeze={() => createOrchestrationDecision.mutate()}
           />
 
-          <ActionPlanCard
-            plan={selectedActionPlanId === null ? actionPlan.data : frozenActionPlan.data}
-            history={actionPlanHistory.data}
-            isLoading={selectedActionPlanId === null ? actionPlan.isLoading : frozenActionPlan.isLoading}
-            isHistoryLoading={actionPlanHistory.isLoading}
-            isFreezing={createActionPlanDecision.isPending}
-            isHistorical={selectedActionPlanId !== null}
-            errorMessage={
-              selectedActionPlanId === null
-                ? (actionPlan.error ? errorMessage(actionPlan.error) : undefined)
-                : (frozenActionPlan.error ? errorMessage(frozenActionPlan.error) : undefined)
+          <div id="action-plan">
+            <ActionPlanCard
+              plan={selectedActionPlanId === null ? actionPlan.data : frozenActionPlan.data}
+              history={actionPlanHistory.data}
+              isLoading={selectedActionPlanId === null ? actionPlan.isLoading : frozenActionPlan.isLoading}
+              isHistoryLoading={actionPlanHistory.isLoading}
+              isFreezing={createActionPlanDecision.isPending}
+              isHistorical={selectedActionPlanId !== null}
+              errorMessage={
+                selectedActionPlanId === null
+                  ? (actionPlan.error ? errorMessage(actionPlan.error) : undefined)
+                  : (frozenActionPlan.error ? errorMessage(frozenActionPlan.error) : undefined)
+              }
+              historyErrorMessage={actionPlanHistory.error ? errorMessage(actionPlanHistory.error) : undefined}
+              freezeErrorMessage={createActionPlanDecision.error ? errorMessage(createActionPlanDecision.error) : undefined}
+              onRetry={() => (
+                selectedActionPlanId === null ? actionPlan.refetch() : frozenActionPlan.refetch()
+              )}
+              onRetryHistory={() => actionPlanHistory.refetch()}
+              onFreeze={() => createActionPlanDecision.mutate()}
+              onSelectHistory={setSelectedActionPlanId}
+              onShowCurrent={() => setSelectedActionPlanId(null)}
+            />
+          </div>
+
+          <ContinuousAutopilotCard
+            decision={
+              selectedContinuousDecisionId === null
+                ? continuousAutopilot.data
+                : frozenContinuousDecision.data
             }
-            historyErrorMessage={actionPlanHistory.error ? errorMessage(actionPlanHistory.error) : undefined}
-            freezeErrorMessage={createActionPlanDecision.error ? errorMessage(createActionPlanDecision.error) : undefined}
+            history={continuousHistory.data}
+            isLoading={
+              selectedContinuousDecisionId === null
+                ? continuousAutopilot.isLoading
+                : frozenContinuousDecision.isLoading
+            }
+            isHistoryLoading={continuousHistory.isLoading}
+            isEvaluating={evaluateContinuousAutopilot.isPending}
+            isHistorical={selectedContinuousDecisionId !== null}
+            errorMessage={
+              selectedContinuousDecisionId === null
+                ? (continuousAutopilot.error ? errorMessage(continuousAutopilot.error) : undefined)
+                : (frozenContinuousDecision.error ? errorMessage(frozenContinuousDecision.error) : undefined)
+            }
+            historyErrorMessage={continuousHistory.error ? errorMessage(continuousHistory.error) : undefined}
+            evaluationErrorMessage={
+              evaluateContinuousAutopilot.error
+                ? errorMessage(evaluateContinuousAutopilot.error)
+                : undefined
+            }
             onRetry={() => (
-              selectedActionPlanId === null ? actionPlan.refetch() : frozenActionPlan.refetch()
+              selectedContinuousDecisionId === null
+                ? continuousAutopilot.refetch()
+                : frozenContinuousDecision.refetch()
             )}
-            onRetryHistory={() => actionPlanHistory.refetch()}
-            onFreeze={() => createActionPlanDecision.mutate()}
-            onSelectHistory={setSelectedActionPlanId}
-            onShowCurrent={() => setSelectedActionPlanId(null)}
+            onRetryHistory={() => continuousHistory.refetch()}
+            onEvaluate={() => evaluateContinuousAutopilot.mutate()}
+            onSelectHistory={setSelectedContinuousDecisionId}
+            onShowCurrent={() => setSelectedContinuousDecisionId(null)}
           />
 
           <Card

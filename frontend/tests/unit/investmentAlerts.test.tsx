@@ -72,6 +72,7 @@ const alertItem = {
   subscription_id: 7,
   decision_id: DECISION_ID,
   asset: 'GARE11',
+  source_domain: 'INVESTMENT' as const,
   alert_type: 'NEW_OPPORTUNITY' as const,
   severity: 'HIGH' as const,
   delivery_channel: 'IN_APP' as const,
@@ -93,6 +94,24 @@ const detail: InvestmentAlertDetail = {
   previous_state: { action: 'WAIT', score: '70', confidence: '80', risk_level: 'LOW', trend: 'SIDEWAYS' },
   current_state: { action: 'BUY', score: '82', confidence: '92', risk_level: 'LOW', trend: 'UPTREND' },
   rule_version: 'investment-alerts-v1',
+};
+const continuousAlert = {
+  alert_id: '37000000-0000-4000-8000-000000000003',
+  subscription_id: null,
+  decision_id: null,
+  asset: null,
+  source_domain: 'CONTINUOUS_AUTOPILOT' as const,
+  source_reference: 'continuous-autopilot:51',
+  household_id: 10,
+  continuous_decision_id: 51,
+  ownership_scope: 'HOUSEHOLD' as const,
+  owner_user_id: null,
+  alert_type: 'CONTINUOUS_AUTOPILOT_CHANGE' as const,
+  severity: 'CRITICAL' as const,
+  delivery_channel: 'IN_APP' as const,
+  message: 'Seu plano financeiro mudou e requer atenção.',
+  created_at: timestamp,
+  read_at: null,
 };
 
 function renderWithClient(element: React.ReactElement) {
@@ -136,6 +155,20 @@ describe('fronteira tipada dos alertas', () => {
 
   test('não fabrica contexto ausente no detalhe', () => {
     expect(() => normalizeInvestmentAlertDetail(alertItem)).toThrow(ApiRequestError);
+  });
+
+  test('normaliza entrega A6 na mesma inbox sem fabricar ativo ou decisão de mercado', () => {
+    const normalized = normalizeInvestmentAlertsPage({
+      ...alertsPage,
+      items: [continuousAlert],
+    });
+    expect(normalized.items[0]).toMatchObject({
+      source_domain: 'CONTINUOUS_AUTOPILOT',
+      asset: null,
+      decision_id: null,
+      continuous_decision_id: 51,
+      severity: 'CRITICAL',
+    });
   });
 });
 
@@ -231,6 +264,23 @@ describe('central de alertas in-app', () => {
     expect(within(before).getByText('Aguardar')).toBeInTheDocument();
     expect(within(now).getByText('Comprar')).toBeInTheDocument();
     expect(screen.getByText(DECISION_ID)).toBeInTheDocument();
+  });
+
+  test('apresenta alerta contínuo household sem reinterpretar score de investimento', async () => {
+    serviceMock.getAlerts.mockResolvedValue({ ...alertsPage, items: [continuousAlert] });
+    serviceMock.getDetail.mockResolvedValue({
+      ...continuousAlert,
+      previous_state: { status: 'UNCHANGED', summary: 'Plano anterior' },
+      current_state: { status: 'CHANGED', summary: 'Plano atualizado' },
+      rule_version: 'continuous-autopilot-rules-v1',
+    });
+    renderWithClient(<InvestmentAlertsPanel userId={37} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Abrir alertas/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Seu plano financeiro mudou/ }));
+    expect(await screen.findByRole('heading', { name: 'Autopilot financeiro' })).toBeInTheDocument();
+    expect(screen.getByText('Plano anterior')).toBeInTheDocument();
+    expect(screen.getByText('Plano atualizado')).toBeInTheDocument();
+    expect(screen.queryByText('Score')).not.toBeInTheDocument();
   });
 
   test('marca como lido e invalida contador/inbox', async () => {

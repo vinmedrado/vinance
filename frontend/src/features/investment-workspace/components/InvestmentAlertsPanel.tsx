@@ -23,6 +23,7 @@ const severityPresentation: Record<InvestmentAlertSeverity, { label: string; ton
   INFO: { label: 'Informativo', tone: 'neutral' },
   MEDIUM: { label: 'Atenção', tone: 'warning' },
   HIGH: { label: 'Relevante', tone: 'danger' },
+  CRITICAL: { label: 'Crítico', tone: 'danger' },
 };
 
 const typeLabels: Record<InvestmentAlertType, string> = {
@@ -31,6 +32,7 @@ const typeLabels: Record<InvestmentAlertType, string> = {
   SCORE_CHANGE: 'Mudança de score',
   CONFIDENCE_CHANGE: 'Mudança de confiança',
   RISK_CHANGE: 'Mudança de risco',
+  CONTINUOUS_AUTOPILOT_CHANGE: 'Mudança no plano financeiro',
 };
 
 const actionLabels: Record<DecisionAuditAction, string> = {
@@ -81,19 +83,27 @@ function StateColumn({ title, state }: { title: string; state: InvestmentAlertSt
 
 function AlertDetail({ detail, pending, onClose, onMarkRead }: { detail: InvestmentAlertDetail; pending: boolean; onClose: () => void; onMarkRead: () => void }) {
   const severity = severityPresentation[detail.severity];
+  const isContinuous = detail.source_domain === 'CONTINUOUS_AUTOPILOT';
   return (
     <aside className="vn-alert-detail" aria-labelledby="alert-detail-title">
       <header>
-        <div><span>{typeLabels[detail.alert_type]}</span><h3 id="alert-detail-title">{detail.asset}</h3><p>{dateTime(detail.created_at)}</p></div>
+        <div><span>{typeLabels[detail.alert_type]}</span><h3 id="alert-detail-title">{detail.asset ?? 'Autopilot financeiro'}</h3><p>{dateTime(detail.created_at)}</p></div>
         <Button type="button" variant="ghost" aria-label="Fechar detalhe do alerta" onClick={onClose}><X size={17} /></Button>
       </header>
       <div className="vn-alert-detail__badges"><Badge tone={severity.tone}>{severity.label}</Badge><Badge tone={detail.read_at ? 'neutral' : 'warning'}>{detail.read_at ? 'Lido' : 'Não lido'}</Badge></div>
       <p className="vn-alert-detail__message">{detail.message}</p>
-      <div className="vn-alert-state-comparison">
-        <StateColumn title="Antes" state={detail.previous_state} />
-        <StateColumn title="Agora" state={detail.current_state} />
-      </div>
-      <div className="vn-alert-detail__trace"><span>Decisão relacionada</span><code>{detail.decision_id}</code></div>
+      {isContinuous ? (
+        <div className="vn-alert-state-comparison">
+          <section className="vn-alert-state-column"><h4>Antes</h4><p>{String(detail.previous_state.summary ?? detail.previous_state.status ?? 'Sem plano anterior')}</p></section>
+          <section className="vn-alert-state-column"><h4>Agora</h4><p>{String(detail.current_state.summary ?? detail.current_state.status ?? 'Plano atualizado')}</p></section>
+        </div>
+      ) : (
+        <div className="vn-alert-state-comparison">
+          <StateColumn title="Antes" state={detail.previous_state} />
+          <StateColumn title="Agora" state={detail.current_state} />
+        </div>
+      )}
+      <div className="vn-alert-detail__trace"><span>Decisão relacionada</span><code>{detail.source_reference ?? detail.decision_id ?? detail.continuous_decision_id}</code></div>
       {!detail.read_at && <Button type="button" disabled={pending} onClick={onMarkRead}><CheckCheck size={17} /> {pending ? 'Marcando...' : 'Marcar como lido'}</Button>}
     </aside>
   );
@@ -171,7 +181,7 @@ export function InvestmentAlertsPanel({ userId }: Props) {
                       return (
                         <li key={item.alert_id}>
                           <button type="button" aria-current={selectedId === item.alert_id ? 'true' : undefined} onClick={() => setSelectedId(item.alert_id)}>
-                            <span className="vn-alert-item__top"><strong>{item.asset}</strong><Badge tone={severity.tone}>{severity.label}</Badge></span>
+                            <span className="vn-alert-item__top"><strong>{item.asset ?? 'Autopilot financeiro'}</strong><Badge tone={severity.tone}>{severity.label}</Badge></span>
                             <span className="vn-alert-item__type">{typeLabels[item.alert_type]}{!item.read_at && <i aria-label="Não lido" />}</span>
                             <span className="vn-alert-item__message">{item.message}</span>
                             <span className="vn-alert-item__time"><Clock3 size={14} aria-hidden="true" /> {dateTime(item.created_at)}</span>

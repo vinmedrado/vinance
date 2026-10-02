@@ -625,6 +625,145 @@ export type ActionPlanHistory = {
   total: number;
 };
 
+export type ContinuousAutopilotStatus =
+  | 'UP_TO_DATE'
+  | 'REEVALUATION_REQUIRED'
+  | 'EVALUATING'
+  | 'CHANGED'
+  | 'UNCHANGED'
+  | 'BLOCKED'
+  | 'FAILED';
+
+export type ContinuousMateriality = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type ContinuousAlertDecision =
+  | 'NO_ALERT'
+  | 'INFORMATIONAL'
+  | 'ACTION_RECOMMENDED'
+  | 'IMPORTANT'
+  | 'CRITICAL';
+export type ContinuousChangeCategory =
+  | 'FINANCIAL_DATA'
+  | 'MARKET_DATA'
+  | 'PROFILE'
+  | 'GOALS'
+  | 'DEBT'
+  | 'ASSETS'
+  | 'HOUSEHOLD'
+  | 'POLICY'
+  | 'ALLOCATION'
+  | 'INVESTMENT_OPPORTUNITY'
+  | 'DATA_QUALITY'
+  | 'FRESHNESS';
+
+export type ContinuousDetectedChange = {
+  change_id: string;
+  change_type: string;
+  category: ContinuousChangeCategory;
+  entity_type: string;
+  entity_id: number | string | null;
+  previous_value: unknown;
+  current_value: unknown;
+  delta: MoneyValue;
+  delta_percent: MoneyValue;
+  severity: 'INFO' | 'WARNING' | 'IMPORTANT' | 'CRITICAL';
+  materiality: ContinuousMateriality;
+  reason: string;
+  source: string;
+  observed_at: string;
+  as_of: string;
+  previous_fingerprint: string | null;
+  current_fingerprint: string | null;
+  ownership_scope: OwnershipScope | null;
+  owner_user_id: number | string | null;
+};
+
+export type ContinuousPlanDiff = {
+  previous_action_plan_id: number | null;
+  current_action_plan_id: number | null;
+  added_actions: Array<Record<string, unknown>>;
+  removed_actions: Array<Record<string, unknown>>;
+  changed_actions: Array<Record<string, unknown>>;
+  unchanged_actions: string[];
+  financial_delta: MoneyValue;
+  investment_delta: MoneyValue;
+  hold_cash_delta: MoneyValue;
+  priority_changes: Array<Record<string, unknown>>;
+  status_change: Record<string, unknown> | null;
+  materiality: ContinuousMateriality;
+  summary: string;
+};
+
+export type ContinuousAutopilotAlert = {
+  severity: ContinuousAlertDecision;
+  category: ContinuousChangeCategory | null;
+  title: string;
+  summary: string;
+  what_changed: string[];
+  why_it_matters: string;
+  recommended_action: string;
+  previous_reference: Record<string, unknown>;
+  current_reference: Record<string, unknown>;
+  dedupe_key: string;
+};
+
+export type ContinuousAutopilot = {
+  continuous_decision_id: number | null;
+  household_id: number;
+  previous_action_plan_id: number | null;
+  current_action_plan_id: number | null;
+  engine_version: 'continuous-autopilot-v1' | string;
+  rules_version: 'continuous-autopilot-rules-v1' | string;
+  status: ContinuousAutopilotStatus;
+  materiality: ContinuousMateriality;
+  alert_decision: ContinuousAlertDecision;
+  reevaluation_scope: 'NONE' | 'FULL_CHAIN' | 'INVESTMENT_CHAIN';
+  change_categories: ContinuousChangeCategory[];
+  detected_changes: ContinuousDetectedChange[];
+  plan_diff: ContinuousPlanDiff;
+  alert: ContinuousAutopilotAlert | null;
+  blockers: ActionPlanMessage[];
+  warnings: ActionPlanMessage[];
+  missing_information: ActionPlanMessage[];
+  evidence: Array<Record<string, unknown>>;
+  rule_traces: Array<Record<string, unknown>>;
+  ruleset: Record<string, unknown>;
+  previous_fingerprint: string | null;
+  current_fingerprint: string | null;
+  ruleset_fingerprint: string;
+  decision_fingerprint: string;
+  dedupe_key: string;
+  generated_at: string;
+  observed_at: string;
+  created_at: string | null;
+  operational_status?: ContinuousAutopilotStatus | null;
+  pending_categories?: ContinuousChangeCategory[];
+  last_evaluated_at?: string | null;
+  last_successful_at?: string | null;
+  operational_warnings?: ActionPlanMessage[];
+};
+
+export type ContinuousAutopilotSummary = {
+  continuous_decision_id: number;
+  household_id: number;
+  previous_action_plan_id: number | null;
+  current_action_plan_id: number;
+  status: ContinuousAutopilotStatus;
+  materiality: ContinuousMateriality;
+  alert_decision: ContinuousAlertDecision;
+  title: string;
+  summary: string;
+  change_count: number;
+  decision_fingerprint: string;
+  observed_at: string;
+  generated_at: string;
+  created_at: string;
+};
+
+export type ContinuousAutopilotHistory = {
+  items: ContinuousAutopilotSummary[];
+  total: number;
+};
+
 export type IncomePayload = {
   ownership_scope: OwnershipScope;
   description: string;

@@ -264,9 +264,10 @@ export type InvestmentAlertType =
   | 'ACTION_CHANGE'
   | 'SCORE_CHANGE'
   | 'CONFIDENCE_CHANGE'
-  | 'RISK_CHANGE';
+  | 'RISK_CHANGE'
+  | 'CONTINUOUS_AUTOPILOT_CHANGE';
 
-export type InvestmentAlertSeverity = 'INFO' | 'MEDIUM' | 'HIGH';
+export type InvestmentAlertSeverity = 'INFO' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export type InvestmentAlertSubscription = {
   id: number;
@@ -327,8 +328,14 @@ export type InvestmentAlertState = Record<string, unknown> & {
 export type InvestmentAlertItem = {
   alert_id: string;
   subscription_id?: number | null;
-  decision_id: string;
-  asset: string;
+  decision_id?: string | null;
+  asset?: string | null;
+  source_domain: 'INVESTMENT' | 'CONTINUOUS_AUTOPILOT';
+  source_reference?: string | null;
+  household_id?: number | null;
+  continuous_decision_id?: number | null;
+  ownership_scope?: 'PERSONAL' | 'HOUSEHOLD' | null;
+  owner_user_id?: number | null;
   alert_type: InvestmentAlertType;
   severity: InvestmentAlertSeverity;
   delivery_channel: 'IN_APP';

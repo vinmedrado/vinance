@@ -4,6 +4,7 @@ import { useSessionToken } from '../../auth/hooks/useAuth';
 import {
   createActionPlanDecision,
   createCapitalAllocationDecision,
+  evaluateContinuousAutopilot,
   createFinancialPolicyDecision,
   createInvestmentOrchestrationDecision,
   createExpense,
@@ -15,7 +16,10 @@ import {
   getCapitalAllocationDecision,
   getCapitalAllocationFromPolicy,
   getCapitalAllocationHistory,
+  getContinuousAutopilotDecision,
+  getContinuousAutopilotHistory,
   getCurrentCapitalAllocation,
+  getCurrentContinuousAutopilot,
   getCurrentActionPlan,
   getCurrentFinancialPolicy,
   getCurrentFinancialState,
@@ -59,6 +63,11 @@ export const actionPlanQueryKey = (
   sessionToken: string | null,
   ...parts: FinancialQueryPart[]
 ) => ['action-plan', sessionToken, ...parts] as const;
+
+export const continuousAutopilotQueryKey = (
+  sessionToken: string | null,
+  ...parts: FinancialQueryPart[]
+) => ['continuous-autopilot', sessionToken, ...parts] as const;
 
 export function useHouseholds() {
   const sessionToken = useSessionToken();
@@ -284,6 +293,44 @@ export function useActionPlanDecision(
   });
 }
 
+export function useCurrentContinuousAutopilot(householdId: number | null) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: continuousAutopilotQueryKey(sessionToken, 'current', householdId),
+    queryFn: () => getCurrentContinuousAutopilot(householdId as number),
+    enabled: householdId !== null,
+  });
+}
+
+export function useContinuousAutopilotHistory(householdId: number | null) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: continuousAutopilotQueryKey(sessionToken, 'history', householdId),
+    queryFn: () => getContinuousAutopilotHistory(householdId as number),
+    enabled: householdId !== null,
+  });
+}
+
+export function useContinuousAutopilotDecision(
+  householdId: number | null,
+  decisionId: number | null,
+) {
+  const sessionToken = useSessionToken();
+  return useQuery({
+    queryKey: continuousAutopilotQueryKey(
+      sessionToken,
+      'history',
+      householdId,
+      decisionId,
+    ),
+    queryFn: () => getContinuousAutopilotDecision(
+      householdId as number,
+      decisionId as number,
+    ),
+    enabled: householdId !== null && decisionId !== null,
+  });
+}
+
 export function useFinancialStateHistory(householdId: number | null) {
   const sessionToken = useSessionToken();
   return useQuery({
@@ -326,6 +373,7 @@ export function useCreateHouseholdIncome(householdId: number | null) {
       queryClient.invalidateQueries({ queryKey: capitalAllocationQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: investmentOrchestrationQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: actionPlanQueryKey(sessionToken, 'current', householdId) });
+      queryClient.invalidateQueries({ queryKey: continuousAutopilotQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: ['financial'] });
     },
   });
@@ -346,6 +394,7 @@ export function useCreateHouseholdExpense(householdId: number | null) {
       queryClient.invalidateQueries({ queryKey: capitalAllocationQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: investmentOrchestrationQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: actionPlanQueryKey(sessionToken, 'current', householdId) });
+      queryClient.invalidateQueries({ queryKey: continuousAutopilotQueryKey(sessionToken, 'current', householdId) });
       queryClient.invalidateQueries({ queryKey: ['financial'] });
     },
   });
@@ -379,6 +428,12 @@ function actionPlanIdempotencyKey(householdId: number) {
   const randomPart = globalThis.crypto?.randomUUID?.()
     ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `action-plan-${householdId}-${randomPart}`;
+}
+
+function continuousAutopilotIdempotencyKey(householdId: number) {
+  const randomPart = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `continuous-autopilot-${householdId}-${randomPart}`;
 }
 
 export function useCreateFinancialPolicyDecision(householdId: number | null) {
@@ -643,6 +698,69 @@ export function useCreateActionPlanDecision(householdId: number | null) {
         capitalAllocationQueryKey(completedSessionToken, 'history', completedHouseholdId),
         financialPolicyQueryKey(completedSessionToken, 'history', completedHouseholdId),
         financialStateQueryKey(completedSessionToken, 'history', completedHouseholdId),
+      ]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+  });
+}
+
+export function useEvaluateContinuousAutopilot(householdId: number | null) {
+  const queryClient = useQueryClient();
+  const sessionToken = useSessionToken();
+  const pendingRequest = useRef<{
+    householdId: number;
+    key: string;
+    sessionToken: string | null;
+  } | null>(null);
+  return useMutation({
+    mutationFn: () => {
+      if (householdId === null) throw new Error('Household não selecionado');
+      if (
+        !pendingRequest.current
+        || pendingRequest.current.householdId !== householdId
+        || pendingRequest.current.sessionToken !== sessionToken
+      ) {
+        pendingRequest.current = {
+          householdId,
+          key: continuousAutopilotIdempotencyKey(householdId),
+          sessionToken,
+        };
+      }
+      return evaluateContinuousAutopilot(householdId, pendingRequest.current.key);
+    },
+    onSuccess: (decision) => {
+      const completedRequest = pendingRequest.current;
+      pendingRequest.current = null;
+      const completedSessionToken = completedRequest?.sessionToken ?? sessionToken;
+      queryClient.setQueryData(
+        continuousAutopilotQueryKey(
+          completedSessionToken,
+          'current',
+          decision.household_id,
+        ),
+        decision,
+      );
+      if (decision.continuous_decision_id !== null) {
+        queryClient.setQueryData(
+          continuousAutopilotQueryKey(
+            completedSessionToken,
+            'history',
+            decision.household_id,
+            decision.continuous_decision_id,
+          ),
+          decision,
+        );
+      }
+      for (const key of [
+        continuousAutopilotQueryKey(completedSessionToken, 'history', decision.household_id),
+        actionPlanQueryKey(completedSessionToken, 'current', decision.household_id),
+        actionPlanQueryKey(completedSessionToken, 'history', decision.household_id),
+        investmentOrchestrationQueryKey(completedSessionToken, 'current', decision.household_id),
+        investmentOrchestrationQueryKey(completedSessionToken, 'history', decision.household_id),
+        capitalAllocationQueryKey(completedSessionToken, 'current', decision.household_id),
+        financialPolicyQueryKey(completedSessionToken, 'current', decision.household_id),
+        financialStateQueryKey(completedSessionToken, 'current', decision.household_id),
       ]) {
         queryClient.invalidateQueries({ queryKey: key });
       }
