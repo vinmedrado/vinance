@@ -285,4 +285,3 @@ def project_decision_for_user(
     result["warnings"] = []
     result["missing_information"] = []
     return result
-

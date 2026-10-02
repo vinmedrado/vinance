@@ -85,4 +85,3 @@ def test_personal_household_projection_is_not_applied_to_individual_household() 
     )
     assert projected == canonical
     assert projected is not canonical
-
