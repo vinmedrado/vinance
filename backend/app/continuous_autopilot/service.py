@@ -429,10 +429,16 @@ async def mark_user_households_dirty(
     category: str,
     dirty_at: datetime | None = None,
 ) -> None:
+    """Mark only the user's PERSONAL household for a personal profile change."""
+
     result = await session.execute(
-        select(HouseholdMember.household_id).where(
+        select(HouseholdMember.household_id)
+        .join(Household, Household.id == HouseholdMember.household_id)
+        .where(
             HouseholdMember.user_id == user_id,
             HouseholdMember.status == "ACTIVE",
+            Household.status == "ACTIVE",
+            Household.household_type == "PERSONAL",
         )
     )
     for household_id in sorted({int(value) for value in result.scalars().all()}):

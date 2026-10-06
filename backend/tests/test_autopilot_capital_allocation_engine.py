@@ -49,6 +49,30 @@ def test_ready_state_allocates_only_proven_monthly_residual() -> None:
     CapitalAllocationRead.model_validate(result)
 
 
+def test_shared_privacy_state_uses_explicit_household_capital_pool() -> None:
+    inputs = _complete_inputs()
+    inputs["privacy_contract_version"] = "household-privacy-v1"
+    inputs["decision_scope"] = "HOUSEHOLD_SHARED"
+    inputs["household"]["household_type"] = "SHARED"
+    inputs["members"].append({"user_id": 2, "full_name": "Bia", "status": "ACTIVE"})
+    inputs["financial_profiles"] = []
+    for domain in ("incomes", "expenses", "liabilities", "assets", "goals"):
+        for record in inputs[domain]:
+            record["ownership_scope"] = "HOUSEHOLD"
+
+    state, _policy, result = _chain(inputs)
+
+    assert state["decision_scope"] == "HOUSEHOLD_SHARED"
+    assert state["member_views"] == []
+    assert result["allocatable_capital"] == state["metrics"]["investment_capacity"]
+    assert result["member_impacts"] == []
+    assert not any(
+        item["code"] == "CAPITAL_OWNERSHIP_BREAKDOWN_INCOMPLETE"
+        for item in result["missing_information"]
+    )
+    assert result["allocated_capital"] <= result["allocatable_capital"]
+
+
 def test_engine_is_deterministic_and_does_not_mutate_inputs() -> None:
     inputs = _complete_inputs()
     state = calculate_financial_state(inputs, evaluated_at=NOW)

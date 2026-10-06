@@ -59,7 +59,7 @@ async def test_profile_absence_is_missing_and_never_defaults_to_moderate() -> No
 
 
 @pytest.mark.asyncio
-async def test_mixed_household_profiles_choose_most_conservative_explicitly() -> None:
+async def test_legacy_pre_privacy_profiles_keep_replay_behavior() -> None:
     profiles = [
         SimpleNamespace(user_id=1, risk_profile="AGGRESSIVE", updated_at=NOW),
         SimpleNamespace(user_id=2, risk_profile="CONSERVATIVE", updated_at=NOW),
@@ -69,6 +69,55 @@ async def test_mixed_household_profiles_choose_most_conservative_explicitly() ->
     )
     assert result["status"] == "MIXED"
     assert result["effective_profile"] == "CONSERVATIVE"
+
+
+@pytest.mark.asyncio
+async def test_personal_privacy_contract_uses_frozen_profile_without_database_read() -> None:
+    inputs = _inputs()
+    inputs.update(
+        {
+            "privacy_contract_version": "household-privacy-v1",
+            "decision_scope": "PERSONAL",
+            "household": {"household_type": "PERSONAL"},
+            "financial_profiles": [
+                {
+                    "user_id": 1,
+                    "risk_profile": "CONSERVATIVE",
+                    "updated_at": NOW,
+                }
+            ],
+        }
+    )
+
+    result = await context.load_profile_context(_Session([]), normalized_inputs=inputs)
+
+    assert result["status"] == "COMPLETE"
+    assert result["effective_profile"] == "CONSERVATIVE"
+    assert result["members"][0]["user_id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_shared_privacy_contract_never_reads_or_identifies_personal_profiles() -> None:
+    inputs = _inputs((1, 2))
+    inputs.update(
+        {
+            "privacy_contract_version": "household-privacy-v1",
+            "decision_scope": "HOUSEHOLD_SHARED",
+            "household": {"household_type": "SHARED"},
+            "financial_profiles": [
+                {"user_id": 1, "risk_profile": "AGGRESSIVE", "updated_at": NOW},
+                {"user_id": 2, "risk_profile": "CONSERVATIVE", "updated_at": NOW},
+            ],
+        }
+    )
+
+    result = await context.load_profile_context(_Session([]), normalized_inputs=inputs)
+
+    assert result["status"] == "MISSING"
+    assert result["effective_profile"] is None
+    assert result["members"] == []
+    assert result["missing_member_user_ids"] == []
+    assert result["source"] == "household_profile.unavailable"
 
 
 @pytest.mark.asyncio

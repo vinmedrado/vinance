@@ -29,13 +29,17 @@ from backend.app.financial_state.models import (
 )
 from backend.app.financial_state.schemas import (
     AssetCreate,
+    AssetUpdate,
     ExpenseCreate,
+    ExpenseUpdate,
     GoalCreate,
+    GoalUpdate,
     HouseholdCreate,
     HouseholdMemberCreate,
     IncomeCreate,
     IncomeUpdate,
     LiabilityCreate,
+    LiabilityUpdate,
 )
 
 
@@ -285,7 +289,7 @@ async def test_real_postgres_individual_couple_ownership_and_immutable_snapshots
                     ownership_scope="HOUSEHOLD",
                 ),
             )
-            with pytest.raises(service.HouseholdPermissionError):
+            with pytest.raises(service.FinancialResourceNotFoundError):
                 await service.update_resource(
                     session,
                     Income,
@@ -338,6 +342,204 @@ async def test_real_postgres_individual_couple_ownership_and_immutable_snapshots
             with pytest.raises(DBAPIError):
                 async with session.begin_nested():
                     await session.execute(text("TRUNCATE financial_state_snapshots"))
+        finally:
+            await session.close()
+            await outer.rollback()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("model", "personal_payload", "household_payload", "share_update", "private_update"),
+    [
+        (
+            Income,
+            IncomeCreate(description="B private income", amount=Decimal("5111"), income_type="salary", received_at=date(2026, 9, 8), is_recurring=True, ownership_scope="PERSONAL"),
+            IncomeCreate(description="Shared income", amount=Decimal("1000"), income_type="rent", received_at=date(2026, 9, 8), is_recurring=True, ownership_scope="HOUSEHOLD"),
+            IncomeUpdate(ownership_scope="HOUSEHOLD"),
+            IncomeUpdate(ownership_scope="PERSONAL"),
+        ),
+        (
+            Expense,
+            ExpenseCreate(description="B private expense", amount=Decimal("1444"), category="private", due_date=date(2026, 9, 8), is_recurring=True, expense_nature="FIXED", ownership_scope="PERSONAL"),
+            ExpenseCreate(description="Shared expense", amount=Decimal("600"), category="shared", due_date=date(2026, 9, 8), is_recurring=True, expense_nature="FIXED", ownership_scope="HOUSEHOLD"),
+            ExpenseUpdate(ownership_scope="HOUSEHOLD"),
+            ExpenseUpdate(ownership_scope="PERSONAL"),
+        ),
+        (
+            FinancialLiability,
+            LiabilityCreate(name="B private debt", liability_type="loan", current_balance=Decimal("9222"), ownership_scope="PERSONAL"),
+            LiabilityCreate(name="Shared debt", liability_type="loan", current_balance=Decimal("200"), ownership_scope="HOUSEHOLD"),
+            LiabilityUpdate(ownership_scope="HOUSEHOLD"),
+            LiabilityUpdate(ownership_scope="PERSONAL"),
+        ),
+        (
+            OwnedAsset,
+            AssetCreate(name="B private asset", asset_class="CASH", current_value=Decimal("8111"), ownership_scope="PERSONAL"),
+            AssetCreate(name="Shared reserve", asset_class="EMERGENCY_RESERVE", current_value=Decimal("700"), ownership_scope="HOUSEHOLD"),
+            AssetUpdate(ownership_scope="HOUSEHOLD"),
+            AssetUpdate(ownership_scope="PERSONAL"),
+        ),
+        (
+            FinancialGoal,
+            GoalCreate(name="B private goal 7444", target_amount=Decimal("7444"), priority="HIGH", ownership_scope="PERSONAL"),
+            GoalCreate(name="Shared goal", target_amount=Decimal("2000"), priority="HIGH", ownership_scope="HOUSEHOLD"),
+            GoalUpdate(ownership_scope="HOUSEHOLD"),
+            GoalUpdate(ownership_scope="PERSONAL"),
+        ),
+    ],
+)
+async def test_real_postgres_personal_is_owner_only_for_every_resource(
+    model, personal_payload, household_payload, share_update, private_update
+) -> None:
+    assert TEST_DATABASE_URL is not None
+    engine = create_async_engine(TEST_DATABASE_URL)
+    async with engine.connect() as connection:
+        outer = await connection.begin()
+        session = AsyncSession(
+            bind=connection,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        try:
+            ana, _, _ = await _user_with_personal_household(session, label="Privacy-A")
+            bia, _, _ = await _user_with_personal_household(session, label="Privacy-B")
+            shared = await service.create_household(
+                session,
+                user_id=ana.id,
+                payload=HouseholdCreate(name="Privacy shared"),
+            )
+            await service.add_member(
+                session,
+                household_id=shared.id,
+                user_id=ana.id,
+                payload=HouseholdMemberCreate(email=bia.email),
+            )
+            private = await service.create_resource(
+                session,
+                model,
+                household_id=shared.id,
+                user_id=bia.id,
+                payload=personal_payload,
+            )
+            shared_record = await service.create_resource(
+                session,
+                model,
+                household_id=shared.id,
+                user_id=ana.id,
+                payload=household_payload,
+            )
+
+            assert [item.id for item in await service.list_resources(session, model, household_id=shared.id, user_id=ana.id)] == [shared_record.id]
+            assert {item.id for item in await service.list_resources(session, model, household_id=shared.id, user_id=bia.id)} == {private.id, shared_record.id}
+            with pytest.raises(service.FinancialResourceNotFoundError):
+                await service.get_resource(session, model, household_id=shared.id, record_id=private.id, user_id=ana.id)
+            with pytest.raises(service.FinancialResourceNotFoundError):
+                await service.update_resource(session, model, household_id=shared.id, record_id=private.id, user_id=ana.id, payload=share_update)
+            with pytest.raises(service.FinancialResourceNotFoundError):
+                await service.delete_resource(session, model, household_id=shared.id, record_id=private.id, user_id=ana.id)
+
+            shared_private = await service.update_resource(
+                session,
+                model,
+                household_id=shared.id,
+                record_id=private.id,
+                user_id=bia.id,
+                payload=share_update,
+            )
+            assert shared_private.ownership_scope == "HOUSEHOLD"
+            assert (await service.get_resource(session, model, household_id=shared.id, record_id=private.id, user_id=ana.id)).id == private.id
+            with pytest.raises(service.HouseholdPermissionError):
+                await service.update_resource(session, model, household_id=shared.id, record_id=private.id, user_id=ana.id, payload=private_update)
+
+            private_again = await service.update_resource(
+                session,
+                model,
+                household_id=shared.id,
+                record_id=private.id,
+                user_id=bia.id,
+                payload=private_update,
+            )
+            assert private_again.ownership_scope == "PERSONAL"
+            with pytest.raises(service.FinancialResourceNotFoundError):
+                await service.get_resource(session, model, household_id=shared.id, record_id=private.id, user_id=ana.id)
+        finally:
+            await session.close()
+            await outer.rollback()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_shared_state_and_snapshot_cannot_infer_personal_income() -> None:
+    assert TEST_DATABASE_URL is not None
+    engine = create_async_engine(TEST_DATABASE_URL)
+    async with engine.connect() as connection:
+        outer = await connection.begin()
+        session = AsyncSession(
+            bind=connection,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        try:
+            ana, _, _ = await _user_with_personal_household(session, label="Inference-A")
+            bia, _, _ = await _user_with_personal_household(session, label="Inference-B")
+            shared = await service.create_household(
+                session,
+                user_id=ana.id,
+                payload=HouseholdCreate(name="Inference shared"),
+            )
+            await service.add_member(
+                session,
+                household_id=shared.id,
+                user_id=ana.id,
+                payload=HouseholdMemberCreate(email=bia.email),
+            )
+            for owner, amount, scope, description in (
+                (ana, "5111", "PERSONAL", "A private 5111"),
+                (bia, "3222", "PERSONAL", "B private 3222"),
+                (ana, "1000", "HOUSEHOLD", "Shared 1000"),
+            ):
+                await service.create_resource(
+                    session,
+                    Income,
+                    household_id=shared.id,
+                    user_id=owner.id,
+                    payload=IncomeCreate(
+                        description=description,
+                        amount=Decimal(amount),
+                        income_type="salary",
+                        received_at=date(2026, 9, 8),
+                        is_recurring=True,
+                        ownership_scope=scope,
+                    ),
+                )
+
+            inputs = await service.build_normalized_inputs(
+                session, household_id=shared.id, user_id=bia.id
+            )
+            state = await service.current_financial_state(
+                session,
+                household_id=shared.id,
+                user_id=bia.id,
+                evaluated_at=NOW,
+            )
+            snapshot = await service.create_snapshot(
+                session,
+                household_id=shared.id,
+                user_id=bia.id,
+                idempotency_key=f"privacy-{uuid4()}",
+                evaluated_at=NOW,
+            )
+
+            assert inputs["privacy_contract_version"] == "household-privacy-v1"
+            assert inputs["decision_scope"] == "HOUSEHOLD_SHARED"
+            assert [item["amount"] for item in inputs["incomes"]] == [Decimal("1000")]
+            assert inputs["financial_profiles"] == []
+            assert state["metrics"]["recurring_monthly_income"] == Decimal("1000.00")
+            assert state["member_views"] == []
+            frozen = str(snapshot.normalized_inputs) + str(snapshot.metrics) + str(snapshot.member_views)
+            assert "5111" not in frozen
+            assert "3222" not in frozen
         finally:
             await session.close()
             await outer.rollback()

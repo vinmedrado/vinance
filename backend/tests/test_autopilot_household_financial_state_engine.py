@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal
+import json
 
 from backend.app.financial_state.engine import ENGINE_VERSION, calculate_financial_state
 
@@ -77,7 +78,7 @@ def test_individual_complete_state_uses_documented_formulas() -> None:
     assert result["goals"][0]["funding_gap"] == Decimal("7500.00")
 
 
-def test_couple_keeps_member_views_distinct_and_counts_shared_records_once() -> None:
+def test_legacy_pre_privacy_input_replays_member_views_without_reinterpretation() -> None:
     data = _complete_individual()
     data["household"]["household_type"] = "SHARED"
     data["members"].append({"user_id": 2, "full_name": "Bia", "status": "ACTIVE"})
@@ -109,6 +110,54 @@ def test_couple_keeps_member_views_distinct_and_counts_shared_records_once() -> 
     assert member_metrics[2]["recurring_monthly_income"] == Decimal("3000.00")
     assert member_metrics[1]["total_expenses"] == Decimal("1000.00")
     assert member_metrics[2]["total_expenses"] == Decimal("500.00")
+
+
+def test_shared_privacy_contract_uses_only_explicit_household_records() -> None:
+    data = _complete_individual()
+    data["privacy_contract_version"] = "household-privacy-v1"
+    data["decision_scope"] = "HOUSEHOLD_SHARED"
+    data["household"]["household_type"] = "SHARED"
+    data["members"].append({"user_id": 2, "full_name": "Bia", "status": "ACTIVE"})
+    data["incomes"] = [
+        {**_record(1, 1), "amount": Decimal("5111"), "is_recurring": True, "received_at": "2026-09-05"},
+        {**_record(2, 2), "amount": Decimal("3222"), "is_recurring": True, "received_at": "2026-09-05"},
+        {**_record(3, 1, "HOUSEHOLD"), "amount": Decimal("1000"), "is_recurring": True, "received_at": "2026-09-05"},
+    ]
+    data["expenses"] = [
+        {**_record(1, 1), "amount": Decimal("1444"), "expense_nature": "FIXED", "due_date": "2026-09-05"},
+        {**_record(2, 2), "amount": Decimal("733"), "expense_nature": "VARIABLE", "due_date": "2026-09-05"},
+        {**_record(3, 1, "HOUSEHOLD"), "amount": Decimal("600"), "expense_nature": "FIXED", "due_date": "2026-09-05"},
+    ]
+    data["assets"] = [
+        {**_record(1, 1), "asset_class": "CASH", "current_value": Decimal("8111"), "value_as_of": "2026-09-07", "status": "ACTIVE"},
+        {**_record(2, 1, "HOUSEHOLD"), "asset_class": "EMERGENCY_RESERVE", "current_value": Decimal("700"), "value_as_of": "2026-09-07", "status": "ACTIVE"},
+    ]
+    data["liabilities"] = [
+        {**_record(1, 2), "current_balance": Decimal("9222"), "monthly_payment": Decimal("333"), "balance_as_of": "2026-09-07", "status": "ACTIVE"},
+        {**_record(2, 1, "HOUSEHOLD"), "current_balance": Decimal("200"), "monthly_payment": Decimal("50"), "balance_as_of": "2026-09-07", "status": "ACTIVE"},
+    ]
+    data["goals"] = [
+        {**_record(1, 2), "name": "Privado-7444", "target_amount": Decimal("7444"), "current_amount": Decimal("0"), "deadline": None, "priority": "HIGH", "status": "ACTIVE"},
+        {**_record(2, 1, "HOUSEHOLD"), "name": "Compartilhado", "target_amount": Decimal("2000"), "current_amount": Decimal("500"), "deadline": None, "priority": "HIGH", "status": "ACTIVE"},
+    ]
+    data["financial_profiles"] = [
+        {"id": 1, "user_id": 1, "monthly_salary": Decimal("9555"), "emergency_reserve": Decimal("8666"), "updated_at": NOW},
+        {"id": 2, "user_id": 2, "monthly_salary": Decimal("6555"), "emergency_reserve": Decimal("5666"), "updated_at": NOW},
+    ]
+
+    result = calculate_financial_state(data, evaluated_at=NOW)
+
+    assert result["privacy_contract_version"] == "household-privacy-v1"
+    assert result["decision_scope"] == "HOUSEHOLD_SHARED"
+    assert result["metrics"]["recurring_monthly_income"] == Decimal("1000.00")
+    assert result["metrics"]["total_expenses"] == Decimal("600.00")
+    assert result["metrics"]["total_assets"] == Decimal("700.00")
+    assert result["metrics"]["total_liabilities"] == Decimal("200.00")
+    assert result["member_views"] == []
+    assert [goal["name"] for goal in result["goals"]] == ["Compartilhado"]
+    serialized = json.dumps(result, default=str, sort_keys=True)
+    for private_sentinel in ("5111", "3222", "1444", "733", "8111", "9222", "7444", "9555", "8666", "6555", "5666"):
+        assert private_sentinel not in serialized
 
 
 def test_explicit_zero_is_preserved_while_absent_value_stays_none() -> None:

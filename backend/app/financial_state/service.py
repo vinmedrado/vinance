@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any, TypeVar
 
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +51,10 @@ class FinancialStateValidationError(FinancialStateDomainError):
 
 ResourceModel = TypeVar("ResourceModel", Income, Expense, FinancialLiability, OwnedAsset, FinancialGoal)
 
+PRIVACY_CONTRACT_VERSION = "household-privacy-v1"
+PERSONAL_DECISION_SCOPE = "PERSONAL"
+SHARED_DECISION_SCOPE = "HOUSEHOLD_SHARED"
+
 _RESOURCE_CHANGE_CATEGORY: dict[type[Any], str] = {
     Income: "FINANCIAL_DATA",
     Expense: "FINANCIAL_DATA",
@@ -71,6 +75,23 @@ async def _mark_continuous_dirty(
         household_id=household_id,
         category=category,
     )
+
+
+async def _mark_resource_dirty_if_shared_visible(
+    session: AsyncSession,
+    *,
+    household: Household,
+    category: str,
+    ownership_scopes: set[str],
+) -> None:
+    """Do not expose private activity through a shared reevaluation marker."""
+
+    if household.household_type == "PERSONAL" or "HOUSEHOLD" in ownership_scopes:
+        await _mark_continuous_dirty(
+            session,
+            household_id=household.id,
+            category=category,
+        )
 
 
 async def get_household_access(
@@ -432,18 +453,37 @@ async def remove_member(
     )
 
 
-async def _get_record(
+def _visible_resource_clause(model: type[ResourceModel], *, user_id: int) -> Any:
+    """PERSONAL is owner-only; HOUSEHOLD is visible to active members."""
+
+    return or_(
+        model.ownership_scope == "HOUSEHOLD",
+        and_(
+            model.ownership_scope == "PERSONAL",
+            model.user_id == user_id,
+        ),
+    )
+
+
+async def _get_visible_record(
     session: AsyncSession,
     model: type[ResourceModel],
     *,
     household_id: int,
     record_id: int,
+    user_id: int,
 ) -> ResourceModel:
     result = await session.execute(
-        select(model).where(model.id == record_id, model.household_id == household_id)
+        select(model).where(
+            model.id == record_id,
+            model.household_id == household_id,
+            _visible_resource_clause(model, user_id=user_id),
+        )
     )
     record = result.scalar_one_or_none()
     if record is None:
+        # A private record owned by another member is indistinguishable from
+        # a missing or cross-household resource.
         raise FinancialResourceNotFoundError("financial resource not found")
     return record
 
@@ -471,7 +511,9 @@ async def create_resource(
     user_id: int,
     payload: Any,
 ) -> ResourceModel:
-    await get_household_access(session, household_id=household_id, user_id=user_id)
+    household, _ = await get_household_access(
+        session, household_id=household_id, user_id=user_id
+    )
     values = payload.model_dump()
     if model is OwnedAsset:
         await _validate_catalog_reference(
@@ -479,10 +521,11 @@ async def create_resource(
         )
     record = model(household_id=household_id, user_id=user_id, **values)
     session.add(record)
-    await _mark_continuous_dirty(
+    await _mark_resource_dirty_if_shared_visible(
         session,
-        household_id=household_id,
+        household=household,
         category=_RESOURCE_CHANGE_CATEGORY[model],
+        ownership_scopes={str(values["ownership_scope"])},
     )
     await session.commit()
     await session.refresh(record)
@@ -498,7 +541,12 @@ async def list_resources(
 ) -> list[ResourceModel]:
     await get_household_access(session, household_id=household_id, user_id=user_id)
     result = await session.execute(
-        select(model).where(model.household_id == household_id).order_by(model.id.desc())
+        select(model)
+        .where(
+            model.household_id == household_id,
+            _visible_resource_clause(model, user_id=user_id),
+        )
+        .order_by(model.id.desc())
     )
     return list(result.scalars().all())
 
@@ -512,8 +560,12 @@ async def get_resource(
     user_id: int,
 ) -> ResourceModel:
     await get_household_access(session, household_id=household_id, user_id=user_id)
-    return await _get_record(
-        session, model, household_id=household_id, record_id=record_id
+    return await _get_visible_record(
+        session,
+        model,
+        household_id=household_id,
+        record_id=record_id,
+        user_id=user_id,
     )
 
 
@@ -526,15 +578,28 @@ async def update_resource(
     user_id: int,
     payload: Any,
 ) -> ResourceModel:
-    _, membership = await get_household_access(
+    household, membership = await get_household_access(
         session, household_id=household_id, user_id=user_id
     )
-    record = await _get_record(
-        session, model, household_id=household_id, record_id=record_id
+    record = await _get_visible_record(
+        session,
+        model,
+        household_id=household_id,
+        record_id=record_id,
+        user_id=user_id,
     )
     if not _can_mutate_record(record, membership, user_id):
         raise HouseholdPermissionError("financial resource permission denied")
     values = payload.model_dump(exclude_unset=True)
+    previous_scope = str(record.ownership_scope)
+    if (
+        previous_scope == "HOUSEHOLD"
+        and values.get("ownership_scope") == "PERSONAL"
+        and record.user_id != user_id
+    ):
+        # Administrators may maintain a shared record, but only its original
+        # owner may withdraw it into that owner's private scope.
+        raise HouseholdPermissionError("only the record owner can make it personal")
     for field, value in values.items():
         column = model.__table__.columns.get(field)
         if value is None and column is not None and not column.nullable:
@@ -551,10 +616,11 @@ async def update_resource(
             raise FinancialStateValidationError("name or asset_catalog_id is required")
     for field, value in values.items():
         setattr(record, field, value)
-    await _mark_continuous_dirty(
+    await _mark_resource_dirty_if_shared_visible(
         session,
-        household_id=household_id,
+        household=household,
         category=_RESOURCE_CHANGE_CATEGORY[model],
+        ownership_scopes={previous_scope, str(record.ownership_scope)},
     )
     await session.commit()
     await session.refresh(record)
@@ -569,19 +635,24 @@ async def delete_resource(
     record_id: int,
     user_id: int,
 ) -> None:
-    _, membership = await get_household_access(
+    household, membership = await get_household_access(
         session, household_id=household_id, user_id=user_id
     )
-    record = await _get_record(
-        session, model, household_id=household_id, record_id=record_id
+    record = await _get_visible_record(
+        session,
+        model,
+        household_id=household_id,
+        record_id=record_id,
+        user_id=user_id,
     )
     if not _can_mutate_record(record, membership, user_id):
         raise HouseholdPermissionError("financial resource permission denied")
     await session.delete(record)
-    await _mark_continuous_dirty(
+    await _mark_resource_dirty_if_shared_visible(
         session,
-        household_id=household_id,
+        household=household,
         category=_RESOURCE_CHANGE_CATEGORY[model],
+        ownership_scopes={str(record.ownership_scope)},
     )
     await session.commit()
 
@@ -599,6 +670,11 @@ async def build_normalized_inputs(
     household, _ = await get_household_access(
         session, household_id=household_id, user_id=user_id
     )
+    decision_scope = (
+        SHARED_DECISION_SCOPE
+        if household.household_type == "SHARED"
+        else PERSONAL_DECISION_SCOPE
+    )
     member_rows = await session.execute(
         select(HouseholdMember, User)
         .join(User, User.id == HouseholdMember.user_id)
@@ -615,13 +691,16 @@ async def build_normalized_inputs(
         }
         for member, member_user in member_rows.all()
     ]
-    member_ids = [
-        item["user_id"] for item in members if item["status"] == "ACTIVE"
-    ]
-
     async def load(model: Any) -> list[Any]:
+        visibility = (
+            model.ownership_scope == "HOUSEHOLD"
+            if decision_scope == SHARED_DECISION_SCOPE
+            else _visible_resource_clause(model, user_id=user_id)
+        )
         result = await session.execute(
-            select(model).where(model.household_id == household_id).order_by(model.id.asc())
+            select(model)
+            .where(model.household_id == household_id, visibility)
+            .order_by(model.id.asc())
         )
         return list(result.scalars().all())
 
@@ -630,11 +709,15 @@ async def build_normalized_inputs(
     liabilities = await load(FinancialLiability)
     assets = await load(OwnedAsset)
     goals = await load(FinancialGoal)
-    profile_result = await session.execute(
-        select(FinancialProfile).where(FinancialProfile.user_id.in_(member_ids))
-    )
-    profiles = list(profile_result.scalars().all())
+    profiles: list[FinancialProfile] = []
+    if decision_scope == PERSONAL_DECISION_SCOPE:
+        profile_result = await session.execute(
+            select(FinancialProfile).where(FinancialProfile.user_id == user_id)
+        )
+        profiles = list(profile_result.scalars().all())
     return {
+        "privacy_contract_version": PRIVACY_CONTRACT_VERSION,
+        "decision_scope": decision_scope,
         "household": _fields(
             household,
             ("id", "name", "household_type", "created_by_user_id", "status"),
@@ -749,6 +832,7 @@ async def build_normalized_inputs(
                     "user_id",
                     "monthly_salary",
                     "emergency_reserve",
+                    "risk_profile",
                     "updated_at",
                 ),
             )

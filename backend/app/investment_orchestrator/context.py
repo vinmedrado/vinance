@@ -51,6 +51,24 @@ async def load_profile_context(
 ) -> dict[str, Any]:
     """Load explicit profiles for active members without applying a default."""
 
+    privacy_contract = normalized_inputs.get("privacy_contract_version")
+    decision_scope = normalized_inputs.get("decision_scope")
+    household_type = str((normalized_inputs.get("household") or {}).get("household_type") or "")
+    if decision_scope == "HOUSEHOLD_SHARED" or household_type == "SHARED":
+        # Investor profiles are personal. Until the product has an explicit
+        # household investment profile, a shared decision must fail closed
+        # without revealing which member supplied or omitted a profile.
+        return {
+            "status": "MISSING",
+            "effective_profile": None,
+            "investment_horizon": None,
+            "members": [],
+            "missing_member_user_ids": [],
+            "inconsistent_member_user_ids": [],
+            "profile_diversity": [],
+            "source": "household_profile.unavailable",
+        }
+
     members = [
         item
         for item in list(normalized_inputs.get("members") or [])
@@ -68,10 +86,19 @@ async def load_profile_context(
             "source": "financial_profiles.risk_profile",
         }
 
-    result = await session.execute(
-        select(FinancialProfile).where(FinancialProfile.user_id.in_(user_ids))
-    )
-    by_user = {int(item.user_id): item for item in result.scalars().all()}
+    if privacy_contract == "household-privacy-v1":
+        by_user: dict[int, Any] = {
+            int(item["user_id"]): item
+            for item in list(normalized_inputs.get("financial_profiles") or [])
+            if item.get("user_id") is not None
+        }
+    else:
+        # Legacy PERSONAL snapshots predate the frozen profile contract. Keep
+        # their replay behavior stable; new snapshots never take this branch.
+        result = await session.execute(
+            select(FinancialProfile).where(FinancialProfile.user_id.in_(user_ids))
+        )
+        by_user = {int(item.user_id): item for item in result.scalars().all()}
     rows: list[dict[str, Any]] = []
     missing: list[int] = []
     inconsistent: list[int] = []
@@ -79,7 +106,11 @@ async def load_profile_context(
     for member in members:
         member_user_id = int(member["user_id"])
         record = by_user.get(member_user_id)
-        raw_profile = getattr(record, "risk_profile", None) if record else None
+        raw_profile = (
+            record.get("risk_profile")
+            if isinstance(record, Mapping)
+            else getattr(record, "risk_profile", None)
+        ) if record else None
         profile = str(raw_profile).strip().upper() if raw_profile is not None else None
         if profile is None or profile == "":
             missing.append(member_user_id)
@@ -93,7 +124,11 @@ async def load_profile_context(
                 "user_id": member_user_id,
                 "full_name": member.get("full_name"),
                 "profile": profile,
-                "updated_at": getattr(record, "updated_at", None) if record else None,
+                "updated_at": (
+                    record.get("updated_at")
+                    if isinstance(record, Mapping)
+                    else getattr(record, "updated_at", None)
+                ) if record else None,
             }
         )
 

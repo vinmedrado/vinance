@@ -661,6 +661,10 @@ def calculate_capital_allocation(
             )
         )
 
+    shared_household_pool = (
+        state.get("privacy_contract_version") == "household-privacy-v1"
+        and state.get("decision_scope") == "HOUSEHOLD_SHARED"
+    )
     member_names: dict[int, str | None] = {}
     personal_initial: dict[int, Decimal | None] = {}
     for raw in state.get("member_views") or []:
@@ -776,7 +780,13 @@ def calculate_capital_allocation(
     sole_member_capacity = (
         next(iter(personal_initial.values())) if len(personal_initial) == 1 else None
     )
-    if (
+    if shared_household_pool:
+        # State v1 proved that this capacity was derived exclusively from
+        # records explicitly shared with the household. It is therefore a
+        # household pool, not an inferred transfer between members.
+        personal_remaining = {}
+        household_remaining = remaining
+    elif (
         every_personal_pool_known
         and len(personal_initial) == 1
         and sole_member_capacity == remaining

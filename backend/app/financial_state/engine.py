@@ -182,6 +182,8 @@ def _recurring_income(
         "primary": "incomes",
         "financial_profile_fallback_user_ids": fallback_users,
     }
+    if not values and not member_ids:
+        missing.append("income.recurring")
     if missing_member_income or not values:
         return None
     return _money(sum(values, Decimal("0")))
@@ -527,6 +529,12 @@ def calculate_financial_state(
         evaluated = evaluated.replace(tzinfo=timezone.utc)
     evaluated = evaluated.astimezone(timezone.utc)
     data = deepcopy(normalized_inputs)
+    privacy_contract_version = data.get("privacy_contract_version")
+    decision_scope = data.get("decision_scope")
+    shared_privacy_scope = (
+        privacy_contract_version == "household-privacy-v1"
+        and decision_scope == "HOUSEHOLD_SHARED"
+    )
     household = data.get("household") or {}
     try:
         household_id = int(household["id"])
@@ -592,6 +600,14 @@ def calculate_financial_state(
         domain="goals",
         inconsistencies=inconsistencies,
     )
+    if shared_privacy_scope:
+        # Defense in depth: a caller cannot smuggle another member's PERSONAL
+        # record into a shared household decision by crafting normalized input.
+        incomes = [item for item in incomes if item.get("ownership_scope") == "HOUSEHOLD"]
+        expenses = [item for item in expenses if item.get("ownership_scope") == "HOUSEHOLD"]
+        liabilities = [item for item in liabilities if item.get("ownership_scope") == "HOUSEHOLD"]
+        assets = [item for item in assets if item.get("ownership_scope") == "HOUSEHOLD"]
+        goals = [item for item in goals if item.get("ownership_scope") == "HOUSEHOLD"]
     profiles: list[dict[str, Any]] = []
     for raw_profile in list(data.get("financial_profiles") or []):
         try:
@@ -603,6 +619,9 @@ def calculate_financial_state(
             profile = dict(raw_profile)
             profile["user_id"] = profile_user_id
             profiles.append(profile)
+    if shared_privacy_scope:
+        # FinancialProfile is personal. A shared profile does not exist in v1.
+        profiles = []
 
     month_incomes = _month_records(incomes, "received_at", evaluated.date())
     month_expenses = _month_records(expenses, "due_date", evaluated.date())
@@ -615,7 +634,10 @@ def calculate_financial_state(
         assets=assets,
         goals=goals,
         profiles=profiles,
-        member_ids=member_ids,
+        # A shared decision is one explicit HOUSEHOLD pool. Requiring one
+        # private value per member would both block valid shared data and leak
+        # which member has (or lacks) personal income/assets.
+        member_ids=set() if shared_privacy_scope else member_ids,
         missing=missing,
         inconsistencies=inconsistencies,
         provenance=provenance,
@@ -631,35 +653,36 @@ def calculate_financial_state(
         evaluated_at=evaluated,
     )
     member_views: list[dict[str, Any]] = []
-    profile_map = _profile_by_user(profiles)
-    for member in sorted(members, key=lambda item: int(item.get("user_id", 0))):
-        user_id = int(member["user_id"])
-        member_missing: list[str] = []
-        member_inconsistencies: list[str] = []
-        member_provenance: dict[str, Any] = {}
-        member_metrics, member_goals = _calculate_metrics(
-            incomes=[item for item in month_incomes if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
-            expenses=[item for item in month_expenses if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
-            liabilities=[item for item in liabilities if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
-            assets=[item for item in assets if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
-            goals=[item for item in goals if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
-            profiles=[profile_map[user_id]] if user_id in profile_map else [],
-            member_ids={user_id},
-            missing=member_missing,
-            inconsistencies=member_inconsistencies,
-            provenance=member_provenance,
-        )
-        member_views.append(
-            {
-                "user_id": user_id,
-                "full_name": member.get("full_name"),
-                "metrics": member_metrics,
-                "goals": member_goals,
-                "missing_fields": _dedupe(member_missing),
-                "inconsistencies": _dedupe(member_inconsistencies),
-                "provenance": member_provenance,
-            }
-        )
+    if not shared_privacy_scope:
+        profile_map = _profile_by_user(profiles)
+        for member in sorted(members, key=lambda item: int(item.get("user_id", 0))):
+            user_id = int(member["user_id"])
+            member_missing: list[str] = []
+            member_inconsistencies: list[str] = []
+            member_provenance: dict[str, Any] = {}
+            member_metrics, member_goals = _calculate_metrics(
+                incomes=[item for item in month_incomes if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
+                expenses=[item for item in month_expenses if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
+                liabilities=[item for item in liabilities if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
+                assets=[item for item in assets if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
+                goals=[item for item in goals if item.get("ownership_scope") == "PERSONAL" and int(item["user_id"]) == user_id],
+                profiles=[profile_map[user_id]] if user_id in profile_map else [],
+                member_ids={user_id},
+                missing=member_missing,
+                inconsistencies=member_inconsistencies,
+                provenance=member_provenance,
+            )
+            member_views.append(
+                {
+                    "user_id": user_id,
+                    "full_name": member.get("full_name"),
+                    "metrics": member_metrics,
+                    "goals": member_goals,
+                    "missing_fields": _dedupe(member_missing),
+                    "inconsistencies": _dedupe(member_inconsistencies),
+                    "provenance": member_provenance,
+                }
+            )
 
     missing_fields = _dedupe(missing)
     inconsistencies = _dedupe(inconsistencies)
@@ -676,7 +699,7 @@ def calculate_financial_state(
     else:
         quality = "COMPLETE"
 
-    return {
+    result = {
         "household_id": household_id,
         "engine_version": ENGINE_VERSION,
         "evaluated_at": evaluated,
@@ -695,3 +718,7 @@ def calculate_financial_state(
         "stale_fields": stale_fields,
         "provenance": provenance,
     }
+    if privacy_contract_version == "household-privacy-v1":
+        result["privacy_contract_version"] = privacy_contract_version
+        result["decision_scope"] = decision_scope
+    return result

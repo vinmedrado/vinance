@@ -24,6 +24,7 @@ from backend.app.financial_state.models import (
     Household,
     OwnedAsset,
 )
+from backend.app.financial_state.schemas import IncomeCreate as HouseholdIncomeCreate
 
 
 class _Session:
@@ -155,3 +156,97 @@ async def test_profile_write_marks_all_memberships_before_commit(monkeypatch) ->
     )
     assert isinstance(session.added[-1], FinancialProfile)
     assert session.events == ["dirty", "commit"]
+
+
+@pytest.mark.asyncio
+async def test_personal_write_inside_shared_household_has_no_shared_dirty_side_channel(
+    monkeypatch,
+) -> None:
+    session = _Session()
+    household = SimpleNamespace(id=10, household_type="SHARED")
+
+    async def access(*_args, **_kwargs):
+        return household, SimpleNamespace(role="MEMBER")
+
+    async def must_not_mark(*_args, **_kwargs):
+        raise AssertionError("PERSONAL activity leaked into shared reevaluation state")
+
+    monkeypatch.setattr(state_service, "get_household_access", access)
+    monkeypatch.setattr(continuous_service, "mark_household_dirty", must_not_mark)
+    await state_service.create_resource(
+        session,
+        Income,
+        household_id=10,
+        user_id=91,
+        payload=HouseholdIncomeCreate(
+            description="Private",
+            amount=Decimal("1000"),
+            income_type="salary",
+            received_at=date(2026, 9, 24),
+            is_recurring=True,
+            ownership_scope="PERSONAL",
+        ),
+    )
+    assert session.events == ["commit"]
+
+
+@pytest.mark.asyncio
+async def test_household_write_inside_shared_household_marks_before_commit(
+    monkeypatch,
+) -> None:
+    session = _Session()
+    household = SimpleNamespace(id=10, household_type="SHARED")
+
+    async def access(*_args, **_kwargs):
+        return household, SimpleNamespace(role="MEMBER")
+
+    async def mark(_session, **kwargs):
+        assert _session is session
+        assert kwargs == {"household_id": 10, "category": "FINANCIAL_DATA"}
+        session.events.append("dirty")
+
+    monkeypatch.setattr(state_service, "get_household_access", access)
+    monkeypatch.setattr(continuous_service, "mark_household_dirty", mark)
+    await state_service.create_resource(
+        session,
+        Income,
+        household_id=10,
+        user_id=91,
+        payload=HouseholdIncomeCreate(
+            description="Shared",
+            amount=Decimal("1000"),
+            income_type="salary",
+            received_at=date(2026, 9, 24),
+            is_recurring=True,
+            ownership_scope="HOUSEHOLD",
+        ),
+    )
+    assert session.events == ["dirty", "commit"]
+
+
+@pytest.mark.asyncio
+async def test_profile_dirty_lookup_targets_only_personal_households() -> None:
+    class Rows:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return []
+
+    class QuerySession:
+        statement = None
+
+        async def execute(self, statement):
+            self.statement = statement
+            return Rows()
+
+    session = QuerySession()
+    await continuous_service.mark_user_households_dirty(
+        session,
+        user_id=91,
+        category="PROFILE",
+    )
+
+    sql = str(session.statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "JOIN households" in sql
+    assert "households.household_type = 'PERSONAL'" in sql

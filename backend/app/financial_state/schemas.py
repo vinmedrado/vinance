@@ -282,6 +282,8 @@ class GoalRead(OrmModel):
 class FinancialStateRead(BaseModel):
     household_id: int
     engine_version: str
+    privacy_contract_version: str | None = None
+    decision_scope: Literal["PERSONAL", "HOUSEHOLD_SHARED"] | None = None
     evaluated_at: datetime
     metrics: dict[str, Any]
     goals: list[dict[str, Any]]
