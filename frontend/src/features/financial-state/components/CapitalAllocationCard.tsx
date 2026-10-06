@@ -47,6 +47,7 @@ function itemTitle(item: CapitalAllocationItem) {
 type CapitalAllocationCardProps = {
   allocation?: CapitalAllocation;
   history?: CapitalAllocationHistory;
+  viewerUserId?: number | null;
   isLoading: boolean;
   isHistoryLoading?: boolean;
   isFreezing?: boolean;
@@ -61,6 +62,7 @@ type CapitalAllocationCardProps = {
 export function CapitalAllocationCard({
   allocation,
   history,
+  viewerUserId,
   isLoading,
   isHistoryLoading = false,
   isFreezing = false,
@@ -94,7 +96,16 @@ export function CapitalAllocationCard({
   if (!allocation) return null;
 
   const visibleAllocations = allocation.allocations.filter(
-    (item) => item.bucket_type !== 'INFORMATIONAL',
+    (item) => item.bucket_type !== 'INFORMATIONAL'
+      && (
+        item.ownership_scope !== 'PERSONAL'
+        || viewerUserId === undefined
+        || (viewerUserId !== null && Number(item.user_id) === viewerUserId)
+      ),
+  );
+  const visibleMemberImpacts = allocation.member_impacts.filter(
+    (member) => viewerUserId === undefined
+      || (viewerUserId !== null && member.user_id === viewerUserId),
   );
 
   return (
@@ -185,11 +196,11 @@ export function CapitalAllocationCard({
         </div>
       )}
 
-      {allocation.member_impacts.length > 1 && (
+      {visibleMemberImpacts.length > 0 && (
         <div className="vn-section-gap">
           <h4>Impacto por membro</h4>
           <div className="vn-list" role="list" aria-label="Impacto do plano por membro">
-            {allocation.member_impacts.map((member) => (
+            {visibleMemberImpacts.map((member) => (
               <div key={member.user_id} role="listitem">
                 <strong>{member.full_name ?? `Membro ${member.user_id}`}</strong>
                 <span>Prioridades pessoais: {money(member.allocated_to_personal_priorities)}</span>

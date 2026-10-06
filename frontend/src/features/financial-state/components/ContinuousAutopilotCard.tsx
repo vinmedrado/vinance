@@ -82,6 +82,7 @@ function currentMessage(decision: ContinuousAutopilot, status: ContinuousAutopil
 type ContinuousAutopilotCardProps = {
   decision?: ContinuousAutopilot;
   history?: ContinuousAutopilotHistory;
+  viewerUserId?: number | null;
   isLoading: boolean;
   isHistoryLoading?: boolean;
   isEvaluating?: boolean;
@@ -99,6 +100,7 @@ type ContinuousAutopilotCardProps = {
 export function ContinuousAutopilotCard({
   decision,
   history,
+  viewerUserId,
   isLoading,
   isHistoryLoading = false,
   isEvaluating = false,
@@ -136,6 +138,11 @@ export function ContinuousAutopilotCard({
     || decision.continuous_decision_id === null;
   const showPlanCta = decision.current_action_plan_id !== null
     && (decision.status === 'CHANGED' || decision.alert_decision !== 'NO_ALERT');
+  const visibleChanges = decision.detected_changes.filter(
+    (change) => change.ownership_scope !== 'PERSONAL'
+      || viewerUserId === undefined
+      || (viewerUserId !== null && Number(change.owner_user_id) === viewerUserId),
+  );
 
   return (
     <Card
@@ -188,11 +195,11 @@ export function ContinuousAutopilotCard({
         </div>
       )}
 
-      {decision.detected_changes.length > 0 && (
+      {visibleChanges.length > 0 && (
         <div className="vn-section-gap">
           <h4>O que mudou</h4>
           <div className="vn-list" role="list" aria-label="Mudanças relevantes do Autopilot">
-            {decision.detected_changes.map((change) => (
+            {visibleChanges.map((change) => (
               <div key={change.change_id} role="listitem">
                 <strong>{change.reason}</strong>
                 <span>{change.category.replace(/_/g, ' ')} · {change.materiality}</span>

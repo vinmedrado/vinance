@@ -602,3 +602,90 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await page.getByRole('link', { name: 'Ver oportunidade em Investir' }).click();
   await expect(page).toHaveURL(/\/investir\?.*action_plan_id=41/);
 });
+
+test('isola dois membros e impede que um draft atravesse a troca de household', async ({ page }) => {
+  const householdB = { ...household, id: 20, name: 'Casa alternativa' };
+  const secondUser = { ...authenticatedUser, id: authenticatedUser.id + 1, email: 'membro-b@fixture.local' };
+  const secondToken = fakeAccessToken(Date.now() + 2 * 60 * 60_000);
+
+  await page.route('**/api/v1/me', async (route) => {
+    const authorization = route.request().headers().authorization ?? '';
+    await json(route, authorization.includes(secondToken) ? secondUser : authenticatedUser);
+  });
+  await page.route('**/api/v1/financial/**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'OPTIONS') return json(route, null);
+    if (path.endsWith('/financial/profile')) return json(route, { id: 1 });
+    if (path.endsWith('/households/default')) return json(route, household);
+    if (path.endsWith('/financial/households')) return json(route, [household, householdB]);
+
+    const householdId = path.includes('/households/20/') ? 20 : 10;
+    if (path.endsWith('/incomes')) {
+      return json(route, [
+        {
+          id: 1, household_id: householdId, user_id: authenticatedUser.id,
+          ownership_scope: 'PERSONAL', description: 'Renda pessoal A E2E', amount: '100.00',
+          income_type: 'salary', received_at: '2026-10-06', is_recurring: true,
+          created_at: '2026-10-06T12:00:00Z', updated_at: '2026-10-06T12:00:00Z',
+        },
+        {
+          id: 2, household_id: householdId, user_id: secondUser.id,
+          ownership_scope: 'PERSONAL', description: 'Renda pessoal B E2E', amount: '9000.00',
+          income_type: 'salary', received_at: '2026-10-06', is_recurring: true,
+          created_at: '2026-10-06T12:00:00Z', updated_at: '2026-10-06T12:00:00Z',
+        },
+        {
+          id: 3, household_id: householdId, user_id: authenticatedUser.id,
+          ownership_scope: 'HOUSEHOLD', description: 'Renda compartilhada E2E', amount: '300.00',
+          income_type: 'rent', received_at: '2026-10-06', is_recurring: true,
+          created_at: '2026-10-06T12:00:00Z', updated_at: '2026-10-06T12:00:00Z',
+        },
+      ]);
+    }
+    if (path.endsWith('/expenses')) return json(route, []);
+    if (path.endsWith('/financial-policy/history')) return json(route, { items: [], total: 0 });
+    if (path.endsWith('/capital-allocation/history')) return json(route, { items: [], total: 0 });
+    if (path.endsWith('/investment-orchestration/history')) return json(route, { items: [], total: 0 });
+    if (path.endsWith('/action-plan/history')) return json(route, { items: [], total: 0 });
+    if (path.endsWith('/continuous-autopilot/history')) return json(route, { items: [], total: 0 });
+    if (path.endsWith('/financial-state')) return json(route, { ...financialState, household_id: householdId });
+    if (path.endsWith('/financial-policy')) return json(route, { ...financialPolicy, household_id: householdId });
+    if (path.endsWith('/capital-allocation')) return json(route, { ...capitalAllocation, household_id: householdId });
+    if (path.endsWith('/investment-orchestration')) return json(route, { ...investmentOrchestration, household_id: householdId });
+    if (path.endsWith('/action-plan')) return json(route, { ...actionPlan, household_id: householdId });
+    if (path.endsWith('/continuous-autopilot')) return json(route, { ...continuousBase, household_id: householdId });
+    return json(route, { detail: 'fixture não configurada' }, 404);
+  });
+
+  await seedSession(page);
+  await page.goto('/financial');
+
+  await expect(page.getByText('Renda pessoal A E2E')).toBeVisible();
+  await expect(page.getByText('Renda compartilhada E2E')).toBeVisible();
+  await expect(page.getByText('Renda pessoal B E2E')).toHaveCount(0);
+
+  const selector = page.locator('select.vn-input').first();
+  await page.getByRole('button', { name: 'Nova receita' }).click();
+  await page.getByLabel('Descrição').fill('Draft preso ao household A');
+  await selector.selectOption('20');
+  await expect(selector).toHaveValue('10');
+  await expect(page.getByRole('dialog', { name: 'Descartar alterações não salvas?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(page.getByLabel('Descrição')).toHaveValue('Draft preso ao household A');
+
+  await selector.selectOption('20');
+  await page.getByRole('button', { name: 'Descartar e trocar' }).click();
+  await expect(selector).toHaveValue('20');
+  await expect(page.getByLabel('Descrição')).toHaveCount(0);
+
+  await page.evaluate(({ accessToken, user }) => {
+    window.localStorage.setItem('vinance_access_token', accessToken);
+    window.localStorage.setItem('vinance_user', JSON.stringify(user));
+    window.dispatchEvent(new CustomEvent('vinance:session-change', { detail: { reason: 'login' } }));
+  }, { accessToken: secondToken, user: secondUser });
+
+  await expect(page.getByText('Renda pessoal B E2E')).toBeVisible();
+  await expect(page.getByText('Renda compartilhada E2E')).toBeVisible();
+  await expect(page.getByText('Renda pessoal A E2E')).toHaveCount(0);
+});

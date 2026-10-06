@@ -97,6 +97,7 @@ function ActionRow({
 type ActionPlanCardProps = {
   plan?: ActionPlan;
   history?: ActionPlanHistory;
+  viewerUserId?: number | null;
   isLoading: boolean;
   isHistoryLoading?: boolean;
   isFreezing?: boolean;
@@ -114,6 +115,7 @@ type ActionPlanCardProps = {
 export function ActionPlanCard({
   plan,
   history,
+  viewerUserId,
   isLoading,
   isHistoryLoading = false,
   isFreezing = false,
@@ -142,6 +144,11 @@ export function ActionPlanCard({
     );
   }
   if (!plan) return null;
+  const visibleActions = plan.actions.filter(
+    (action) => action.ownership_scope !== 'PERSONAL'
+      || viewerUserId === undefined
+      || (viewerUserId !== null && Number(action.owner_user_id) === viewerUserId),
+  );
 
   return (
     <Card
@@ -195,7 +202,7 @@ export function ActionPlanCard({
       <div className="vn-section-gap">
         <h4>O que fazer agora</h4>
         <div className="vn-list" role="list" aria-label="Ações ordenadas do plano">
-          {plan.actions.map((action) => (
+          {visibleActions.map((action) => (
             <ActionRow
               key={action.action_id}
               action={action}

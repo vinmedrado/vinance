@@ -815,7 +815,8 @@ test('mantém a resposta da decisão no cache do household que iniciou o POST', 
   );
 });
 
-test('mostra visões pessoais distintas quando o backend retorna um casal', async () => {
+test('não mostra a visão pessoal de outro membro mesmo se ela chegar no payload', async () => {
+  setSession('session-token-a', { id: 1 });
   service.getCurrentFinancialPolicy.mockResolvedValueOnce({
     ...policy,
     member_policy_views: [
@@ -852,8 +853,8 @@ test('mostra visões pessoais distintas quando o backend retorna um casal', asyn
 
   expect(await screen.findByRole('heading', { name: 'Visões individuais' })).toBeInTheDocument();
   expect(screen.getByText('Ana')).toBeInTheDocument();
-  expect(screen.getByText('Bia')).toBeInTheDocument();
-  expect(screen.getByText(/Visão pessoal de Bia/)).toBeInTheDocument();
+  expect(screen.queryByText('Bia')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Visão pessoal de Bia/)).not.toBeInTheDocument();
 });
 
 test('mantém o cadastro de receita e envia ownership explícito ao household selecionado', async () => {
@@ -871,4 +872,145 @@ test('mantém o cadastro de receita e envia ownership explícito ao household se
     description: 'Salário',
     ownership_scope: 'PERSONAL',
   })));
+});
+
+test('mantém o draft no household original até o usuário confirmar o descarte', async () => {
+  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
+  const user = userEvent.setup();
+  renderPage();
+
+  const selector = await screen.findByLabelText('Household');
+  await user.click(screen.getByRole('button', { name: 'Nova receita' }));
+  await user.type(screen.getByLabelText('Descrição'), 'Rascunho do household A');
+  await user.selectOptions(selector, '20');
+
+  expect(selector).toHaveValue('10');
+  expect(screen.getByRole('dialog', { name: 'Descartar alterações não salvas?' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Descrição')).toHaveValue('Rascunho do household A');
+
+  await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+  expect(selector).toHaveValue('10');
+  expect(screen.getByLabelText('Descrição')).toHaveValue('Rascunho do household A');
+
+  await user.selectOptions(selector, '20');
+  await user.click(screen.getByRole('button', { name: 'Descartar e trocar' }));
+  expect(selector).toHaveValue('20');
+  expect(screen.queryByLabelText('Descrição')).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Nova receita' }));
+  expect(screen.getByLabelText('Descrição')).toHaveValue('');
+});
+
+test('descarta também draft de despesa antes de trocar de household', async () => {
+  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
+  const user = userEvent.setup();
+  renderPage();
+
+  const selector = await screen.findByLabelText('Household');
+  await user.click(screen.getByRole('button', { name: 'Nova despesa' }));
+  await user.type(screen.getByLabelText('Descrição'), 'Despesa privada A');
+  await user.selectOptions(selector, '20');
+
+  expect(selector).toHaveValue('10');
+  await user.click(screen.getByRole('button', { name: 'Descartar e trocar' }));
+  expect(selector).toHaveValue('20');
+  expect(screen.queryByDisplayValue('Despesa privada A')).not.toBeInTheDocument();
+});
+
+test('impede troca durante mutation e invalida somente o household capturado', async () => {
+  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
+  let resolveIncome!: (value: { id: number }) => void;
+  service.createIncome.mockReturnValueOnce(
+    new Promise<{ id: number }>((resolve) => { resolveIncome = resolve; }),
+  );
+  const user = userEvent.setup();
+  const { client } = renderPage();
+  const invalidateQueries = vi.spyOn(client, 'invalidateQueries');
+
+  const selector = await screen.findByLabelText('Household');
+  await user.click(screen.getByRole('button', { name: 'Nova receita' }));
+  await user.type(screen.getByLabelText('Descrição'), 'Salário A');
+  await user.type(screen.getByLabelText('Valor'), '5000');
+  await user.click(screen.getByRole('button', { name: 'Salvar receita' }));
+
+  await waitFor(() => expect(service.createIncome).toHaveBeenCalledWith(
+    10,
+    expect.objectContaining({ description: 'Salário A' }),
+  ));
+  expect(selector).toBeDisabled();
+  expect(selector).toHaveValue('10');
+
+  act(() => resolveIncome({ id: 1 }));
+  await waitFor(() => expect(selector).not.toBeDisabled());
+  expect(invalidateQueries).toHaveBeenCalledWith({
+    queryKey: financialStateQueryKey(null, 'incomes', 10),
+  });
+  expect(invalidateQueries).not.toHaveBeenCalledWith({
+    queryKey: financialStateQueryKey(null, 'incomes', 20),
+  });
+});
+
+test('limpa drafts quando a sessão muda e não transporta dados entre usuários', async () => {
+  setSession('session-token-a', { id: 1 });
+  const user = userEvent.setup();
+  renderPage();
+
+  await user.click(await screen.findByRole('button', { name: 'Nova receita' }));
+  await user.type(screen.getByLabelText('Descrição'), 'Rascunho privado da Ana');
+  expect(screen.getByDisplayValue('Rascunho privado da Ana')).toBeInTheDocument();
+
+  act(() => setSession('session-token-b', { id: 2 }));
+
+  await waitFor(() => {
+    expect(screen.queryByDisplayValue('Rascunho privado da Ana')).not.toBeInTheDocument();
+  });
+});
+
+test('filtra registros PERSONAL de outro membro e mantém dados próprios e compartilhados', async () => {
+  setSession('session-token-a', { id: 1 });
+  service.listHouseholdIncomes.mockResolvedValueOnce([
+    {
+      id: 1, household_id: 10, user_id: 1, ownership_scope: 'PERSONAL',
+      description: 'Receita pessoal A', amount: '100.00', income_type: 'outros',
+      received_at: '2026-10-06', is_recurring: false,
+      created_at: '2026-10-06T12:00:00Z', updated_at: '2026-10-06T12:00:00Z',
+    },
+    {
+      id: 2, household_id: 10, user_id: 2, ownership_scope: 'PERSONAL',
+      description: 'SEGREDO RECEITA B', amount: '9999.00', income_type: 'outros',
+      received_at: '2026-10-06', is_recurring: false,
+      created_at: '2026-10-06T12:00:00Z', updated_at: '2026-10-06T12:00:00Z',
+    },
+    {
+      id: 3, household_id: 10, user_id: 2, ownership_scope: 'HOUSEHOLD',
+      description: 'Receita compartilhada', amount: '300.00', income_type: 'outros',
+      received_at: '2026-10-06', is_recurring: false,
+      created_at: '2026-10-06T12:00:00Z', updated_at: '2026-10-06T12:00:00Z',
+    },
+  ]);
+  service.listHouseholdExpenses.mockResolvedValueOnce([
+    {
+      id: 1, household_id: 10, user_id: 2, ownership_scope: 'PERSONAL',
+      description: 'SEGREDO DESPESA B', amount: '8888.00', category: 'outros',
+      due_date: '2026-10-06', paid_at: null, is_paid: false, is_recurring: false,
+      expense_nature: 'VARIABLE', created_at: '2026-10-06T12:00:00Z',
+      updated_at: '2026-10-06T12:00:00Z',
+    },
+    {
+      id: 2, household_id: 10, user_id: 1, ownership_scope: 'HOUSEHOLD',
+      description: 'Despesa compartilhada', amount: '200.00', category: 'outros',
+      due_date: '2026-10-06', paid_at: null, is_paid: false, is_recurring: false,
+      expense_nature: 'VARIABLE', created_at: '2026-10-06T12:00:00Z',
+      updated_at: '2026-10-06T12:00:00Z',
+    },
+  ]);
+
+  renderPage();
+
+  expect(await screen.findByText('Receita pessoal A')).toBeInTheDocument();
+  expect(screen.getByText('Receita compartilhada')).toBeInTheDocument();
+  expect(screen.getByText('Despesa compartilhada')).toBeInTheDocument();
+  expect(screen.queryByText('SEGREDO RECEITA B')).not.toBeInTheDocument();
+  expect(screen.queryByText('SEGREDO DESPESA B')).not.toBeInTheDocument();
+  expect(screen.getAllByRole('heading', { name: 'Dados compartilhados do household' }).length).toBeGreaterThan(0);
 });

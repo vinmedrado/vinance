@@ -55,6 +55,7 @@ function displayEvidence(evidence: FinancialPolicyEvidence) {
 type FinancialPolicyCardProps = {
   policy?: FinancialPolicy;
   history?: FinancialPolicyHistory;
+  viewerUserId?: number | null;
   isLoading: boolean;
   isHistoryLoading?: boolean;
   isFreezing?: boolean;
@@ -69,6 +70,7 @@ type FinancialPolicyCardProps = {
 export function FinancialPolicyCard({
   policy,
   history,
+  viewerUserId,
   isLoading,
   isHistoryLoading = false,
   isFreezing = false,
@@ -114,6 +116,10 @@ export function FinancialPolicyCard({
   const visibleEvidence = (explanation?.evidence_refs ?? active?.evidence_refs ?? [])
     .map((code) => evidenceByCode.get(code))
     .filter((item): item is FinancialPolicyEvidence => Boolean(item));
+  const visibleMemberViews = policy.member_policy_views.filter(
+    (member) => viewerUserId === undefined
+      || (viewerUserId !== null && member.user_id === viewerUserId),
+  );
 
   return (
     <Card
@@ -199,11 +205,11 @@ export function FinancialPolicyCard({
         </div>
       )}
 
-      {policy.member_policy_views.length > 1 && (
+      {visibleMemberViews.length > 0 && (
         <div className="vn-section-gap">
           <h4>Visões individuais</h4>
           <div className="vn-list" role="list" aria-label="Prioridades pessoais dos membros">
-            {policy.member_policy_views.map((member) => (
+            {visibleMemberViews.map((member) => (
               <div key={member.user_id} role="listitem">
                 <strong>{member.full_name ?? `Membro ${member.user_id}`}</strong>
                 <span>{stateLabels[member.policy_state]}. {member.explanation}</span>

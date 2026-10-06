@@ -97,6 +97,8 @@ export type MemberFinancialView = {
 export type FinancialState = {
   household_id: number;
   engine_version: string;
+  privacy_contract_version?: 'household-privacy-v1';
+  decision_scope?: 'PERSONAL' | 'HOUSEHOLD_SHARED';
   evaluated_at: string;
   metrics: FinancialStateMetrics;
   goals: FinancialStateGoal[];
