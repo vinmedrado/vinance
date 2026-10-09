@@ -16,11 +16,19 @@ import type {
   GoalPayload,
   Household,
   HouseholdExpense,
+  HouseholdGoal,
   HouseholdIncome,
+  HouseholdLiability,
+  HouseholdOwnedAsset,
   IncomePayload,
   InvestmentOrchestration,
   InvestmentOrchestrationHistory,
   LiabilityPayload,
+  IncomeUpdatePayload,
+  ExpenseUpdatePayload,
+  LiabilityUpdatePayload,
+  AssetUpdatePayload,
+  GoalUpdatePayload,
 } from '../types/financialState.types';
 
 export async function listHouseholds() {
@@ -255,37 +263,97 @@ export async function getFinancialStateHistory(householdId: number) {
   return data;
 }
 
-export async function listHouseholdIncomes(householdId: number) {
-  const { data } = await api.get<HouseholdIncome[]>(`/financial/households/${householdId}/incomes`);
+export async function listHouseholdIncomes(householdId: number, signal?: AbortSignal) {
+  const { data } = await api.get<HouseholdIncome[]>(`/financial/households/${householdId}/incomes`, { signal });
   return data;
 }
 
-export async function listHouseholdExpenses(householdId: number) {
-  const { data } = await api.get<HouseholdExpense[]>(`/financial/households/${householdId}/expenses`);
+export async function listHouseholdExpenses(householdId: number, signal?: AbortSignal) {
+  const { data } = await api.get<HouseholdExpense[]>(`/financial/households/${householdId}/expenses`, { signal });
+  return data;
+}
+
+export async function listHouseholdLiabilities(householdId: number, signal?: AbortSignal) {
+  const { data } = await api.get<HouseholdLiability[]>(`/financial/households/${householdId}/debts`, { signal });
+  return data;
+}
+
+export async function listHouseholdAssets(householdId: number, signal?: AbortSignal) {
+  const { data } = await api.get<HouseholdOwnedAsset[]>(`/financial/households/${householdId}/assets`, { signal });
+  return data;
+}
+
+export async function listHouseholdGoals(householdId: number, signal?: AbortSignal) {
+  const { data } = await api.get<HouseholdGoal[]>(`/financial/households/${householdId}/goals`, { signal });
   return data;
 }
 
 export async function createIncome(householdId: number, payload: IncomePayload) {
-  const { data } = await api.post(`/financial/households/${householdId}/incomes`, payload);
+  const { data } = await api.post<HouseholdIncome>(`/financial/households/${householdId}/incomes`, payload);
   return data;
 }
 
 export async function createExpense(householdId: number, payload: ExpensePayload) {
-  const { data } = await api.post(`/financial/households/${householdId}/expenses`, payload);
+  const { data } = await api.post<HouseholdExpense>(`/financial/households/${householdId}/expenses`, payload);
   return data;
 }
 
 export async function createLiability(householdId: number, payload: LiabilityPayload) {
-  const { data } = await api.post(`/financial/households/${householdId}/debts`, payload);
+  const { data } = await api.post<HouseholdLiability>(`/financial/households/${householdId}/debts`, payload);
   return data;
 }
 
 export async function createAsset(householdId: number, payload: AssetPayload) {
-  const { data } = await api.post(`/financial/households/${householdId}/assets`, payload);
+  const { data } = await api.post<HouseholdOwnedAsset>(`/financial/households/${householdId}/assets`, payload);
   return data;
 }
 
 export async function createGoal(householdId: number, payload: GoalPayload) {
-  const { data } = await api.post(`/financial/households/${householdId}/goals`, payload);
+  const { data } = await api.post<HouseholdGoal>(`/financial/households/${householdId}/goals`, payload);
   return data;
+}
+
+export async function updateIncome(householdId: number, recordId: number, payload: IncomeUpdatePayload) {
+  const { data } = await api.patch<HouseholdIncome>(`/financial/households/${householdId}/incomes/${recordId}`, payload);
+  return data;
+}
+
+export async function updateExpense(householdId: number, recordId: number, payload: ExpenseUpdatePayload) {
+  const { data } = await api.patch<HouseholdExpense>(`/financial/households/${householdId}/expenses/${recordId}`, payload);
+  return data;
+}
+
+export async function updateLiability(householdId: number, recordId: number, payload: LiabilityUpdatePayload) {
+  const { data } = await api.patch<HouseholdLiability>(`/financial/households/${householdId}/debts/${recordId}`, payload);
+  return data;
+}
+
+export async function updateAsset(householdId: number, recordId: number, payload: AssetUpdatePayload) {
+  const { data } = await api.patch<HouseholdOwnedAsset>(`/financial/households/${householdId}/assets/${recordId}`, payload);
+  return data;
+}
+
+export async function updateGoal(householdId: number, recordId: number, payload: GoalUpdatePayload) {
+  const { data } = await api.patch<HouseholdGoal>(`/financial/households/${householdId}/goals/${recordId}`, payload);
+  return data;
+}
+
+export async function deleteIncome(householdId: number, recordId: number) {
+  await api.delete(`/financial/households/${householdId}/incomes/${recordId}`);
+}
+
+export async function deleteExpense(householdId: number, recordId: number) {
+  await api.delete(`/financial/households/${householdId}/expenses/${recordId}`);
+}
+
+export async function deleteLiability(householdId: number, recordId: number) {
+  await api.delete(`/financial/households/${householdId}/debts/${recordId}`);
+}
+
+export async function deleteAsset(householdId: number, recordId: number) {
+  await api.delete(`/financial/households/${householdId}/assets/${recordId}`);
+}
+
+export async function deleteGoal(householdId: number, recordId: number) {
+  await api.delete(`/financial/households/${householdId}/goals/${recordId}`);
 }

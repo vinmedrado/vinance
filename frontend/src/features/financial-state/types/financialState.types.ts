@@ -43,6 +43,56 @@ export type HouseholdExpense = {
   updated_at: string;
 };
 
+export type HouseholdLiability = {
+  id: number;
+  household_id: number;
+  user_id: number;
+  ownership_scope: OwnershipScope;
+  name: string;
+  liability_type: string;
+  current_balance: MoneyValue;
+  monthly_payment: MoneyValue;
+  annual_interest_rate_pct: MoneyValue;
+  due_date: string | null;
+  balance_as_of: string | null;
+  currency: string;
+  status: 'ACTIVE' | 'PAID' | 'DEFAULTED' | 'CANCELLED';
+  created_at: string;
+  updated_at: string;
+};
+
+export type HouseholdOwnedAsset = {
+  id: number;
+  household_id: number;
+  user_id: number;
+  ownership_scope: OwnershipScope;
+  asset_class: 'CASH' | 'EMERGENCY_RESERVE' | 'FIXED_INCOME' | 'INVESTMENTS' | 'REAL_ESTATE' | 'VEHICLES' | 'OTHER';
+  asset_catalog_id: number | null;
+  name: string | null;
+  current_value: MoneyValue;
+  value_as_of: string | null;
+  currency: string;
+  status: 'ACTIVE' | 'DISPOSED';
+  created_at: string;
+  updated_at: string;
+};
+
+export type HouseholdGoal = {
+  id: number;
+  household_id: number;
+  user_id: number;
+  ownership_scope: OwnershipScope;
+  name: string;
+  target_amount: MoneyValue;
+  current_amount: MoneyValue;
+  deadline: string | null;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH';
+  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+  currency: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AssetDistribution = Record<string, {
   amount: MoneyValue;
   percentage: MoneyValue;
@@ -797,6 +847,7 @@ export type LiabilityPayload = {
   due_date?: string | null;
   balance_as_of?: string | null;
   currency?: string;
+  status?: 'ACTIVE' | 'PAID' | 'DEFAULTED' | 'CANCELLED';
 };
 
 export type AssetPayload = {
@@ -807,6 +858,7 @@ export type AssetPayload = {
   current_value?: number | null;
   value_as_of?: string | null;
   currency?: string;
+  status?: 'ACTIVE' | 'DISPOSED';
 };
 
 export type GoalPayload = {
@@ -816,4 +868,12 @@ export type GoalPayload = {
   current_amount?: number | null;
   deadline?: string | null;
   priority: 'LOW' | 'MEDIUM' | 'HIGH';
+  status?: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+  currency?: string;
 };
+
+export type IncomeUpdatePayload = Partial<IncomePayload>;
+export type ExpenseUpdatePayload = Partial<ExpensePayload>;
+export type LiabilityUpdatePayload = Partial<LiabilityPayload>;
+export type AssetUpdatePayload = Partial<AssetPayload>;
+export type GoalUpdatePayload = Partial<GoalPayload>;

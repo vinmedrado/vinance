@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { BarChart3, Brain, Landmark, LayoutDashboard, LogOut, MessageCircle, ShieldCheck, WalletCards, TrendingUp } from 'lucide-react';
+import { BarChart3, Brain, House, Landmark, LayoutDashboard, ListChecks, LogOut, MessageCircle, ShieldCheck, WalletCards, TrendingUp } from 'lucide-react';
 import { Button } from '../components';
 import { useLogout, useCurrentUser } from '../features/auth/hooks/useAuth';
 import { useThemeMode } from '../hooks/useThemeMode';
@@ -7,6 +7,8 @@ import { useThemeMode } from '../hooks/useThemeMode';
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Minha situação', path: '/financial', icon: WalletCards },
+  { label: 'Dados financeiros', path: '/financial/manage', icon: ListChecks },
+  { label: 'Casa e família', path: '/household', icon: House },
   { label: 'Mercado', path: '/market', icon: BarChart3 },
   { label: 'Inteligência', path: '/intelligence', icon: Brain },
   { label: 'Investir', path: '/investir', icon: TrendingUp },

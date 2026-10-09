@@ -9,6 +9,8 @@ import { MarketPage } from '../pages/MarketPage';
 import { IntelligencePage } from '../pages/IntelligencePage';
 import { AdvisorPage } from '../pages/AdvisorPage';
 import { InvestmentWorkspacePage } from '../pages/InvestmentWorkspacePage';
+import { HouseholdPage } from '../pages/HouseholdPage';
+import { FinancialDataPage } from '../pages/FinancialDataPage';
 
 export function AppRoutes() {
   return (
@@ -18,6 +20,8 @@ export function AppRoutes() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="financial" element={<FinancialPage />} />
+        <Route path="financial/manage" element={<FinancialDataPage />} />
+        <Route path="household" element={<HouseholdPage />} />
         <Route path="market" element={<MarketPage />} />
         <Route path="intelligence" element={<IntelligencePage />} />
         <Route path="investir" element={<InvestmentWorkspacePage />} />
