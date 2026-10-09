@@ -39,6 +39,9 @@ test('two accounts create, invite and consent to a shared household', async ({ b
       const request = route.request();
       const path = new URL(request.url()).pathname.replace('/api/v1', '');
       const user = users[email];
+      if (path === '/register' && request.method() === 'POST') {
+        return reply(route, { access_token: accessToken, token_type: 'bearer', user }, 201);
+      }
       if (path === '/me') return reply(route, user);
       if (path === '/financial/households' && request.method() === 'GET') {
         const result = [personalA, personalB, ...(shared ? [shared] : [])].filter((household) => (memberships.get(household.id) ?? []).some((member) => member.user_id === user.id && member.status === 'ACTIVE'));
@@ -117,10 +120,12 @@ test('two accounts create, invite and consent to a shared household', async ({ b
       return reply(route, { detail: `Unhandled ${request.method()} ${path}` }, 404);
     });
     await page.goto('/login');
-    await page.evaluate(({ tokenValue, storedUser }) => {
-      window.localStorage.setItem('vinance_access_token', tokenValue);
-      window.localStorage.setItem('vinance_user', JSON.stringify(storedUser));
-    }, { tokenValue: accessToken, storedUser: userForStorage(users[email]) });
+    await page.getByRole('button', { name: 'Criar nova conta' }).click();
+    await page.getByLabel('Nome').fill(users[email].full_name);
+    await page.getByLabel('E-mail').fill(email);
+    await page.getByLabel('Senha').fill('phase-b-password');
+    await page.getByRole('button', { name: 'Registrar e entrar' }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
     await page.goto('/household');
     return page;
   }
@@ -191,7 +196,3 @@ test('two accounts create, invite and consent to a shared household', async ({ b
   await contextA.close();
   await contextB.close();
 });
-
-function userForStorage(user: { id: number; email: string; full_name: string; is_active: boolean }) {
-  return user;
-}
