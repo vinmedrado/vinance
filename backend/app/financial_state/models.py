@@ -84,6 +84,67 @@ class HouseholdMember(Base):
     )
 
 
+class HouseholdInvitation(Base):
+    __tablename__ = "household_invitations"
+    __table_args__ = (
+        CheckConstraint("role IN ('OWNER','MEMBER')", name="ck_household_invitations_role"),
+        CheckConstraint(
+            "status IN ('PENDING','ACCEPTED','DECLINED','CANCELLED','EXPIRED')",
+            name="ck_household_invitations_status",
+        ),
+        CheckConstraint(
+            "invited_email_normalized = lower(invited_email_normalized)",
+            name="ck_household_invitations_email_normalized",
+        ),
+        Index(
+            "uq_household_invitations_pending_email",
+            "household_id",
+            "invited_email_normalized",
+            unique=True,
+            postgresql_where=text("status = 'PENDING'"),
+        ),
+        Index(
+            "ix_household_invitations_household_status",
+            "household_id",
+            "status",
+        ),
+        Index(
+            "ix_household_invitations_invitee_status",
+            "invited_email_normalized",
+            "status",
+        ),
+        Index(
+            "ix_household_invitations_invited_user_status",
+            "invited_user_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    household_id: Mapped[int] = mapped_column(
+        ForeignKey("households.id", ondelete="CASCADE"), nullable=False
+    )
+    invited_email_normalized: Mapped[str] = mapped_column(String(255), nullable=False)
+    invited_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    invited_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="MEMBER")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    declined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class FinancialLiability(Base):
     __tablename__ = "financial_liabilities"
     __table_args__ = (

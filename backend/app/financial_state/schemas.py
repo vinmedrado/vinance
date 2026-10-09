@@ -4,13 +4,14 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 OwnershipScope = Literal["PERSONAL", "HOUSEHOLD"]
 HouseholdStatus = Literal["ACTIVE", "ARCHIVED"]
 MemberRole = Literal["OWNER", "MEMBER"]
 MemberStatus = Literal["ACTIVE", "REMOVED"]
+InvitationStatus = Literal["PENDING", "ACCEPTED", "DECLINED", "CANCELLED", "EXPIRED"]
 LiabilityStatus = Literal["ACTIVE", "PAID", "DEFAULTED", "CANCELLED"]
 AssetClass = Literal[
     "CASH",
@@ -55,16 +56,8 @@ class HouseholdRead(OrmModel):
     updated_at: datetime
 
 
-class HouseholdMemberCreate(StrictModel):
-    email: EmailStr
-    role: MemberRole = "MEMBER"
-    is_default: bool = False
-
-
 class HouseholdMemberUpdate(StrictModel):
-    role: MemberRole | None = None
-    status: MemberStatus | None = None
-    is_default: bool | None = None
+    role: MemberRole
 
 
 class HouseholdMemberRead(OrmModel):
@@ -78,6 +71,37 @@ class HouseholdMemberRead(OrmModel):
     updated_at: datetime
     email: str | None = None
     full_name: str | None = None
+
+
+class HouseholdInvitationCreate(StrictModel):
+    email: EmailStr
+    role: MemberRole = "MEMBER"
+    expires_at: datetime | None = None
+
+    @field_validator("expires_at")
+    @classmethod
+    def require_timezone_aware_expiry(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("expires_at must include a timezone")
+        return value
+
+
+class HouseholdInvitationRead(BaseModel):
+    id: int
+    household_id: int
+    household_name: str
+    invited_email_normalized: str
+    invited_user_id: int | None
+    invited_by_user_id: int
+    invited_by_name: str | None = None
+    role: MemberRole
+    status: InvitationStatus
+    expires_at: datetime | None
+    accepted_at: datetime | None
+    declined_at: datetime | None
+    cancelled_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class IncomeCreate(StrictModel):

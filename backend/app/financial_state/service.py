@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, TypeVar
@@ -12,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.auth.models import User
+from backend.app.auth.normalization import normalize_email
 from backend.app.catalog.models import AssetCatalog
 from backend.app.financial.models import Expense, FinancialProfile, Income
 from backend.app.financial_state.engine import calculate_financial_state
@@ -20,9 +22,13 @@ from backend.app.financial_state.models import (
     FinancialLiability,
     FinancialStateSnapshot,
     Household,
+    HouseholdInvitation,
     HouseholdMember,
     OwnedAsset,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class FinancialStateDomainError(Exception):
@@ -211,6 +217,7 @@ async def update_household(
     user_id: int,
     payload: Any,
 ) -> Household:
+    await _lock_household(session, household_id=household_id)
     household, _ = await require_household_owner(
         session, household_id=household_id, user_id=user_id
     )
@@ -257,7 +264,10 @@ async def list_members(
     result = await session.execute(
         select(HouseholdMember, User)
         .join(User, User.id == HouseholdMember.user_id)
-        .where(HouseholdMember.household_id == household_id)
+        .where(
+            HouseholdMember.household_id == household_id,
+            HouseholdMember.status == "ACTIVE",
+        )
         .order_by(HouseholdMember.id.asc())
     )
     return [
@@ -313,56 +323,6 @@ async def _restore_personal_default(session: AsyncSession, *, user_id: int) -> N
         personal.is_default = True
 
 
-async def add_member(
-    session: AsyncSession,
-    *,
-    household_id: int,
-    user_id: int,
-    payload: Any,
-) -> dict[str, Any]:
-    household, _ = await require_household_owner(
-        session, household_id=household_id, user_id=user_id
-    )
-    if household.household_type != "SHARED":
-        raise HouseholdConflictError("personal household cannot accept members")
-    result = await session.execute(
-        select(User).where(User.email == str(payload.email).lower(), User.is_active.is_(True))
-    )
-    invited_user = result.scalar_one_or_none()
-    if invited_user is None:
-        raise FinancialResourceNotFoundError("user not found")
-    existing_result = await session.execute(
-        select(HouseholdMember).where(
-            HouseholdMember.household_id == household_id,
-            HouseholdMember.user_id == invited_user.id,
-        )
-    )
-    membership = existing_result.scalar_one_or_none()
-    if membership is not None and membership.status == "ACTIVE":
-        raise HouseholdConflictError("user is already a household member")
-    if payload.is_default:
-        await _clear_user_default(session, user_id=invited_user.id)
-    if membership is None:
-        membership = HouseholdMember(
-            household_id=household_id,
-            user_id=invited_user.id,
-            role=payload.role,
-            status="ACTIVE",
-            is_default=payload.is_default,
-        )
-        session.add(membership)
-    else:
-        membership.role = payload.role
-        membership.status = "ACTIVE"
-        membership.is_default = payload.is_default
-    await _mark_continuous_dirty(
-        session, household_id=household_id, category="HOUSEHOLD"
-    )
-    await session.commit()
-    await session.refresh(membership)
-    return await _member_read(session, membership)
-
-
 async def _active_owner_count(
     session: AsyncSession,
     *,
@@ -380,6 +340,16 @@ async def _active_owner_count(
     return int(result.scalar_one())
 
 
+async def _lock_household(session: AsyncSession, *, household_id: int) -> None:
+    """Serialize membership administration for one household, never globally."""
+
+    await session.execute(
+        select(Household.id)
+        .where(Household.id == household_id)
+        .with_for_update()
+    )
+
+
 async def update_member(
     session: AsyncSession,
     *,
@@ -388,42 +358,37 @@ async def update_member(
     user_id: int,
     payload: Any,
 ) -> dict[str, Any]:
+    await _lock_household(session, household_id=household_id)
     household, _ = await require_household_owner(
         session, household_id=household_id, user_id=user_id
     )
+    if household.household_type != "SHARED":
+        raise HouseholdConflictError("personal household membership cannot be administered")
     result = await session.execute(
-        select(HouseholdMember).where(
+        select(HouseholdMember)
+        .where(
             HouseholdMember.id == member_id,
             HouseholdMember.household_id == household_id,
+            HouseholdMember.status == "ACTIVE",
         )
+        .with_for_update()
     )
     membership = result.scalar_one_or_none()
     if membership is None:
         raise FinancialResourceNotFoundError("member not found")
     values = payload.model_dump(exclude_unset=True)
-    removes_owner = membership.role == "OWNER" and (
-        values.get("role") == "MEMBER" or values.get("status") == "REMOVED"
-    )
+    if set(values) - {"role"}:
+        raise FinancialStateValidationError("only role can be changed by household administration")
+    removes_owner = membership.role == "OWNER" and values.get("role") == "MEMBER"
     if removes_owner and await _active_owner_count(
         session,
         household_id=household_id,
         excluding_member_id=membership.id,
     ) == 0:
         raise HouseholdConflictError("household must retain an active owner")
-    if household.household_type == "PERSONAL" and values.get("status") == "REMOVED":
-        raise HouseholdConflictError("personal household owner cannot be removed")
-    if values.get("is_default") is True:
-        await _clear_user_default(
-            session,
-            user_id=membership.user_id,
-            except_membership_id=membership.id,
-        )
     for field, value in values.items():
         if value is not None:
             setattr(membership, field, value)
-    if membership.status == "REMOVED":
-        membership.is_default = False
-        await _restore_personal_default(session, user_id=membership.user_id)
     await _mark_continuous_dirty(
         session, household_id=household_id, category="HOUSEHOLD"
     )
@@ -439,17 +404,430 @@ async def remove_member(
     member_id: int,
     user_id: int,
 ) -> None:
-    class Removal:
-        @staticmethod
-        def model_dump(*, exclude_unset: bool = False) -> dict[str, str]:
-            return {"status": "REMOVED"}
-
-    await update_member(
+    await _lock_household(session, household_id=household_id)
+    household, _ = await require_household_owner(
+        session, household_id=household_id, user_id=user_id
+    )
+    if household.household_type != "SHARED":
+        raise HouseholdConflictError("personal household member cannot be removed")
+    result = await session.execute(
+        select(HouseholdMember)
+        .where(
+            HouseholdMember.id == member_id,
+            HouseholdMember.household_id == household_id,
+            HouseholdMember.status == "ACTIVE",
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if membership is None:
+        raise FinancialResourceNotFoundError("member not found")
+    if membership.user_id == user_id:
+        raise HouseholdConflictError("use the leave endpoint to leave a household")
+    await session.execute(
+        select(User.id).where(User.id == membership.user_id).with_for_update()
+    )
+    locked_result = await session.execute(
+        select(HouseholdMember)
+        .where(
+            HouseholdMember.id == member_id,
+            HouseholdMember.household_id == household_id,
+            HouseholdMember.status == "ACTIVE",
+        )
+        .with_for_update()
+    )
+    membership = locked_result.scalar_one_or_none()
+    if membership is None:
+        raise FinancialResourceNotFoundError("member not found")
+    if membership.role == "OWNER" and await _active_owner_count(
         session,
         household_id=household_id,
-        member_id=member_id,
-        user_id=user_id,
-        payload=Removal(),
+        excluding_member_id=membership.id,
+    ) == 0:
+        raise HouseholdConflictError("household must retain an active owner")
+    was_default = bool(membership.is_default)
+    membership.status = "REMOVED"
+    membership.is_default = False
+    if was_default:
+        await _restore_personal_default(session, user_id=membership.user_id)
+    await _mark_continuous_dirty(
+        session, household_id=household_id, category="HOUSEHOLD"
+    )
+    await session.commit()
+    logger.info(
+        "household_member_removed household_id=%s member_id=%s actor_user_id=%s",
+        household_id,
+        member_id,
+        user_id,
+    )
+
+
+async def _invitation_read(
+    session: AsyncSession,
+    invitation: HouseholdInvitation,
+) -> dict[str, Any]:
+    household = await session.get(Household, invitation.household_id)
+    inviter = await session.get(User, invitation.invited_by_user_id)
+    status = invitation.status
+    now = datetime.now(timezone.utc)
+    if status == "PENDING" and invitation.expires_at is not None and invitation.expires_at <= now:
+        status = "EXPIRED"
+    return {
+        "id": invitation.id,
+        "household_id": invitation.household_id,
+        "household_name": household.name if household else "Household",
+        "invited_email_normalized": invitation.invited_email_normalized,
+        "invited_user_id": invitation.invited_user_id,
+        "invited_by_user_id": invitation.invited_by_user_id,
+        "invited_by_name": inviter.full_name if inviter else None,
+        "role": invitation.role,
+        "status": status,
+        "expires_at": invitation.expires_at,
+        "accepted_at": invitation.accepted_at,
+        "declined_at": invitation.declined_at,
+        "cancelled_at": invitation.cancelled_at,
+        "created_at": invitation.created_at,
+        "updated_at": invitation.updated_at,
+    }
+
+
+async def create_invitation(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    user_id: int,
+    payload: Any,
+) -> dict[str, Any]:
+    await _lock_household(session, household_id=household_id)
+    household, _ = await require_household_owner(
+        session, household_id=household_id, user_id=user_id
+    )
+    if household.household_type != "SHARED":
+        raise HouseholdConflictError("personal household cannot accept invitations")
+    inviter = await session.get(User, user_id)
+    if inviter is None:
+        raise FinancialResourceNotFoundError("user not found")
+    email = normalize_email(str(payload.email))
+    if email == normalize_email(inviter.email):
+        raise HouseholdConflictError("you are already a household member")
+    invited_result = await session.execute(
+        select(User).where(User.email == email, User.is_active.is_(True))
+    )
+    invited_user = invited_result.scalar_one_or_none()
+    if invited_user is not None:
+        membership_result = await session.execute(
+            select(HouseholdMember).where(
+                HouseholdMember.household_id == household_id,
+                HouseholdMember.user_id == invited_user.id,
+                HouseholdMember.status == "ACTIVE",
+            )
+        )
+        if membership_result.scalar_one_or_none() is not None:
+            raise HouseholdConflictError("user is already a household member")
+    await session.execute(
+        update(HouseholdInvitation)
+        .where(
+            HouseholdInvitation.household_id == household_id,
+            HouseholdInvitation.invited_email_normalized == email,
+            HouseholdInvitation.status == "PENDING",
+            HouseholdInvitation.expires_at.is_not(None),
+            HouseholdInvitation.expires_at <= datetime.now(timezone.utc),
+        )
+        .values(status="EXPIRED", updated_at=func.now())
+    )
+    existing_result = await session.execute(
+        select(HouseholdInvitation).where(
+            HouseholdInvitation.household_id == household_id,
+            HouseholdInvitation.invited_email_normalized == email,
+            HouseholdInvitation.status == "PENDING",
+        )
+    )
+    if existing_result.scalar_one_or_none() is not None:
+        raise HouseholdConflictError("a pending invitation already exists")
+    invitation = HouseholdInvitation(
+        household_id=household_id,
+        invited_email_normalized=email,
+        invited_user_id=invited_user.id if invited_user else None,
+        invited_by_user_id=user_id,
+        role=payload.role,
+        status="PENDING",
+        expires_at=payload.expires_at,
+    )
+    session.add(invitation)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HouseholdConflictError("a pending invitation already exists") from exc
+    await session.refresh(invitation)
+    logger.info(
+        "household_invitation_created household_id=%s invitation_id=%s actor_user_id=%s",
+        household_id,
+        invitation.id,
+        user_id,
+    )
+    return await _invitation_read(session, invitation)
+
+
+async def list_household_invitations(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    user_id: int,
+) -> list[dict[str, Any]]:
+    await require_household_owner(session, household_id=household_id, user_id=user_id)
+    result = await session.execute(
+        select(HouseholdInvitation)
+        .where(HouseholdInvitation.household_id == household_id)
+        .order_by(HouseholdInvitation.created_at.desc(), HouseholdInvitation.id.desc())
+    )
+    return [await _invitation_read(session, item) for item in result.scalars().all()]
+
+
+async def list_incoming_invitations(
+    session: AsyncSession,
+    *,
+    user_id: int,
+) -> list[dict[str, Any]]:
+    user = await session.get(User, user_id)
+    if user is None:
+        raise FinancialResourceNotFoundError("user not found")
+    email = normalize_email(user.email)
+    result = await session.execute(
+        select(HouseholdInvitation)
+        .where(
+            or_(
+                HouseholdInvitation.invited_user_id == user_id,
+                HouseholdInvitation.invited_email_normalized == email,
+            )
+        )
+        .order_by(HouseholdInvitation.created_at.desc(), HouseholdInvitation.id.desc())
+    )
+    return [await _invitation_read(session, item) for item in result.scalars().all()]
+
+
+async def _locked_invitation_for_invitee(
+    session: AsyncSession,
+    *,
+    invitation_id: int,
+    user_id: int,
+) -> tuple[HouseholdInvitation, User]:
+    user = await session.get(User, user_id)
+    if user is None:
+        raise FinancialResourceNotFoundError("invitation not found")
+    initial_result = await session.execute(
+        select(HouseholdInvitation).where(HouseholdInvitation.id == invitation_id)
+    )
+    invitation = initial_result.scalar_one_or_none()
+    if invitation is None or (
+        invitation.invited_user_id not in (None, user_id)
+        or invitation.invited_email_normalized != normalize_email(user.email)
+    ):
+        raise FinancialResourceNotFoundError("invitation not found")
+    await _lock_household(session, household_id=invitation.household_id)
+    result = await session.execute(
+        select(HouseholdInvitation)
+        .where(HouseholdInvitation.id == invitation_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    invitation = result.scalar_one_or_none()
+    if invitation is None or (
+        invitation.invited_user_id not in (None, user_id)
+        or invitation.invited_email_normalized != normalize_email(user.email)
+    ):
+        raise FinancialResourceNotFoundError("invitation not found")
+    return invitation, user
+
+
+async def accept_invitation(
+    session: AsyncSession,
+    *,
+    invitation_id: int,
+    user_id: int,
+) -> dict[str, Any]:
+    invitation, user = await _locked_invitation_for_invitee(
+        session, invitation_id=invitation_id, user_id=user_id
+    )
+    membership_result = await session.execute(
+        select(HouseholdMember)
+        .where(
+            HouseholdMember.household_id == invitation.household_id,
+            HouseholdMember.user_id == user_id,
+        )
+        .with_for_update()
+    )
+    membership = membership_result.scalar_one_or_none()
+    if invitation.status == "ACCEPTED":
+        if membership is None or membership.status != "ACTIVE":
+            raise HouseholdConflictError("accepted invitation has no active membership")
+        return await _invitation_read(session, invitation)
+    if invitation.status != "PENDING":
+        raise HouseholdConflictError("invitation is no longer pending")
+    now = datetime.now(timezone.utc)
+    if invitation.expires_at is not None and invitation.expires_at <= now:
+        invitation.status = "EXPIRED"
+        await session.commit()
+        raise HouseholdConflictError("invitation has expired")
+    household = await session.get(Household, invitation.household_id)
+    if household is None or household.status != "ACTIVE" or household.household_type != "SHARED":
+        raise FinancialResourceNotFoundError("invitation not found")
+    if membership is None:
+        membership = HouseholdMember(
+            household_id=invitation.household_id,
+            user_id=user_id,
+            role=invitation.role,
+            status="ACTIVE",
+            is_default=False,
+        )
+        session.add(membership)
+    elif membership.status == "REMOVED":
+        membership.role = invitation.role
+        membership.status = "ACTIVE"
+        membership.is_default = False
+    invitation.invited_user_id = user.id
+    invitation.status = "ACCEPTED"
+    invitation.accepted_at = now
+    await _mark_continuous_dirty(
+        session, household_id=invitation.household_id, category="HOUSEHOLD"
+    )
+    await session.commit()
+    await session.refresh(invitation)
+    logger.info(
+        "household_invitation_accepted household_id=%s invitation_id=%s actor_user_id=%s",
+        invitation.household_id,
+        invitation.id,
+        user_id,
+    )
+    return await _invitation_read(session, invitation)
+
+
+async def decline_invitation(
+    session: AsyncSession,
+    *,
+    invitation_id: int,
+    user_id: int,
+) -> dict[str, Any]:
+    invitation, _ = await _locked_invitation_for_invitee(
+        session, invitation_id=invitation_id, user_id=user_id
+    )
+    if invitation.status == "DECLINED":
+        return await _invitation_read(session, invitation)
+    if invitation.status != "PENDING":
+        raise HouseholdConflictError("invitation is no longer pending")
+    invitation.status = "DECLINED"
+    invitation.declined_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(invitation)
+    logger.info(
+        "household_invitation_declined household_id=%s invitation_id=%s actor_user_id=%s",
+        invitation.household_id,
+        invitation.id,
+        user_id,
+    )
+    return await _invitation_read(session, invitation)
+
+
+async def cancel_invitation(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    invitation_id: int,
+    user_id: int,
+) -> dict[str, Any]:
+    await _lock_household(session, household_id=household_id)
+    await require_household_owner(session, household_id=household_id, user_id=user_id)
+    result = await session.execute(
+        select(HouseholdInvitation)
+        .where(
+            HouseholdInvitation.id == invitation_id,
+            HouseholdInvitation.household_id == household_id,
+        )
+        .with_for_update()
+    )
+    invitation = result.scalar_one_or_none()
+    if invitation is None:
+        raise FinancialResourceNotFoundError("invitation not found")
+    if invitation.status == "CANCELLED":
+        return await _invitation_read(session, invitation)
+    if invitation.status != "PENDING":
+        raise HouseholdConflictError("invitation is no longer pending")
+    invitation.status = "CANCELLED"
+    invitation.cancelled_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(invitation)
+    logger.info(
+        "household_invitation_cancelled household_id=%s invitation_id=%s actor_user_id=%s",
+        household_id,
+        invitation.id,
+        user_id,
+    )
+    return await _invitation_read(session, invitation)
+
+
+async def set_default_household(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    user_id: int,
+) -> Household:
+    await _lock_household(session, household_id=household_id)
+    household, membership = await get_household_access(
+        session, household_id=household_id, user_id=user_id
+    )
+    await session.execute(select(User.id).where(User.id == user_id).with_for_update())
+    locked_result = await session.execute(
+        select(HouseholdMember)
+        .where(HouseholdMember.id == membership.id)
+        .with_for_update()
+    )
+    membership = locked_result.scalar_one()
+    await _clear_user_default(
+        session, user_id=user_id, except_membership_id=membership.id
+    )
+    membership.is_default = True
+    await session.commit()
+    return household
+
+
+async def leave_household(
+    session: AsyncSession,
+    *,
+    household_id: int,
+    user_id: int,
+) -> None:
+    await _lock_household(session, household_id=household_id)
+    household, membership = await get_household_access(
+        session, household_id=household_id, user_id=user_id
+    )
+    if household.household_type != "SHARED":
+        raise HouseholdConflictError("personal household cannot be left")
+    await session.execute(select(User.id).where(User.id == user_id).with_for_update())
+    locked_result = await session.execute(
+        select(HouseholdMember)
+        .where(HouseholdMember.id == membership.id)
+        .with_for_update()
+    )
+    membership = locked_result.scalar_one()
+    if membership.role == "OWNER" and await _active_owner_count(
+        session,
+        household_id=household_id,
+        excluding_member_id=membership.id,
+    ) == 0:
+        raise HouseholdConflictError("transfer ownership before leaving the household")
+    was_default = bool(membership.is_default)
+    membership.status = "REMOVED"
+    membership.is_default = False
+    if was_default:
+        await _restore_personal_default(session, user_id=user_id)
+    await _mark_continuous_dirty(
+        session, household_id=household_id, category="HOUSEHOLD"
+    )
+    await session.commit()
+    logger.info(
+        "household_member_left household_id=%s member_id=%s actor_user_id=%s",
+        household_id,
+        membership.id,
+        user_id,
     )
 
 

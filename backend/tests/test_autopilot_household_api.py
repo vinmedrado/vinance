@@ -47,7 +47,14 @@ def test_household_api_contract_is_registered_and_authenticated() -> None:
         "/api/v1/financial/households": {"GET", "POST"},
         "/api/v1/financial/households/default": {"GET"},
         "/api/v1/financial/households/{household_id}": {"GET", "PATCH"},
-        "/api/v1/financial/households/{household_id}/members": {"GET", "POST"},
+        "/api/v1/financial/households/{household_id}/members": {"GET"},
+        "/api/v1/financial/households/{household_id}/invitations": {"GET", "POST"},
+        "/api/v1/financial/households/{household_id}/invitations/{invitation_id}/cancel": {"POST"},
+        "/api/v1/financial/household-invitations": {"GET"},
+        "/api/v1/financial/household-invitations/{invitation_id}/accept": {"POST"},
+        "/api/v1/financial/household-invitations/{invitation_id}/decline": {"POST"},
+        "/api/v1/financial/households/{household_id}/default": {"POST"},
+        "/api/v1/financial/households/{household_id}/leave": {"POST"},
         "/api/v1/financial/households/{household_id}/incomes": {"GET", "POST"},
         "/api/v1/financial/households/{household_id}/expenses": {"GET", "POST"},
         "/api/v1/financial/households/{household_id}/debts": {"GET", "POST"},
@@ -131,7 +138,7 @@ def test_anonymous_user_cannot_list_households() -> None:
             },
         ),
         (
-            "/api/v1/financial/households/10/members",
+            "/api/v1/financial/households/10/invitations",
             {"email": "member@example.com", "role": "MEMBER"},
         ),
     ],
@@ -141,7 +148,7 @@ def test_client_cannot_choose_database_user_id(monkeypatch, path: str, payload: 
         raise AssertionError("invalid payload reached the service")
 
     monkeypatch.setattr(state_router.service, "create_resource", should_not_run)
-    monkeypatch.setattr(state_router.service, "add_member", should_not_run)
+    monkeypatch.setattr(state_router.service, "create_invitation", should_not_run)
     previous = _authenticated()
     try:
         with TestClient(app) as client:
@@ -149,6 +156,12 @@ def test_client_cannot_choose_database_user_id(monkeypatch, path: str, payload: 
         assert response.status_code == 422
     finally:
         _restore(previous)
+
+
+def test_direct_membership_activation_route_is_not_exposed() -> None:
+    paths = app.openapi()["paths"]
+    methods = {method.upper() for method in paths["/api/v1/financial/households/{household_id}/members"]}
+    assert methods == {"GET"}
 
 
 def test_cross_household_lookup_is_indistinguishable_from_missing(monkeypatch) -> None:

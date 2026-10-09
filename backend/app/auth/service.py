@@ -4,19 +4,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.auth.models import User
+from backend.app.auth.normalization import normalize_email
 from backend.app.auth.security import get_password_hash, verify_password
 from backend.app.auth.schemas import UserCreate
 from backend.app.financial_state.models import Household, HouseholdMember
 
 
 async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
-    result = await session.execute(select(User).where(User.email == email.lower()))
+    result = await session.execute(select(User).where(User.email == normalize_email(email)))
     return result.scalar_one_or_none()
 
 
 async def create_user(session: AsyncSession, payload: UserCreate) -> User:
     user = User(
-        email=payload.email.lower(),
+        email=normalize_email(str(payload.email)),
         full_name=payload.full_name,
         hashed_password=get_password_hash(payload.password),
     )

@@ -25,7 +25,8 @@ from backend.app.financial_state.schemas import (
     GoalRead,
     GoalUpdate,
     HouseholdCreate,
-    HouseholdMemberCreate,
+    HouseholdInvitationCreate,
+    HouseholdInvitationRead,
     HouseholdMemberRead,
     HouseholdMemberUpdate,
     HouseholdRead,
@@ -148,26 +149,6 @@ async def household_members_list(
     )
 
 
-@router.post(
-    "/households/{household_id}/members",
-    response_model=HouseholdMemberRead,
-    status_code=status.HTTP_201_CREATED,
-)
-async def household_member_add(
-    payload: HouseholdMemberCreate,
-    household_id: int = Path(ge=1),
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-):
-    return await _domain_call(
-        service.add_member,
-        session,
-        household_id=household_id,
-        user_id=current_user.id,
-        payload=payload,
-    )
-
-
 @router.patch(
     "/households/{household_id}/members/{member_id}",
     response_model=HouseholdMemberRead,
@@ -204,6 +185,158 @@ async def household_member_remove(
         session,
         household_id=household_id,
         member_id=member_id,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/households/{household_id}/invitations",
+    response_model=HouseholdInvitationRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def household_invitation_create(
+    response: Response,
+    payload: HouseholdInvitationCreate,
+    household_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        service.create_invitation,
+        session,
+        household_id=household_id,
+        user_id=current_user.id,
+        payload=payload,
+    )
+
+
+@router.get(
+    "/households/{household_id}/invitations",
+    response_model=list[HouseholdInvitationRead],
+)
+async def household_invitations_list(
+    response: Response,
+    household_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        service.list_household_invitations,
+        session,
+        household_id=household_id,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/households/{household_id}/invitations/{invitation_id}/cancel",
+    response_model=HouseholdInvitationRead,
+)
+async def household_invitation_cancel(
+    response: Response,
+    household_id: int = Path(ge=1),
+    invitation_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        service.cancel_invitation,
+        session,
+        household_id=household_id,
+        invitation_id=invitation_id,
+        user_id=current_user.id,
+    )
+
+
+@router.get(
+    "/household-invitations",
+    response_model=list[HouseholdInvitationRead],
+)
+async def incoming_household_invitations(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        service.list_incoming_invitations,
+        session,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/household-invitations/{invitation_id}/accept",
+    response_model=HouseholdInvitationRead,
+)
+async def household_invitation_accept(
+    response: Response,
+    invitation_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        service.accept_invitation,
+        session,
+        invitation_id=invitation_id,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/household-invitations/{invitation_id}/decline",
+    response_model=HouseholdInvitationRead,
+)
+async def household_invitation_decline(
+    response: Response,
+    invitation_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        service.decline_invitation,
+        session,
+        invitation_id=invitation_id,
+        user_id=current_user.id,
+    )
+
+
+@router.post("/households/{household_id}/default", response_model=HouseholdRead)
+async def household_set_default(
+    response: Response,
+    household_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        service.set_default_household,
+        session,
+        household_id=household_id,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/households/{household_id}/leave",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def household_leave(
+    response: Response,
+    household_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    await _domain_call(
+        service.leave_household,
+        session,
+        household_id=household_id,
         user_id=current_user.id,
     )
 

@@ -26,6 +26,7 @@ from backend.app.financial_state.models import (  # noqa: F401
     FinancialLiability,
     FinancialStateSnapshot,
     Household,
+    HouseholdInvitation,
     HouseholdMember,
     OwnedAsset,
 )

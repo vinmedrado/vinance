@@ -35,7 +35,7 @@ from backend.app.financial_state.schemas import (
     GoalCreate,
     GoalUpdate,
     HouseholdCreate,
-    HouseholdMemberCreate,
+    HouseholdInvitationCreate,
     IncomeCreate,
     IncomeUpdate,
     LiabilityCreate,
@@ -85,6 +85,32 @@ async def _user_with_personal_household(
     await session.refresh(household)
     await session.refresh(member)
     return user, household, member
+
+
+async def _invite_and_accept(
+    session: AsyncSession,
+    *,
+    household: Household,
+    owner: User,
+    invitee: User,
+) -> dict:
+    invitation = await service.create_invitation(
+        session,
+        household_id=household.id,
+        user_id=owner.id,
+        payload=HouseholdInvitationCreate(email=invitee.email),
+    )
+    await service.accept_invitation(
+        session,
+        invitation_id=invitation["id"],
+        user_id=invitee.id,
+    )
+    members = await service.list_members(
+        session,
+        household_id=household.id,
+        user_id=owner.id,
+    )
+    return next(member for member in members if member["user_id"] == invitee.id)
 
 
 @pytest.mark.asyncio
@@ -247,11 +273,8 @@ async def test_real_postgres_individual_couple_ownership_and_immutable_snapshots
                 user_id=ana.id,
                 payload=HouseholdCreate(name="Casa de Ana e Bia"),
             )
-            membership = await service.add_member(
-                session,
-                household_id=shared.id,
-                user_id=ana.id,
-                payload=HouseholdMemberCreate(email=bia.email),
+            membership = await _invite_and_accept(
+                session, household=shared, owner=ana, invitee=bia
             )
             with pytest.raises(service.HouseholdNotFoundError):
                 await service.current_financial_state(
@@ -305,11 +328,8 @@ async def test_real_postgres_individual_couple_ownership_and_immutable_snapshots
                 member_id=membership["id"],
                 user_id=ana.id,
             )
-            reactivated = await service.add_member(
-                session,
-                household_id=shared.id,
-                user_id=ana.id,
-                payload=HouseholdMemberCreate(email=bia.email),
+            reactivated = await _invite_and_accept(
+                session, household=shared, owner=ana, invitee=bia
             )
             assert reactivated["id"] == membership["id"]
             assert reactivated["status"] == "ACTIVE"
@@ -409,11 +429,8 @@ async def test_real_postgres_personal_is_owner_only_for_every_resource(
                 user_id=ana.id,
                 payload=HouseholdCreate(name="Privacy shared"),
             )
-            await service.add_member(
-                session,
-                household_id=shared.id,
-                user_id=ana.id,
-                payload=HouseholdMemberCreate(email=bia.email),
+            await _invite_and_accept(
+                session, household=shared, owner=ana, invitee=bia
             )
             private = await service.create_resource(
                 session,
@@ -488,11 +505,8 @@ async def test_real_postgres_shared_state_and_snapshot_cannot_infer_personal_inc
                 user_id=ana.id,
                 payload=HouseholdCreate(name="Inference shared"),
             )
-            await service.add_member(
-                session,
-                household_id=shared.id,
-                user_id=ana.id,
-                payload=HouseholdMemberCreate(email=bia.email),
+            await _invite_and_accept(
+                session, household=shared, owner=ana, invitee=bia
             )
             for owner, amount, scope, description in (
                 (ana, "5111", "PERSONAL", "A private 5111"),
