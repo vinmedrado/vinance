@@ -194,7 +194,7 @@ Frontend:
 - Não há recomendação definitiva de compra/venda.
 - Não há embeddings, vector database, LangChain, CrewAI, AutoGen ou Ollama.
 - Não há backtest, LSTM, Prophet ou ML treinado.
-- O frontend ainda não possui CRUD financeiro avançado.
+- O frontend financeiro cobre receitas, despesas, dívidas, patrimônio, objetivos e perfil; integrações bancárias e execução permanecem fora de escopo.
 - O mercado ainda não possui screener avançado ou gráficos complexos.
 - Observabilidade e CI/CD ainda devem ser evoluídos antes de produção real.
 

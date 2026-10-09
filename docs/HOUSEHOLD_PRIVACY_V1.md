@@ -81,6 +81,10 @@ O frontend ainda filtra defensivamente itens `PERSONAL` que não pertençam ao u
 
 Datas escolhidas pelo usuário em formulários usam o calendário local do browser. Elas não são derivadas de `toISOString()`, que converte para UTC e pode avançar o dia no horário de São Paulo. Timestamps de auditoria do backend continuam em UTC.
 
-## Limites da V1
+## Produto household
 
-Esta política não implementa convite/aceite de membro, CRUD financeiro completo no frontend, perfil de investimento compartilhado nem rateio automático. Essas funcionalidades exigem contratos próprios e não alteram a regra fundamental: ausência de compartilhamento explícito mantém o dado privado.
+O lifecycle de household compartilhado usa convite com consentimento explícito. Criar um convite `PENDING` não cria membership ativa. Somente o usuário autenticado cujo e-mail normalizado corresponde ao convite pode aceitá-lo; recusa e cancelamento não concedem acesso. O household pessoal permanece separado e não aceita convites.
+
+O frontend oferece CRUD canônico de receitas, despesas, dívidas, patrimônio e objetivos, além de edição do perfil financeiro pessoal. Novos registros começam como `PERSONAL`; a mudança para `HOUSEHOLD` exige intenção explícita e mantém as regras deste documento.
+
+Perfil de investimento compartilhado e rateio automático continuam fora do contrato. A ausência dessas capacidades nunca autoriza o uso de dados pessoais de outro membro.

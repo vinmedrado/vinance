@@ -148,10 +148,10 @@ Endpoints autenticados sob `/api/v1/financial/households/{household_id}`:
 - `GET /action-plan/history/{action_plan_id}`.
 
 Todos exigem membership ativo, isolam households, evitam enumeração cruzada e
-retornam `Cache-Control: private, no-store`. A autorização canônica concede aos
-membros ativos a visão consolidada do household, incluindo os itens pessoais
-que compõem aquela decisão; não existe acesso por usuário externo ao household.
-Não existe endpoint de edição ou exclusão.
+retornam `Cache-Control: private, no-store`. Uma decisão compartilhada é formada
+somente por registros explicitamente `HOUSEHOLD`; dados `PERSONAL` de outro
+membro não entram em valores, evidências ou ações compartilhadas. Não existe
+endpoint de edição ou exclusão.
 
 ## Frontend
 
