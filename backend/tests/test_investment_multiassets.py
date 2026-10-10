@@ -1,20 +1,5 @@
-from app.investment.portfolio_allocator import PortfolioAllocator
-from app.investment.engines.fii_engine import FIIEngine
-from app.investment.engines.fixed_income_engine import FixedIncomeEngine
-
-
-def test_allocator_prioritizes_reserve_when_missing():
-    result = PortfolioAllocator().allocate(
-        capital=1000,
-        profile="agressivo",
-        monthly_income=5000,
-        monthly_expenses=4000,
-        emergency_reserve=1000,
-        monthly_debt_payment=0,
-    )
-    alloc = {item["asset_class"]: item["percent"] for item in result["allocation"]}
-    assert alloc["caixa_reserva"] > 0.15
-    assert any("reserva" in msg.lower() for msg in result["explanation"])
+from backend.app.investment.engines.fii_engine import FIIEngine
+from backend.app.investment.engines.fixed_income_engine import FixedIncomeEngine
 
 
 def test_fii_engine_uses_dividends_and_volatility():

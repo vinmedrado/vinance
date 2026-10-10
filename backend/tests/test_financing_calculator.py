@@ -1,6 +1,11 @@
 import pytest
 
-from app.financing.services.calculator import FinancingInput, calculate_iof, calculate_schedule, price_payment
+from backend.app.domain.finance.calculator import (
+    FinancingInput,
+    calculate_iof,
+    calculate_schedule,
+    price_payment,
+)
 
 
 def test_price_fixed_payment_is_constant_without_external_costs():

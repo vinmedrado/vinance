@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.app.financing.schemas import FinancingSimulationRequest
-from backend.app.financing.services.calculator import FinancingInput, calculate_schedule
+from backend.app.domain.finance.calculator import FinancingInput, calculate_schedule
 
 SAFE_COMMITMENT = 0.25
 COMFORT_COMMITMENT = 0.30
