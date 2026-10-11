@@ -93,6 +93,9 @@ async def _evaluate(
             session,
             investment_budget=investment_budget,
             profile=profile_context["effective_profile"],
+            investment_horizon_months=profile_context.get(
+                "investment_horizon_months"
+            ),
             captured_at=generated_at,
         )
     try:

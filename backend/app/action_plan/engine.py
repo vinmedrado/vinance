@@ -708,13 +708,18 @@ def _investment_actions(
             quantity = None
         rank = starting_rank + len(result)
         symbol = str(raw.get("ticker") or raw.get("symbol") or "Oportunidade")
+        display_title = (
+            str(raw.get("product_name") or raw.get("asset_name") or symbol)
+            if str(raw.get("asset_class") or "").upper() == "FIXED_INCOME"
+            else symbol
+        )
         result.append(
             _action(
                 action_id=f"orchestration-{rank:03d}-{action_type.lower()}-{raw.get('asset_id') or symbol}",
                 category="INVESTMENT",
                 action_type=action_type,
                 rank=rank,
-                title=symbol,
+                title=display_title,
                 description=str(raw.get("reason") or "Decisão herdada do Investment Orchestrator."),
                 household_id=household_id,
                 generated_at=generated_at,
@@ -725,6 +730,17 @@ def _investment_actions(
                     "guardrail_status": guardrail,
                     "recommendation_score": raw.get("recommendation_score"),
                     "market": raw.get("market"),
+                    "product_id": raw.get("product_id"),
+                    "source_product_id": raw.get("source_product_id"),
+                    "product_type": raw.get("product_type"),
+                    "indexer": raw.get("indexer"),
+                    "reference_rate": raw.get("reference_rate"),
+                    "maturity_date": raw.get("maturity_date"),
+                    "liquidity_type": raw.get("liquidity_type"),
+                    "minimum_investment": raw.get("minimum_investment"),
+                    "market_date": raw.get("market_date"),
+                    "fixed_income_engine_version": raw.get("engine_version"),
+                    "fixed_income_rules_version": raw.get("rules_version"),
                 },
                 ownership_scope=ownership_scope,
                 owner_user_id=owner_user_id,

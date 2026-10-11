@@ -8,6 +8,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.catalog.models import AssetCatalog
+from backend.app.fixed_income.engine import evaluate_fixed_income_product
 from backend.app.financial.models import FinancialProfile
 from backend.app.intelligence.asset_score_model import AssetScore
 from backend.app.intelligence.asset_trend_signal_model import AssetTrendSignal
@@ -24,6 +25,7 @@ from backend.app.intelligence.services.recommendation_guardrail_service import (
     GUARDRAIL_SOURCE,
 )
 from backend.app.intelligence.services.trend_signal_service import TREND_SOURCE
+from backend.app.market.models import RendaFixaProduto
 from backend.app.investment_orchestrator.rules import (
     MARKET_FRESHNESS_DAYS,
     PROFILE_ORDER,
@@ -37,6 +39,7 @@ MARKET_LABELS = {
     "FII": "Fundos imobiliários",
     "ETF": "ETFs",
     "BDR": "BDRs",
+    "FIXED_INCOME": "Renda fixa",
 }
 
 
@@ -62,6 +65,7 @@ async def load_profile_context(
             "status": "MISSING",
             "effective_profile": None,
             "investment_horizon": None,
+            "investment_horizon_months": None,
             "members": [],
             "missing_member_user_ids": [],
             "inconsistent_member_user_ids": [],
@@ -80,6 +84,7 @@ async def load_profile_context(
             "status": "MISSING",
             "effective_profile": None,
             "investment_horizon": None,
+            "investment_horizon_months": None,
             "members": [],
             "missing_member_user_ids": [],
             "inconsistent_member_user_ids": [],
@@ -124,6 +129,11 @@ async def load_profile_context(
                 "user_id": member_user_id,
                 "full_name": member.get("full_name"),
                 "profile": profile,
+                "investment_horizon_months": (
+                    record.get("investment_horizon_months")
+                    if isinstance(record, Mapping)
+                    else getattr(record, "investment_horizon_months", None)
+                ) if record else None,
                 "updated_at": (
                     record.get("updated_at")
                     if isinstance(record, Mapping)
@@ -141,13 +151,21 @@ async def load_profile_context(
     else:
         effective = min(known, key=lambda value: PROFILE_ORDER[value])
         status = "COMPLETE" if len(set(known)) == 1 else "MIXED"
+    horizon_values = [
+        int(row["investment_horizon_months"])
+        for row in rows
+        if row.get("investment_horizon_months") is not None
+        and str(row.get("investment_horizon_months")).isdigit()
+        and int(row["investment_horizon_months"]) > 0
+    ]
+    effective_horizon = (
+        min(horizon_values) if len(horizon_values) == len(rows) and rows else None
+    )
     return {
         "status": status,
         "effective_profile": effective,
-        # The canonical financial profile currently has no investment-horizon
-        # field. Keep the absence explicit so the orchestrator can limit the
-        # decision instead of silently assuming a long horizon.
-        "investment_horizon": None,
+        "investment_horizon": effective_horizon,
+        "investment_horizon_months": effective_horizon,
         "members": rows,
         "missing_member_user_ids": missing,
         "inconsistent_member_user_ids": inconsistent,
@@ -290,6 +308,7 @@ async def load_market_context(
     *,
     investment_budget: Decimal,
     profile: str | None,
+    investment_horizon_months: int | None = None,
     captured_at: datetime | None = None,
     limit_per_market: int = 20,
 ) -> dict[str, Any]:
@@ -323,7 +342,10 @@ async def load_market_context(
     candidates: list[dict[str, Any]] = []
     missing: list[str] = []
     failures: list[dict[str, str]] = []
-    for market in SUPPORTED_MARKETS:
+    equity_markets = tuple(
+        market for market in SUPPORTED_MARKETS if market != "FIXED_INCOME"
+    )
+    for market in equity_markets:
         try:
             data_date = await _latest_common_market_date(session, market=market)
             if data_date is None:
@@ -560,6 +582,103 @@ async def load_market_context(
                 }
             )
 
+    if "FIXED_INCOME" in SUPPORTED_MARKETS:
+        try:
+            product_result = await session.execute(
+                select(RendaFixaProduto)
+                .where(
+                    RendaFixaProduto.source == "tesouro_transparente",
+                    RendaFixaProduto.is_active.is_(True),
+                )
+                .order_by(
+                    RendaFixaProduto.market_date.desc(),
+                    RendaFixaProduto.vencimento.asc(),
+                    RendaFixaProduto.source_product_id.asc(),
+                )
+                .limit(max(limit_per_market * 4, 40))
+            )
+            products = list(product_result.scalars().all())
+            catalog_ids = [
+                int(item.asset_catalog_id)
+                for item in products
+                if item.asset_catalog_id is not None
+            ]
+            catalog_by_id: dict[int, AssetCatalog] = {}
+            if catalog_ids:
+                fixed_catalog_result = await session.execute(
+                    select(AssetCatalog).where(AssetCatalog.id.in_(catalog_ids))
+                )
+                catalog_by_id = {
+                    int(item.id): item
+                    for item in fixed_catalog_result.scalars().all()
+                }
+            fixed_candidates: list[dict[str, Any]] = []
+            for product in products:
+                payload = {
+                    column.name: getattr(product, column.name)
+                    for column in RendaFixaProduto.__table__.columns
+                }
+                catalog = (
+                    catalog_by_id.get(int(product.asset_catalog_id))
+                    if product.asset_catalog_id is not None
+                    else None
+                )
+                payload["catalog_ticker"] = getattr(catalog, "ticker", None)
+                fixed_candidates.append(
+                    evaluate_fixed_income_product(
+                        payload,
+                        investment_budget=budget,
+                        profile=profile_value,
+                        investment_horizon_months=investment_horizon_months,
+                        as_of=captured_at,
+                    )
+                )
+            candidates.extend(fixed_candidates)
+            fixed_market_dates = [
+                item.get("market_date")
+                for item in fixed_candidates
+                if item.get("market_date") is not None
+            ]
+            latest_market_date = max(fixed_market_dates) if fixed_market_dates else None
+            fixed_freshness = (
+                "FRESH"
+                if fixed_candidates
+                and all(item.get("freshness_status") == "FRESH" for item in fixed_candidates)
+                else "STALE"
+                if fixed_candidates
+                else "UNKNOWN"
+            )
+            if not fixed_candidates:
+                missing.append("market.FIXED_INCOME.real_products")
+            market_rows.append(
+                {
+                    "market": "FIXED_INCOME",
+                    "label": MARKET_LABELS["FIXED_INCOME"],
+                    "status": "AVAILABLE" if fixed_candidates else "UNKNOWN",
+                    "data_timestamp": (
+                        datetime.combine(latest_market_date, time.min, tzinfo=timezone.utc)
+                        if latest_market_date is not None
+                        else None
+                    ),
+                    "freshness_status": fixed_freshness,
+                    "candidate_count": len(fixed_candidates),
+                    "source": "tesouro_transparente",
+                    "engine_version": "fixed-income-v1",
+                    "rules_version": "fixed-income-rules-v1",
+                }
+            )
+        except Exception as exc:
+            failures.append({"market": "FIXED_INCOME", "error": type(exc).__name__})
+            market_rows.append(
+                {
+                    "market": "FIXED_INCOME",
+                    "label": MARKET_LABELS["FIXED_INCOME"],
+                    "status": "UNAVAILABLE",
+                    "data_timestamp": None,
+                    "freshness_status": "UNKNOWN",
+                    "candidate_count": 0,
+                }
+            )
     available = sum(1 for item in market_rows if item["status"] == "AVAILABLE")
     return {
         "captured_at": captured_at,
@@ -572,5 +691,6 @@ async def load_market_context(
             "score": SCORE_SOURCE,
             "guardrail": GUARDRAIL_SOURCE,
             "trend": TREND_SOURCE,
+            "fixed_income": "tesouro_transparente",
         },
     }

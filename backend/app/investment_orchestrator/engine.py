@@ -13,6 +13,9 @@ from backend.app.capital_allocation.engine import (
 from backend.app.financial_policy.engine import (
     decision_fingerprint_from_payload as policy_fingerprint_from_payload,
 )
+from backend.app.intelligence.services.budget_advisor_service import (
+    build_amount_budget_candidate,
+)
 from backend.app.investment_orchestrator.rules import (
     CONCENTRATION_THRESHOLD_PCT,
     ENGINE_VERSION,
@@ -416,7 +419,11 @@ def _class_plan(
                 "reason": reason,
                 "risk_fit": "COMPATIBLE" if buys else "UNKNOWN",
                 "liquidity_fit": (
-                    "KNOWN_BY_SCORE"
+                    "KNOWN_BY_PRODUCT"
+                    if market == "FIXED_INCOME"
+                    and rows
+                    and all(row.get("liquidity_assessment") != "UNKNOWN" for row in rows)
+                    else "KNOWN_BY_SCORE"
                     if rows and all(row.get("liquidity_score") is not None for row in rows)
                     else "UNKNOWN"
                 ),
@@ -486,8 +493,30 @@ def _class_plan(
         committed = False
         for row in rows:
             if row["action"] == "BUY" and class_allocation is not None and not committed:
-                price = _money(row.get("price_reference"), allow_none=True)
                 class_budget = class_allocation["allocated_amount"]
+                if str(row.get("purchase_mode") or "").upper() == "AMOUNT":
+                    minimum = _money(row.get("minimum_investment"), allow_none=True)
+                    amount_candidate = build_amount_budget_candidate(
+                        budget=class_budget,
+                        minimum_investment=minimum,
+                    )
+                    if amount_candidate.affordable:
+                        capital = amount_candidate.candidate_amount
+                        row["candidate_amount"] = capital
+                        row["capital_required"] = amount_candidate.minimum_investment
+                        row["quantity_suggested"] = 0
+                        row["capital_committed"] = capital
+                        class_allocation["suggested_capital"] = capital
+                        class_allocation["remaining_cash"] = (
+                            amount_candidate.remaining_budget
+                        )
+                        committed = True
+                    else:
+                        row["action"] = "WAIT"
+                        row["reason"] = "O orçamento da classe não comporta o aporte mínimo conhecido."
+                    ranked.append(row)
+                    continue
+                price = _money(row.get("price_reference"), allow_none=True)
                 if price is not None and price > 0 and class_budget >= price:
                     advisor_quantity = int(row.get("quantity_candidate") or 0)
                     max_quantity = int(class_budget // price)
@@ -679,15 +708,18 @@ def calculate_investment_orchestration(
         )
 
     profile, profile_blockers, profile_warnings = _profile_gate(profile_data)
+    investment_horizon = profile_data.get(
+        "investment_horizon_months", profile_data.get("investment_horizon")
+    )
     if budget > 0:
         blockers.extend(profile_blockers)
         warnings.extend(profile_warnings)
-        if profile_data.get("investment_horizon") in {None, ""}:
+        if investment_horizon in {None, ""}:
             warnings.append(
                 _message(
                     "INVESTMENT_HORIZON_UNKNOWN",
                     "O horizonte de investimento não está disponível no perfil canônico; a estratégia permanece limitada.",
-                    fields=("profile_context.investment_horizon",),
+                    fields=("profile_context.investment_horizon_months",),
                     rule_ids=("IOV1-PROFILE-001", "IOV1-CLASS-001"),
                 )
             )
@@ -695,7 +727,7 @@ def calculate_investment_orchestration(
                 _message(
                     "INVESTMENT_HORIZON_REQUIRED",
                     "Informar o horizonte permitiria avaliar melhor compatibilidade de liquidez e risco.",
-                    fields=("financial_profiles.investment_horizon",),
+                    fields=("financial_profiles.investment_horizon_months",),
                     rule_ids=("IOV1-PROFILE-001", "IOV1-CLASS-001"),
                 )
             )
@@ -871,7 +903,8 @@ def calculate_investment_orchestration(
             {
                 "profile_status": profile_data.get("status"),
                 "effective_profile": profile,
-                "investment_horizon": profile_data.get("investment_horizon"),
+                "investment_horizon": investment_horizon,
+                "investment_horizon_months": investment_horizon,
             },
             "O perfil foi consumido sem default implícito e o horizonte ausente permaneceu explícito.",
         ),
@@ -892,6 +925,24 @@ def calculate_investment_orchestration(
                 "partial_failures": market_data.get("partial_failures") or [],
             },
             "Somente snapshots atuais com score, preço e guardrail alinhados foram avaliados.",
+        ),
+        _trace(
+            "IOV1-FIXED-INCOME-001",
+            "TRIGGERED"
+            if any(
+                str(item.get("market") or "").upper() == "FIXED_INCOME"
+                for item in candidates
+            )
+            else "NOT_TRIGGERED",
+            {
+                "candidate_count": sum(
+                    1
+                    for item in candidates
+                    if str(item.get("market") or "").upper() == "FIXED_INCOME"
+                ),
+                "investment_horizon_months": investment_horizon,
+            },
+            "Renda fixa usa suitability e guardrails canônicos quando há produtos reais.",
         ),
         _trace(
             "IOV1-CLASS-001",

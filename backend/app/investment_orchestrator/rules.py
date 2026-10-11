@@ -11,8 +11,8 @@ MONEY_ROUNDING = ROUND_DOWN
 SETTLEMENT_CURRENCY = "BRL"
 MARKET_FRESHNESS_DAYS = 7
 CONCENTRATION_THRESHOLD_PCT = Decimal("50.00")
-SUPPORTED_MARKETS = ("ACOES", "FII", "ETF", "BDR")
-UNSUPPORTED_CLASSES = ("FIXED_INCOME", "CRYPTO")
+SUPPORTED_MARKETS = ("ACOES", "FII", "ETF", "BDR", "FIXED_INCOME")
+UNSUPPORTED_CLASSES = ("CRYPTO",)
 VALID_STATUSES = {
     "BLOCKED",
     "LIMITED",
@@ -41,6 +41,7 @@ RULE_CATALOG = {
     "IOV1-PROFILE-001": "Perfil explícito é obrigatório; nenhum perfil padrão é inventado.",
     "IOV1-PORTFOLIO-001": "Carteira ausente permanece desconhecida e concentração conhecida é respeitada.",
     "IOV1-MARKET-001": "Scores exigem preço, fonte, data fresca e guardrail correspondente.",
+    "IOV1-FIXED-INCOME-001": "Renda fixa usa fatos oficiais, suitability e guardrails versionados próprios.",
     "IOV1-CLASS-001": "Elegibilidade deriva de perfil, risco, dados e concentração.",
     "IOV1-ALLOCATE-001": "Capital por classe deriva da força relativa das oportunidades elegíveis.",
     "IOV1-GUARDRAIL-001": "BLOCKED nunca compra; WARNING aguarda; APPROVED pode ser candidato.",
