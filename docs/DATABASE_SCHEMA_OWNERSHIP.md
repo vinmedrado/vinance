@@ -26,6 +26,13 @@ criado em `0006` com esse contrato: adiciona as features específicas de cada
 mercado, normaliza os campos numéricos e substitui constraints e índices
 históricos pelos objetos canônicos.
 
+A migration `0026_fixed_income_v1` evolui, no mesmo ownership canônico, a
+tabela `renda_fixa_produtos` e o perfil financeiro. Ela acrescenta identidade
+estável de origem, fatos de preço/taxa/liquidez/vencimento, metadata da fonte e
+o horizonte opcional `financial_profiles.investment_horizon_months`. O
+catálogo global continua separado de `owned_assets`: uma oportunidade de
+mercado não prova propriedade pelo usuário.
+
 Em `cripto_ml_features`, linhas legadas sem `coin_id` recebem um identificador
 estável no formato `legacy:<ticker-normalizado>`. Esse prefixo registra a
 proveniência sem fingir que o valor é um identificador nativo de provedor. A
@@ -70,7 +77,9 @@ PostgreSQL vazio com `alembic upgrade head`.
 O teste `backend/tests/test_alembic_fresh_database.py` automatiza essa prova.
 Ele exige uma base PostgreSQL dedicada cujo nome contenha `test`, reconstrói
 apenas o schema `public` dessa base, executa todas as migrations e compara o
-resultado com o metadata. Exemplo de execução em ambiente isolado:
+resultado com o metadata, inclusive Intelligence e Renda Fixa, e confirma que
+as seis tabelas externas do Trading não foram adotadas. Exemplo de execução
+em ambiente isolado:
 
 ```bash
 ALEMBIC_FRESH_TEST_DATABASE_URL=<url-de-banco-test-dedicado> \

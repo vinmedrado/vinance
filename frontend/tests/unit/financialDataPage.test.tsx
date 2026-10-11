@@ -60,7 +60,7 @@ beforeEach(() => {
   financialStateService.updateIncome.mockResolvedValue({ ...income, description: 'Salário principal' });
   financialStateService.createLiability.mockResolvedValue({ id: 201 });
   financialStateService.deleteGoal.mockResolvedValue(undefined);
-  financialService.getProfile.mockResolvedValue({ id: 1, user_id: 10, monthly_salary: '5000.00', emergency_reserve: '1000.00', has_debt_default: false, risk_profile: 'moderate', created_at: '', updated_at: '' });
+  financialService.getProfile.mockResolvedValue({ id: 1, user_id: 10, monthly_salary: '5000.00', emergency_reserve: '1000.00', has_debt_default: false, risk_profile: 'moderate', investment_horizon_months: 120, created_at: '', updated_at: '' });
   financialService.upsertProfile.mockResolvedValue({});
 });
 
@@ -121,10 +121,37 @@ test('edits the personal financial profile without attaching a household id', as
   const reserve = screen.getByLabelText('Reserva de emergência');
   await user.clear(reserve);
   await user.type(reserve, '2500');
+  const horizon = screen.getByRole('spinbutton', { name: /Horizonte de investimento/i });
+  await user.clear(horizon);
+  await user.type(horizon, '60');
   await user.click(screen.getByRole('button', { name: 'Salvar perfil' }));
   await waitFor(() => expect(financialService.upsertProfile).toHaveBeenCalledWith(expect.objectContaining({
     monthly_salary: 5000,
     emergency_reserve: 2500,
+    investment_horizon_months: 60,
   })));
   expect(financialService.upsertProfile.mock.calls[0][0]).not.toHaveProperty('household_id');
+});
+
+test('preserves an unknown investment horizon as null', async () => {
+  financialService.getProfile.mockResolvedValue({
+    id: 1,
+    user_id: 10,
+    monthly_salary: '5000.00',
+    emergency_reserve: '1000.00',
+    has_debt_default: false,
+    risk_profile: 'moderate',
+    investment_horizon_months: null,
+    created_at: '',
+    updated_at: '',
+  });
+  const user = userEvent.setup();
+  renderPage();
+  expect((await screen.findAllByText('Não informado')).length).toBeGreaterThan(0);
+  await user.click(screen.getByRole('button', { name: 'Editar perfil' }));
+  await user.click(screen.getByRole('button', { name: 'Salvar perfil' }));
+
+  await waitFor(() => expect(financialService.upsertProfile).toHaveBeenCalledWith(
+    expect.objectContaining({ investment_horizon_months: null }),
+  ));
 });

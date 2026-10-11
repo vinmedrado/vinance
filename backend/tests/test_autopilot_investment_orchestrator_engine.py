@@ -255,6 +255,83 @@ def test_dynamic_class_distribution_uses_relative_scores_not_fixed_weights() -> 
     assert amounts["ACOES"] != result["investment_budget"] * Decimal("0.30")
 
 
+def test_fixed_income_amount_commitment_respects_budget_and_minimum() -> None:
+    fixed_income = _candidate(
+        ticker="TD-REAL",
+        market="FIXED_INCOME",
+        score="80",
+        price="20000",
+    )
+    fixed_income.update(
+        {
+            "purchase_mode": "AMOUNT",
+            "minimum_investment": Decimal("200.00"),
+            "candidate_amount": Decimal("5000.00"),
+            "quantity_candidate": 0,
+            "liquidity_assessment": "KNOWN_LIQUID",
+            "product_id": 99,
+            "source_product_id": "tesouro-selic:2029-03-01",
+            "product_type": "TREASURY_SELIC",
+        }
+    )
+
+    result = _run(market=_market(fixed_income))
+
+    opportunity = result["ranked_opportunities"][0]
+    class_allocation = result["class_allocations"][0]
+    assert opportunity["action"] == "BUY"
+    assert opportunity["quantity_suggested"] == 0
+    assert opportunity["capital_committed"] == class_allocation["allocated_amount"]
+    assert opportunity["capital_committed"] <= result["investment_budget"]
+    assert result["suggested_capital"] + result["remaining_investment_cash"] == result["investment_budget"]
+
+
+def test_all_supported_classes_preserve_capital_without_reusing_remainders() -> None:
+    fixed_income = _candidate(
+        ticker="TD-REAL",
+        market="FIXED_INCOME",
+        score="75",
+        price="1000",
+    )
+    fixed_income.update(
+        {
+            "purchase_mode": "AMOUNT",
+            "minimum_investment": Decimal("1.00"),
+            "candidate_amount": Decimal("1000.00"),
+            "quantity_candidate": 0,
+        }
+    )
+    result = _run(
+        market=_market(
+            _candidate("AAA3", "ACOES", score="90", price="1"),
+            _candidate("FII11", "FII", score="85", price="1"),
+            _candidate("ETF1", "ETF", score="80", price="1"),
+            _candidate("BDR1", "BDR", score="70", price="1"),
+            fixed_income,
+        )
+    )
+
+    class_total = sum(
+        item["allocated_amount"] for item in result["class_allocations"]
+    )
+    committed_total = sum(
+        item["capital_committed"] for item in result["ranked_opportunities"]
+    )
+    assert {item["market"] for item in result["class_allocations"]} == {
+        "ACOES",
+        "FII",
+        "ETF",
+        "BDR",
+        "FIXED_INCOME",
+    }
+    assert class_total <= result["investment_budget"]
+    assert committed_total == result["suggested_capital"]
+    assert committed_total <= class_total
+    assert result["suggested_capital"] + result["remaining_investment_cash"] == result["investment_budget"]
+    for allocation in result["class_allocations"]:
+        assert allocation["suggested_capital"] <= allocation["allocated_amount"]
+
+
 def test_opportunities_are_ranked_globally_by_safe_action_and_score() -> None:
     result = _run(
         market=_market(
@@ -311,11 +388,13 @@ def test_all_market_context_failure_blocks() -> None:
     assert result["remaining_investment_cash"] == result["investment_budget"]
 
 
-def test_fixed_income_and_crypto_are_not_falsely_declared_supported() -> None:
+def test_fixed_income_is_canonical_but_crypto_remains_unsupported() -> None:
     result = _run()
     decisions = {item["asset_class"]: item for item in result["asset_class_decisions"]}
     assert decisions["FIXED_INCOME"]["eligibility"] == "UNKNOWN"
+    assert "PIPELINE_NOT_SUPPORTED" not in decisions["FIXED_INCOME"]["constraints"]
     assert decisions["CRYPTO"]["eligibility"] == "UNKNOWN"
+    assert decisions["CRYPTO"]["constraints"] == ["PIPELINE_NOT_SUPPORTED"]
 
 
 def test_allocation_fingerprint_tampering_fails_closed() -> None:

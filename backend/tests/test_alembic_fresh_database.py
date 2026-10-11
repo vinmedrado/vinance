@@ -48,6 +48,42 @@ INTELLIGENCE_COLUMNS = {
     },
 }
 
+FIXED_INCOME_COLUMNS = {
+    "source_product_id",
+    "asset_catalog_id",
+    "nome",
+    "emissor",
+    "tipo",
+    "indexador",
+    "rate_type",
+    "purchase_rate",
+    "redemption_rate",
+    "unit_price",
+    "redemption_unit_price",
+    "base_unit_price",
+    "vencimento",
+    "liquidez_dias",
+    "liquidity_type",
+    "investimento_minimo",
+    "guarantee_type",
+    "tax_treatment",
+    "currency",
+    "market_date",
+    "source_metadata",
+    "source",
+    "coletado_em",
+    "is_active",
+}
+
+TRADING_EXTERNAL_TABLES = {
+    "backtest_runs",
+    "crypto_candles",
+    "crypto_features",
+    "crypto_targets",
+    "paper_trades",
+    "trading_signals",
+}
+
 
 def _run_alembic(*arguments: str, database_url: str) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
@@ -97,7 +133,7 @@ def test_fresh_alembic_database_matches_canonical_metadata() -> None:
 
     current = _run_alembic("current", database_url=FRESH_DATABASE_URL)
     assert current.returncode == 0, current.stdout + current.stderr
-    assert "0025_intelligence_schema (head)" in current.stdout
+    assert "0026_fixed_income_v1 (head)" in current.stdout
 
     check = _run_alembic("check", database_url=FRESH_DATABASE_URL)
     assert check.returncode == 0, check.stdout + check.stderr
@@ -107,6 +143,7 @@ def test_fresh_alembic_database_matches_canonical_metadata() -> None:
     try:
         inspector = sa.inspect(engine)
         table_names = set(inspector.get_table_names())
+        assert not (TRADING_EXTERNAL_TABLES & table_names)
         for table_name, expected_columns in INTELLIGENCE_COLUMNS.items():
             assert table_name in table_names
             actual_columns = {
@@ -148,5 +185,37 @@ def test_fresh_alembic_database_matches_canonical_metadata() -> None:
             "coin_id",
             "date",
         )
+
+        fixed_income_columns = {
+            column["name"]: column
+            for column in inspector.get_columns("renda_fixa_produtos")
+        }
+        assert FIXED_INCOME_COLUMNS.issubset(fixed_income_columns)
+        assert fixed_income_columns["source_product_id"]["nullable"] is False
+        assert fixed_income_columns["currency"]["nullable"] is False
+
+        fixed_income_uniques = {
+            unique["name"]: tuple(unique["column_names"])
+            for unique in inspector.get_unique_constraints("renda_fixa_produtos")
+        }
+        assert fixed_income_uniques["uq_renda_fixa_produtos_source_product"] == (
+            "source",
+            "source_product_id",
+        )
+
+        fixed_income_indexes = {
+            index["name"] for index in inspector.get_indexes("renda_fixa_produtos")
+        }
+        assert {
+            "ix_renda_fixa_produtos_asset_catalog_id",
+            "ix_renda_fixa_produtos_market_date",
+            "ix_renda_fixa_produtos_active_market_date",
+        }.issubset(fixed_income_indexes)
+
+        profile_columns = {
+            column["name"]: column
+            for column in inspector.get_columns("financial_profiles")
+        }
+        assert profile_columns["investment_horizon_months"]["nullable"] is True
     finally:
         engine.dispose()

@@ -34,7 +34,10 @@ Estados formais:
 - `ACTIVE`: capital autorizado e oportunidade compatível sem limitação material conhecida;
 - `NO_SUITABLE_OPPORTUNITY`: há capital autorizado, mas nenhuma oportunidade passa pelos critérios atuais. Todo o valor permanece em caixa.
 
-Carteira ausente é `UNKNOWN`, nunca carteira zerada. O modelo atual não possui campo canônico de horizonte; sua ausência é registrada como `INVESTMENT_HORIZON_UNKNOWN` e limita a decisão, sem assumir longo prazo.
+Carteira ausente é `UNKNOWN`, nunca carteira zerada. O horizonte opcional é
+lido de `financial_profiles.investment_horizon_months`; sua ausência continua
+registrada como `INVESTMENT_HORIZON_UNKNOWN` e limita a decisão, sem assumir
+longo prazo.
 
 ## Classes e perfil
 
@@ -43,9 +46,13 @@ A v1 considera apenas classes com pipeline canônico completo:
 - `ACOES`;
 - `FII`;
 - `ETF`;
-- `BDR`.
+- `BDR`;
+- `FIXED_INCOME`, com produtos soberanos do pipeline oficial do Tesouro.
 
-`FIXED_INCOME` e `CRYPTO` são expostas como `UNKNOWN`, pois ainda não possuem neste fluxo a mesma cadeia de catálogo, score, preço e guardrail. Isso não declara essas classes ruins; declara apenas que a infraestrutura v1 não consegue avaliá-las com qualidade equivalente.
+`CRYPTO` permanece `UNKNOWN`: Trading Crypto não equivale a suporte de
+investimento de longo prazo. CDB, LCI e LCA também permanecem fora do universo
+até existir fonte real canônica; nenhum produto sintético é usado para
+preencher a classe.
 
 O perfil é lido de `financial_profiles.risk_profile` e normalizado para o contrato do Investor Profile Advisor. Perfil ausente ou inconsistente bloqueia a avaliação. Em household com perfis diferentes, a v1 usa explicitamente o perfil mais conservador e registra warning; não presume que os membros tenham o mesmo risco.
 
@@ -59,7 +66,10 @@ Para cada mercado, o adaptador seleciona o snapshot mais recente em que score e 
 - score de liquidez nullable, preservando ausência como desconhecida;
 - freshness e falhas parciais por classe.
 
-Dados com mais de sete dias são `STALE`. Preço, recommendation score ou liquidez ausentes nunca viram zero ou valor neutro.
+Dados de mercados listados seguem a freshness de sete dias do Orchestrator.
+Renda fixa usa seu ruleset próprio, atualmente cinco dias corridos a partir de
+`market_date`, porque a fonte oficial é diária. Preço, score, taxa, mínimo ou
+liquidez ausentes nunca viram zero ou valor neutro.
 
 Precedência de segurança:
 
@@ -68,7 +78,11 @@ Precedência de segurança:
 - guardrail `APPROVED` ainda exige freshness, preço, score, liquidez e risco compatível;
 - conflito sempre é normalizado em favor da segurança.
 
-O Budget Advisor calcula possibilidades de quantidade dentro do orçamento. Seus itens são alternativas: a v1 compromete no máximo uma oportunidade por classe para não gastar o mesmo capital duas vezes.
+O Budget Advisor calcula possibilidades de quantidade dentro do orçamento.
+Para produtos de aplicação monetária, seu adaptador canônico calcula
+`candidate_amount` e respeita o aporte mínimo sem inventar lote inteiro. Seus
+itens são alternativas: a v1 compromete no máximo uma oportunidade por classe
+para não gastar o mesmo capital duas vezes.
 As oportunidades finais são ranqueadas globalmente por ação segura, recommendation score e desempates determinísticos; a ordem fixa dos mercados nunca define o ranking.
 
 ## Classe, capital e conservação
@@ -128,4 +142,10 @@ Na área financeira, “Como investir este valor” apresenta budget autorizado,
 
 ## Limites e evolução futura
 
-A v1 não implementa produtos de renda fixa, cripto, câmbio, otimização de carteira, lotes inventados, corretora, Open Finance, execução, rebalanceamento, Continuous Autopilot ou Trading allocation. A próxima camada poderá consumir a decisão congelada para construir um Action Plan. Qualquer integração futura com Trading exigirá bucket especulativo explícito, autorização própria e contrato separado; o Trading V2 permanece isolado e `PAPER_ONLY`.
+A v1 não implementa CDB/LCI/LCA sem fonte real, cripto investment, câmbio,
+otimização de carteira, lotes inventados, corretora, Open Finance, execução,
+rebalanceamento ou Trading allocation. Action Plan e Continuous Autopilot
+consomem a decisão congelada sem reinterpretar a recomendação. Qualquer
+integração futura com Trading exigirá bucket especulativo explícito,
+autorização própria e contrato separado; o Trading V2 permanece isolado e
+`PAPER_ONLY`.

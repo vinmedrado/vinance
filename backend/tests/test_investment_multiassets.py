@@ -1,5 +1,4 @@
 from backend.app.investment.engines.fii_engine import FIIEngine
-from backend.app.investment.engines.fixed_income_engine import FixedIncomeEngine
 
 
 def test_fii_engine_uses_dividends_and_volatility():
@@ -9,10 +8,3 @@ def test_fii_engine_uses_dividends_and_volatility():
     assert result["asset_class"] == "fii"
     assert "dividend_yield_estimated" in result["metrics"]
     assert result["portfolio_role"]
-
-
-def test_fixed_income_engine_considers_liquidity_and_guarantee():
-    product = {"name": "CDB Liquidez", "indexer": "CDI", "rate": 100, "liquidity_days": 0, "guarantee_type": "FGC", "minimum_investment": 0}
-    result = FixedIncomeEngine().analyze_product(product)
-    assert result["risk"] == "baixo"
-    assert "liquidez" in " ".join(result["explanation"]).lower()

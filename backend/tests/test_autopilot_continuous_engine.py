@@ -246,6 +246,29 @@ def test_insignificant_monetary_change_is_audited_without_action_alert() -> None
     assert str(result["detected_changes"][0]["delta"]) == "0.01"
 
 
+def test_fixed_income_rate_reference_change_is_audited_without_forcing_action() -> None:
+    previous = _plan(plan_id=41)
+    current = _plan(plan_id=42)
+    for plan, rate in ((previous, "0.05"), (current, "0.06")):
+        action = plan["actions"][1]
+        action["asset_class"] = "FIXED_INCOME"
+        action["symbol"] = "TD-REAL"
+        action["source_reference"] = {
+            "source_product_id": "tesouro-selic:2029-03-01",
+            "reference_rate": rate,
+            "market_date": "2026-09-24",
+        }
+    current["decision_fingerprint"] = "b" * 64
+
+    result = _evaluate(previous, current, change_categories=["MARKET_DATA"])
+
+    assert result["plan_diff"]["changed_actions"][0]["changed_fields"] == [
+        "source_reference"
+    ]
+    assert result["materiality"] == "LOW"
+    assert result["alert_decision"] == "INFORMATIONAL"
+
+
 @pytest.mark.parametrize(
     ("before", "after", "materiality"),
     [

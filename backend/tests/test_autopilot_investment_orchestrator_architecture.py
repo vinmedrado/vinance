@@ -44,7 +44,13 @@ def test_ruleset_is_versioned_conservative_and_has_no_fixed_class_weights() -> N
     assert MONEY_QUANTUM == Decimal("0.01")
     assert RULES.rounding_mode == "ROUND_DOWN"
     assert RULES.speculative_capital == 0
-    assert set(SUPPORTED_MARKETS) == {"ACOES", "FII", "ETF", "BDR"}
+    assert set(SUPPORTED_MARKETS) == {
+        "ACOES",
+        "FII",
+        "ETF",
+        "BDR",
+        "FIXED_INCOME",
+    }
     source = _text(DOMAIN / "rules.py") + _text(DOMAIN / "engine.py")
     assert "PROFILE_DIVERSIFIED_ALLOCATIONS" not in source
     assert "get_diversified_allocation" not in source

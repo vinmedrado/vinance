@@ -133,6 +133,47 @@ def test_guardrail_conflict_never_becomes_buy() -> None:
     assert result["investment_actions"][0]["amount"] is None
 
 
+def test_fixed_income_opportunity_remains_structured_in_action_plan() -> None:
+    state, policy, allocation = _chain()
+    opportunity = _candidate(
+        ticker="TD-REAL",
+        market="FIXED_INCOME",
+        score="85",
+        price="20000",
+    )
+    opportunity.update(
+        {
+            "purchase_mode": "AMOUNT",
+            "minimum_investment": Decimal("200.00"),
+            "candidate_amount": Decimal("5000.00"),
+            "quantity_candidate": 0,
+            "liquidity_assessment": "KNOWN_LIQUID",
+            "product_id": 31,
+            "source_product_id": "tesouro-selic:2029-03-01",
+            "product_name": "Tesouro Selic 2029",
+            "product_type": "TREASURY_SELIC",
+            "indexer": "SELIC",
+            "reference_rate": Decimal("0.05"),
+            "maturity_date": "2029-03-01",
+            "liquidity_type": "DAILY_REPURCHASE",
+            "market_date": "2026-09-19",
+            "engine_version": "fixed-income-v1",
+            "rules_version": "fixed-income-rules-v1",
+        }
+    )
+    orchestration = _run(market=_market(opportunity))
+
+    result = calculate_action_plan(state, policy, allocation, orchestration)
+    action = result["investment_actions"][0]
+
+    assert action["action_type"] == "INVESTMENT_BUY"
+    assert action["title"] == "Tesouro Selic 2029"
+    assert action["asset_class"] == "FIXED_INCOME"
+    assert action["amount"] <= orchestration["suggested_capital"]
+    assert action["source_reference"]["source_product_id"] == "tesouro-selic:2029-03-01"
+    assert action["source_reference"]["maturity_date"] == "2029-03-01"
+
+
 def test_financial_actions_copy_allocation_amount_and_ownership() -> None:
     state, policy, allocation = _chain()
     allocation = deepcopy(allocation)
