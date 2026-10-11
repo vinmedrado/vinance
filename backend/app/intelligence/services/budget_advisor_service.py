@@ -53,6 +53,17 @@ class BudgetAdvisorItem:
     recommendation_components_json: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class AmountBudgetCandidate:
+    """Budget result for products purchased by monetary amount."""
+
+    budget: Decimal
+    minimum_investment: Decimal | None
+    candidate_amount: Decimal
+    remaining_budget: Decimal
+    affordable: bool
+
+
 def _as_money(value: Decimal) -> Decimal:
     return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
 
@@ -73,6 +84,53 @@ def _validate_budget(budget: Decimal) -> Decimal:
     if not budget.is_finite() or budget <= 0:
         raise ValueError("budget deve ser maior que zero")
     return budget
+
+
+def build_amount_budget_candidate(
+    *,
+    budget: Decimal,
+    minimum_investment: Decimal | None,
+) -> AmountBudgetCandidate:
+    """Reconcile an amount-based product against an authorized budget.
+
+    ``None`` remains unknown and is never coerced to zero. A real zero minimum
+    remains distinguishable, while a zero budget never creates a financed
+    candidate.
+    """
+
+    try:
+        normalized_budget = Decimal(str(budget))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("budget deve ser finito e não negativo") from exc
+    if normalized_budget < 0 or not normalized_budget.is_finite():
+        raise ValueError("budget deve ser finito e não negativo")
+    normalized_budget = _as_money(normalized_budget)
+
+    normalized_minimum: Decimal | None = None
+    if minimum_investment is not None:
+        try:
+            normalized_minimum = Decimal(str(minimum_investment))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise ValueError(
+                "minimum_investment deve ser finito e não negativo"
+            ) from exc
+        if normalized_minimum < 0 or not normalized_minimum.is_finite():
+            raise ValueError("minimum_investment deve ser finito e não negativo")
+        normalized_minimum = _as_money(normalized_minimum)
+
+    affordable = (
+        normalized_budget > 0
+        and normalized_minimum is not None
+        and normalized_budget >= normalized_minimum
+    )
+    candidate_amount = normalized_budget if affordable else Decimal("0.00")
+    return AmountBudgetCandidate(
+        budget=normalized_budget,
+        minimum_investment=normalized_minimum,
+        candidate_amount=candidate_amount,
+        remaining_budget=_as_money(normalized_budget - candidate_amount),
+        affordable=affordable,
+    )
 
 
 def _quantity_possible(budget: Decimal, price: Decimal) -> int:

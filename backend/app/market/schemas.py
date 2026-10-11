@@ -89,30 +89,49 @@ class MacroIndicatorRead(MacroIndicatorIn):
 
 
 class RendaFixaProdutoIn(BaseModel):
+    source_product_id: str = Field(min_length=1, max_length=160)
+    asset_catalog_id: int | None = Field(default=None, gt=0)
     nome: str
     emissor: str | None = None
     tipo: str
     indexador: str | None = None
     taxa_juros: Decimal | None = None
     taxa_total_equiv: Decimal | None = None
+    rate_type: str | None = None
+    purchase_rate: Decimal | None = None
+    redemption_rate: Decimal | None = None
+    unit_price: Decimal | None = Field(default=None, gt=0)
+    redemption_unit_price: Decimal | None = Field(default=None, gt=0)
+    base_unit_price: Decimal | None = Field(default=None, gt=0)
     vencimento: date | None = None
     liquidez_dias: int | None = Field(default=None, ge=0)
+    liquidity_type: str | None = None
     investimento_minimo: Decimal | None = Field(default=None, ge=0)
     garantia_fgc: bool = False
+    guarantee_type: str | None = None
+    tax_treatment: str | None = None
     codigo_tesouro: str | None = None
     selic_vigente: Decimal | None = None
     ipca_12m: Decimal | None = None
+    currency: str = Field(default="BRL", min_length=3, max_length=3)
+    market_date: date | None = None
+    source_metadata: dict | None = None
     source: str
     coletado_em: datetime | None = None
     is_active: bool = True
 
-    @field_validator("nome", "tipo", "source")
+    @field_validator("source_product_id", "nome", "tipo", "source")
     @classmethod
     def _required_text(cls, value: str) -> str:
         text = value.strip()
         if not text:
             raise ValueError("field is required")
         return text
+
+    @field_validator("currency")
+    @classmethod
+    def _currency(cls, value: str) -> str:
+        return value.strip().upper()
 
 
 class RendaFixaProdutoRead(RendaFixaProdutoIn):

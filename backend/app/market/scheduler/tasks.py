@@ -43,12 +43,13 @@ async def _sync_tesouro_direto() -> dict[str, int]:
     provider = TesouroDiretoProvider()
     rows = await provider.fetch_produtos()
     async with AsyncSessionLocal() as session:
-        processed = 0
-        for row in rows:
-            await service.upsert_renda_fixa_produto(session, payload=row)
-            processed += 1
-    logger.info("Tesouro Direto products synced", extra={"processed": processed})
-    return {"processed": processed}
+        summary = await service.sync_renda_fixa_produtos(
+            session,
+            produtos=rows,
+            source=provider.source,
+        )
+    logger.info("Tesouro Direto products synced", extra=summary)
+    return summary
 
 
 @celery_app.task(name="market.sync_historical_prices_weekly", queue="market")

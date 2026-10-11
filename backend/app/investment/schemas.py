@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -18,22 +18,6 @@ class YFinanceSyncRequest(BaseModel):
     @classmethod
     def normalize_symbols(cls, value: list[str]) -> list[str]:
         return sorted({item.strip().upper() for item in value if item and item.strip()})
-
-
-class FixedIncomeProductIn(BaseModel):
-    issuer: str
-    product_type: Literal["Tesouro", "CDB", "LCI", "LCA", "Renda Fixa"]
-    name: str
-    indexer: str
-    rate: float
-    maturity_date: datetime | None = None
-    liquidity_days: int = Field(default=0, ge=0)
-    guarantee_type: str | None = None
-    minimum_investment: float = Field(default=0, ge=0)
-
-
-class FixedIncomeImportRequest(BaseModel):
-    products: list[FixedIncomeProductIn] = Field(min_length=1, max_length=500)
 
 
 class AllocationRequest(BaseModel):

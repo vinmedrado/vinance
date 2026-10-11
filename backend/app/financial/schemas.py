@@ -62,6 +62,7 @@ class FinancialProfileCreate(BaseModel):
     emergency_reserve: Decimal = Field(ge=0, max_digits=14, decimal_places=2)
     has_debt_default: bool = False
     risk_profile: RiskProfile
+    investment_horizon_months: int | None = Field(default=None, gt=0, le=1200)
 
 
 class FinancialProfileRead(BaseModel):
@@ -73,6 +74,7 @@ class FinancialProfileRead(BaseModel):
     emergency_reserve: Decimal
     has_debt_default: bool
     risk_profile: RiskProfile
+    investment_horizon_months: int | None = None
     created_at: datetime
     updated_at: datetime
 

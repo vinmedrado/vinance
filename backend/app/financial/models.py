@@ -61,6 +61,13 @@ class Expense(Base):
 
 class FinancialProfile(Base):
     __tablename__ = "financial_profiles"
+    __table_args__ = (
+        CheckConstraint(
+            "investment_horizon_months IS NULL OR "
+            "investment_horizon_months BETWEEN 1 AND 1200",
+            name="ck_financial_profiles_investment_horizon_range",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
@@ -68,5 +75,6 @@ class FinancialProfile(Base):
     emergency_reserve: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     has_debt_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     risk_profile: Mapped[str] = mapped_column(String(20), nullable=False)
+    investment_horizon_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

@@ -1211,6 +1211,7 @@ async def build_normalized_inputs(
                     "monthly_salary",
                     "emergency_reserve",
                     "risk_profile",
+                    "investment_horizon_months",
                     "updated_at",
                 ),
             )
