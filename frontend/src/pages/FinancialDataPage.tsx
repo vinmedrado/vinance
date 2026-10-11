@@ -204,6 +204,7 @@ function emptyProfileDraft() {
     emergencyReserve: '',
     hasDebtDefault: false,
     riskProfile: 'moderate' as 'conservative' | 'moderate' | 'aggressive',
+    investmentHorizonMonths: '',
   };
 }
 
@@ -257,6 +258,9 @@ export function FinancialDataPage() {
       emergencyReserve: String(profile.data.emergency_reserve),
       hasDebtDefault: profile.data.has_debt_default,
       riskProfile: profile.data.risk_profile,
+      investmentHorizonMonths: profile.data.investment_horizon_months == null
+        ? ''
+        : String(profile.data.investment_horizon_months),
     });
   }, [profile.data, profileDirty]);
 
@@ -351,6 +355,9 @@ export function FinancialDataPage() {
         emergency_reserve: Number(profileDraft.emergencyReserve),
         has_debt_default: profileDraft.hasDebtDefault,
         risk_profile: profileDraft.riskProfile,
+        investment_horizon_months: profileDraft.investmentHorizonMonths.trim() === ''
+          ? null
+          : Number(profileDraft.investmentHorizonMonths),
       },
     });
     setProfileDirty(false);
@@ -417,6 +424,7 @@ export function FinancialDataPage() {
             <div><small>Renda mensal declarada</small><strong>{formatCurrency(profile.data.monthly_salary)}</strong></div>
             <div><small>Reserva declarada</small><strong>{formatCurrency(profile.data.emergency_reserve)}</strong></div>
             <div><small>Postura de risco</small><strong>{profile.data.risk_profile}</strong></div>
+            <div><small>Horizonte de investimento</small><strong>{profile.data.investment_horizon_months == null ? 'Não informado' : `${profile.data.investment_horizon_months} meses`}</strong></div>
           </div>
         )}
         {!profileEditing && missingProfile && <EmptyState title="Perfil ainda não preenchido" description="Informe o básico para melhorar a leitura financeira. Você poderá editar depois." />}
@@ -425,6 +433,7 @@ export function FinancialDataPage() {
             <MoneyInput label="Renda mensal" value={profileDraft.monthlySalary} min="0.01" required onChange={(event) => { setProfileDraft((current) => ({ ...current, monthlySalary: event.target.value })); setProfileDirty(true); }} />
             <MoneyInput label="Reserva de emergência" value={profileDraft.emergencyReserve} required onChange={(event) => { setProfileDraft((current) => ({ ...current, emergencyReserve: event.target.value })); setProfileDirty(true); }} />
             <SelectField label="Perfil financeiro de risco" value={profileDraft.riskProfile} onChange={(event) => { setProfileDraft((current) => ({ ...current, riskProfile: event.target.value as any })); setProfileDirty(true); }} options={[{ value: 'conservative', label: 'Conservador' }, { value: 'moderate', label: 'Moderado' }, { value: 'aggressive', label: 'Agressivo' }]} />
+            <Input label="Horizonte de investimento (meses, opcional)" type="number" min="1" max="1200" value={profileDraft.investmentHorizonMonths} onChange={(event) => { setProfileDraft((current) => ({ ...current, investmentHorizonMonths: event.target.value })); setProfileDirty(true); }} helper="Prazo esperado para o capital de investimento. Não é o prazo de um objetivo específico." />
             <ToggleField label="Possui inadimplência declarada" checked={profileDraft.hasDebtDefault} onChange={(event) => { setProfileDraft((current) => ({ ...current, hasDebtDefault: event.target.checked })); setProfileDirty(true); }} />
             <Button type="submit" disabled={saveProfile.isPending}>{saveProfile.isPending ? 'Salvando...' : 'Salvar perfil'}</Button>
           </form>

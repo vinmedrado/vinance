@@ -10,7 +10,8 @@ export type Expense = {
 };
 export type FinancialProfile = {
   id: number; user_id: number; monthly_salary: string; emergency_reserve: string;
-  has_debt_default: boolean; risk_profile: RiskProfile; created_at: string; updated_at: string;
+  has_debt_default: boolean; risk_profile: RiskProfile; investment_horizon_months: number | null;
+  created_at: string; updated_at: string;
 };
 export type FinancialDiagnosis = {
   monthly_salary: string; total_expenses_30d: string; emergency_reserve: string; has_debt_default: boolean; risk_profile: RiskProfile;
@@ -19,4 +20,7 @@ export type FinancialDiagnosis = {
 };
 export type IncomeCreate = { description: string; amount: number; income_type: string; received_at: string; is_recurring: boolean };
 export type ExpenseCreate = { description: string; amount: number; category: string; due_date: string; paid_at?: string | null; is_paid: boolean; is_recurring: boolean };
-export type FinancialProfileCreate = { monthly_salary: number; emergency_reserve: number; has_debt_default: boolean; risk_profile: RiskProfile };
+export type FinancialProfileCreate = {
+  monthly_salary: number; emergency_reserve: number; has_debt_default: boolean;
+  risk_profile: RiskProfile; investment_horizon_months?: number | null;
+};

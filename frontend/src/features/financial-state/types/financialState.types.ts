@@ -480,6 +480,23 @@ export type RankedInvestmentOpportunity = {
   reasons: unknown[];
   warnings: unknown[];
   reason: string;
+  product_id?: number | null;
+  source_product_id?: string | null;
+  product_name?: string | null;
+  product_type?: string | null;
+  indexer?: string | null;
+  reference_rate?: MoneyValue;
+  purchase_rate?: MoneyValue;
+  redemption_rate?: MoneyValue;
+  maturity_date?: string | null;
+  liquidity_type?: string | null;
+  liquidity_days?: number | null;
+  minimum_investment?: MoneyValue;
+  guarantee_type?: string | null;
+  tax_treatment?: string | null;
+  market_date?: string | null;
+  freshness_status?: string | null;
+  purchase_mode?: 'AMOUNT' | string;
   [key: string]: unknown;
 };
 

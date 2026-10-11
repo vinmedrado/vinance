@@ -24,6 +24,7 @@ import {
   useCurrentInvestmentOrchestration,
   useInvestmentOrchestrationDecision,
 } from '../features/financial-state/hooks/useFinancialState';
+import { FixedIncomeOpportunityDetails } from '../features/financial-state/components/FixedIncomeOpportunityDetails';
 import { getInvestmentWorkspaceRecommendation } from '../features/investment-workspace/services/investmentWorkspace.service';
 import type { ExplainedBudgetAdvisorResponse, InvestmentWorkspaceFilters, InvestorProfile } from '../features/investment-workspace/types/investmentWorkspace.types';
 import { decisionPresentation } from '../features/investment-workspace/utils/investmentDecision';
@@ -184,6 +185,9 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
     : frozenAutopilot.data;
   const autopilotLoading = currentAutopilot.isLoading || frozenAutopilot.isLoading;
   const autopilotError = currentAutopilot.error || frozenAutopilot.error;
+  const fixedIncomeOpportunities = (autopilot?.ranked_opportunities ?? [])
+    .filter((item) => item.market === 'FIXED_INCOME')
+    .slice(0, 5);
   const seededAutopilot = useRef<string | null>(null);
   const [filters, setFilters] = useState<InvestmentWorkspaceFilters>({ budget: 300, market: 'FII', profile: 'CONSERVATIVE', includeWarnings: false });
   const [submittedFilters, setSubmittedFilters] = useState<InvestmentWorkspaceFilters>(filters);
@@ -273,6 +277,22 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
               <p>Sugerido: {formatCurrency(autopilot.suggested_capital ?? 0)} · preservado em caixa: {formatCurrency(autopilot.remaining_investment_cash ?? 0)}</p>
             </div>
           </div>
+          {fixedIncomeOpportunities.length > 0 && (
+            <div className="vn-section-gap">
+              <h4>Renda fixa avaliada pelo Autopilot</h4>
+              <p>Produtos reais do Tesouro avaliados pelo backend com o mesmo orçamento autorizado. Esta tela não recalcula suitability nem executa aplicação.</p>
+              <div className="vn-list" role="list" aria-label="Oportunidades de renda fixa do Autopilot">
+                {fixedIncomeOpportunities.map((item) => (
+                  <div key={item.source_product_id ?? `${item.market}-${item.symbol}`} role="listitem">
+                    <strong>{item.product_name ?? item.symbol} <Badge tone={item.action === 'BUY' ? 'success' : item.action === 'AVOID' ? 'danger' : 'warning'}>{item.action === 'BUY' ? 'Comprar' : item.action === 'WAIT' ? 'Aguardar' : item.action === 'AVOID' ? 'Evitar' : 'Sem recomendação'}</Badge></strong>
+                    <span>Capital sugerido: {item.capital_committed == null ? 'Não informado' : formatCurrency(item.capital_committed)}</span>
+                    <small>{item.reason}</small>
+                    <FixedIncomeOpportunityDetails opportunity={item} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

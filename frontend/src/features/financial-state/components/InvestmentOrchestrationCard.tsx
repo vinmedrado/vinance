@@ -7,6 +7,7 @@ import type {
   MoneyValue,
   RankedInvestmentOpportunity,
 } from '../types/financialState.types';
+import { FixedIncomeOpportunityDetails } from './FixedIncomeOpportunityDetails';
 
 const statusLabels: Record<InvestmentOrchestrationStatus, string> = {
   BLOCKED: 'BLOQUEADO',
@@ -174,6 +175,7 @@ export function InvestmentOrchestrationCard({
                     {item.quantity_suggested > 0 ? ` · ${item.quantity_suggested} unidade(s)` : ''}
                   </span>
                   <small>{item.reason}</small>
+                  <FixedIncomeOpportunityDetails opportunity={item} />
                 </div>
               ))}
             </div>
