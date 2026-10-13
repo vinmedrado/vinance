@@ -36,7 +36,7 @@ Endpoints úteis:
 
 - Backend: `SENTRY_DSN_BACKEND`.
 - Frontend: `VITE_SENTRY_DSN`.
-- Analytics: `VITE_ANALYTICS_ENABLED=true`, `VITE_POSTHOG_KEY` e `VITE_POSTHOG_HOST`.
+- Analytics: `VITE_ANALYTICS_ENABLED=true`, `VITE_POSTHOG_PROJECT_ID` (identificador público) e `VITE_POSTHOG_HOST`.
 
 ## Billing ready
 
