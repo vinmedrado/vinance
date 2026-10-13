@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { mockBrowserSession } from '../fixtures/authSessionFixture';
 
 const headers = {
   'access-control-allow-origin': 'http://127.0.0.1:4173',
@@ -147,11 +148,7 @@ test('manages the five canonical financial resources and the personal profile', 
 });
 
 async function login(page: Page) {
-  await page.goto('/login');
-  await page.evaluate(({ tokenValue, storedUser }) => {
-    window.localStorage.setItem('vinance_access_token', tokenValue);
-    window.localStorage.setItem('vinance_user', JSON.stringify(storedUser));
-  }, { tokenValue: accessToken(), storedUser: user });
+  await mockBrowserSession(page, { token: accessToken(), user, headers });
   await page.goto('/financial/manage');
 }
 

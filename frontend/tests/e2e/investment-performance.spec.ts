@@ -5,6 +5,7 @@ import {
   decisionHistoryResponse,
   fakeAccessToken,
 } from '../fixtures/investmentFixtures';
+import { mockBrowserSession } from '../fixtures/authSessionFixture';
 
 const headers = {
   'access-control-allow-origin': 'http://127.0.0.1:4173',
@@ -19,11 +20,7 @@ async function json(route: Route, body: unknown, status = 200) {
 
 async function authenticated(page: Page) {
   const token = fakeAccessToken();
-  await page.goto('/login');
-  await page.evaluate(({ accessToken, user }) => {
-    window.localStorage.setItem('vinance_access_token', accessToken);
-    window.localStorage.setItem('vinance_user', JSON.stringify(user));
-  }, { accessToken: token, user: authenticatedUser });
+  await mockBrowserSession(page, { token, user: authenticatedUser, headers });
   await page.route('**/api/v1/me', (route) => json(route, authenticatedUser));
   return token;
 }

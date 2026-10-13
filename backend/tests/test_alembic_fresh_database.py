@@ -133,7 +133,7 @@ def test_fresh_alembic_database_matches_canonical_metadata() -> None:
 
     current = _run_alembic("current", database_url=FRESH_DATABASE_URL)
     assert current.returncode == 0, current.stdout + current.stderr
-    assert "0026_fixed_income_v1 (head)" in current.stdout
+    assert "0027_auth_sessions (head)" in current.stdout
 
     check = _run_alembic("check", database_url=FRESH_DATABASE_URL)
     assert check.returncode == 0, check.stdout + check.stderr

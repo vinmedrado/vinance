@@ -4,6 +4,7 @@ import {
   authenticatedUser,
   fakeAccessToken,
 } from '../fixtures/investmentFixtures';
+import { mockBrowserSession } from '../fixtures/authSessionFixture';
 
 const apiHeaders = {
   'access-control-allow-origin': 'http://127.0.0.1:4173',
@@ -25,11 +26,7 @@ async function json(route: Route, body: unknown, status = 200) {
 }
 
 async function seedSession(page: Page) {
-  await page.goto('/login');
-  await page.evaluate(({ accessToken, user }) => {
-    window.localStorage.setItem('vinance_access_token', accessToken);
-    window.localStorage.setItem('vinance_user', JSON.stringify(user));
-  }, { accessToken: fakeAccessToken(), user: authenticatedUser });
+  await mockBrowserSession(page, { token: fakeAccessToken(), user: authenticatedUser, headers: apiHeaders });
 }
 
 const fixedIncomeOrchestration = {

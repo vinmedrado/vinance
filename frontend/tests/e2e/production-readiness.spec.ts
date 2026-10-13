@@ -36,12 +36,18 @@ test('aceite completo: login, decisão, auditoria, performance, alerta, reload e
   test.setTimeout(60_000);
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
+  const apiOrigins = new Set<string>();
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
   page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/')) apiOrigins.add(url.origin);
+  });
 
   const token = fakeAccessToken();
+  let sessionActive = false;
   let monitored = false;
   let generated = false;
   let readAt: string | null = null;
@@ -81,8 +87,22 @@ test('aceite completo: login, decisão, auditoria, performance, alerta, reload e
     rule_version: 'investment-alerts-v1',
   });
 
-  await page.route('**/api/v1/login', (route) => json(route, { access_token: token, token_type: 'bearer', user: authenticatedUser }));
-  await page.route('**/api/v1/me', (route) => json(route, authenticatedUser));
+  await page.route('**/api/v1/login', (route) => {
+    sessionActive = true;
+    return json(route, { access_token: token, token_type: 'bearer', user: authenticatedUser });
+  });
+  await page.route('**/api/v1/refresh', (route) => (
+    sessionActive
+      ? json(route, { access_token: token, token_type: 'bearer', user: authenticatedUser })
+      : json(route, { detail: 'Invalid session' }, 401)
+  ));
+  await page.route('**/api/v1/logout', (route) => {
+    sessionActive = false;
+    return route.fulfill({ status: 204, headers: apiHeaders });
+  });
+  await page.route('**/api/v1/me', (route) => (
+    sessionActive ? json(route, authenticatedUser) : json(route, { detail: 'Invalid session' }, 401)
+  ));
   await page.route('**/api/intelligence/budget-advisor**', (route) => json(route, completeBudgetResponse));
   await page.route('**/api/v1/investments/decisions?**', (route) => json(route, decisionHistoryResponse));
   await page.route(new RegExp('/api/v1/investments/decisions/[0-9a-f-]{36}$'), (route) => json(route, decisionDetailResponse));
@@ -193,6 +213,10 @@ test('aceite completo: login, decisão, auditoria, performance, alerta, reload e
   await expect(page).toHaveURL(/\/login$/);
   await page.goto('/investir');
   await expect(page).toHaveURL(/\/login$/);
-  expect(consoleErrors).toEqual([]);
+  expect([...apiOrigins]).toEqual([new URL(page.url()).origin]);
+  const unexpectedConsoleErrors = consoleErrors.filter((message) => (
+    !/Failed to load resource: the server responded with a status of 401 \(Unauthorized\)/.test(message)
+  ));
+  expect(unexpectedConsoleErrors).toEqual([]);
   expect(pageErrors).toEqual([]);
 });

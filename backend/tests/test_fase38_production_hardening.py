@@ -108,9 +108,58 @@ def test_production_settings_accept_explicit_secure_values() -> None:
         redis_url="redis://app:strong-password@redis.internal:6379/0",
         secret_key="5f98b98df53b425d8f7436d5ac21cbfdc886829c4f88b9bb",
         cors_origins="https://vinance.example.com",
+        trusted_hosts="vinance.example.com",
     )
 
     assert settings.is_production is True
+
+
+def test_production_settings_reject_non_https_public_origin() -> None:
+    with pytest.raises(ValidationError, match="CORS_ORIGINS"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            database_url="postgresql+asyncpg://app:strong-password@db.internal:5432/vinance",
+            redis_url="redis://app:strong-password@redis.internal:6379/0",
+            secret_key="5f98b98df53b425d8f7436d5ac21cbfdc886829c4f88b9bb",
+            cors_origins="http://vinance.example.com",
+            trusted_hosts="vinance.example.com",
+        )
+
+
+def test_production_example_placeholders_fail_closed() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            _env_file=None,
+            environment="production",
+            database_url="postgresql+asyncpg://app:replace-with-password@postgres:5432/vinance",
+            redis_url="redis://:replace-with-password@redis:6379/0",
+            secret_key="replace-with-a-strong-random-secret-at-least-32-bytes",
+            cors_origins="https://vinance.example.invalid",
+            trusted_hosts="vinance.example.invalid",
+        )
+
+    message = str(exc_info.value)
+    for field in ("DATABASE_URL", "REDIS_URL", "SECRET_KEY", "CORS_ORIGINS", "TRUSTED_HOSTS"):
+        assert field in message
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (("debug", True), ("demo_mode_enabled", True)),
+)
+def test_production_rejects_debug_and_demo_modes(field: str, value: bool) -> None:
+    values = {
+        "environment": "production",
+        "database_url": "postgresql+asyncpg://app:strong-password@db.internal:5432/vinance",
+        "redis_url": "redis://app:strong-password@redis.internal:6379/0",
+        "secret_key": "5f98b98df53b425d8f7436d5ac21cbfdc886829c4f88b9bb",
+        "cors_origins": "https://vinance.example.com",
+        "trusted_hosts": "vinance.example.com",
+        field: value,
+    }
+    with pytest.raises(ValidationError, match=field.upper()):
+        Settings(_env_file=None, **values)
 
 
 def test_cors_wildcard_is_rejected_with_credentials_in_every_environment() -> None:
@@ -146,7 +195,7 @@ def test_financial_health_classification_has_no_legacy_model_dependency() -> Non
     assert "saudável" in diagnosis
 
 
-def test_health_returns_503_when_a_required_dependency_is_unavailable(monkeypatch) -> None:
+def test_health_is_liveness_even_when_a_dependency_is_unavailable(monkeypatch) -> None:
     from backend.app import main as main_module
 
     async def database_unavailable() -> bool:
@@ -161,10 +210,82 @@ def test_health_returns_503_when_a_required_dependency_is_unavailable(monkeypatc
     with TestClient(main_module.app) as client:
         response = client.get("/health")
 
-    assert response.status_code == 503
-    assert response.json() == {"status": "unhealthy", "api": "ok", "database": "error", "redis": "ok"}
+    assert response.status_code == 200
+    assert response.json()["status"] == "healthy"
+    assert response.json()["api"] == "ok"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
+
+
+def test_ready_returns_503_when_database_is_unavailable(monkeypatch) -> None:
+    from backend.app import main as main_module
+
+    async def database_unavailable() -> bool:
+        return False
+
+    async def redis_available() -> bool:
+        return True
+
+    monkeypatch.setattr(main_module, "validate_database_connection", database_unavailable)
+    monkeypatch.setattr(main_module, "validate_redis_connection", redis_available)
+
+    with TestClient(main_module.app) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "api": "ok",
+        "database": "error",
+        "redis": "ok",
+        "schema": "error",
+    }
+
+
+def test_ready_requires_database_schema_to_match_application_head(monkeypatch) -> None:
+    from backend.app import main as main_module
+
+    async def available() -> bool:
+        return True
+
+    async def incompatible_schema() -> SimpleNamespace:
+        return SimpleNamespace(compatible=False)
+
+    monkeypatch.setattr(main_module, "validate_database_connection", available)
+    monkeypatch.setattr(main_module, "validate_redis_connection", available)
+    monkeypatch.setattr(main_module, "schema_revision_status", incompatible_schema)
+
+    with TestClient(main_module.app) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["schema"] == "error"
+
+
+def test_ready_succeeds_when_dependencies_and_schema_are_compatible(monkeypatch) -> None:
+    from backend.app import main as main_module
+
+    async def available() -> bool:
+        return True
+
+    async def compatible_schema() -> SimpleNamespace:
+        return SimpleNamespace(compatible=True)
+
+    monkeypatch.setattr(main_module, "validate_database_connection", available)
+    monkeypatch.setattr(main_module, "validate_redis_connection", available)
+    monkeypatch.setattr(main_module, "schema_revision_status", compatible_schema)
+
+    with TestClient(main_module.app) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "api": "ok",
+        "database": "ok",
+        "redis": "ok",
+        "schema": "ok",
+    }
 
 
 @pytest.mark.parametrize(

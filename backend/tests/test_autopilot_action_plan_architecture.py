@@ -3,13 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from fastapi import Request, Response
+from fastapi.testclient import TestClient
 from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint
 
 from backend.app.action_plan.models import ActionPlanDecision
 from backend.app.action_plan.rules import ENGINE_VERSION, RULES_VERSION
 from backend.app.investment_orchestrator.models import InvestmentOrchestrationDecision
-from backend.app.main import security_headers
+from backend.app.main import app
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -91,26 +91,9 @@ def test_action_plan_router_is_registered_once() -> None:
         assert router_source.count(suffix) == 1
 
 
-@pytest.mark.asyncio
-async def test_action_plan_security_headers_cover_pre_router_auth_errors() -> None:
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "scheme": "http",
-            "path": "/api/v1/financial/households/10/action-plan",
-            "root_path": "",
-            "query_string": b"",
-            "headers": [],
-            "client": ("test", 123),
-            "server": ("test", 80),
-        }
-    )
-
-    async def unauthorized(_: Request) -> Response:
-        return Response(status_code=401)
-
-    response = await security_headers(request, unauthorized)
+def test_action_plan_security_headers_cover_pre_router_auth_errors() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/v1/financial/households/10/action-plan")
     assert response.status_code == 401
     assert response.headers["cache-control"] == "private, no-store"
 

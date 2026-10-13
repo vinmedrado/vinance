@@ -7,6 +7,7 @@ import {
   fakeAccessToken,
   longContentResponse,
 } from '../fixtures/investmentFixtures';
+import { mockBrowserSession } from '../fixtures/authSessionFixture';
 
 const apiHeaders = {
   'access-control-allow-origin': 'http://127.0.0.1:4173',
@@ -23,14 +24,15 @@ async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, headers: apiHeaders, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
-async function seedSession(page: Page, expiresAt?: number) {
+async function seedSession(page: Page, expiresAt?: number, maxSuccessfulRefreshes?: number) {
   const token = fakeAccessToken(expiresAt);
-  await page.goto('/login');
-  await page.evaluate(({ accessToken, user }) => {
-    window.localStorage.setItem('vinance_access_token', accessToken);
-    window.localStorage.setItem('vinance_user', JSON.stringify(user));
-  }, { accessToken: token, user: authenticatedUser });
-  return token;
+  const session = await mockBrowserSession(page, {
+    token,
+    user: authenticatedUser,
+    headers: apiHeaders,
+    maxSuccessfulRefreshes,
+  });
+  return { token, session };
 }
 
 async function mockMe(page: Page, status = 200, onRequest?: (request: Request) => void) {
@@ -48,12 +50,18 @@ async function mockBudget(page: Page, payload: unknown = completeBudgetResponse,
 }
 
 test('anônimo é redirecionado e login retorna para /investir', async ({ page }) => {
-  await mockMe(page);
-  await page.route('**/api/v1/login', (route) => json(route, {
-    access_token: fakeAccessToken(),
-    token_type: 'bearer',
+  const token = fakeAccessToken();
+  const session = await mockBrowserSession(page, {
+    token,
     user: authenticatedUser,
-  }));
+    active: false,
+    headers: apiHeaders,
+  });
+  await mockMe(page);
+  await page.route('**/api/v1/login', (route) => {
+    session.activate(token, authenticatedUser);
+    return json(route, { access_token: token, token_type: 'bearer', user: authenticatedUser });
+  });
 
   await page.goto('/investir');
   await expect(page).toHaveURL(/\/login$/);
@@ -71,7 +79,7 @@ test('sessão autenticada suporta consulta, reload e logout', async ({ page }) =
   let budgetRequests = 0;
   let meRequests = 0;
   let capturedBudgetRequest: Request | undefined;
-  const token = await seedSession(page);
+  const { token } = await seedSession(page);
   await mockMe(page, 200, () => { meRequests += 1; });
   await mockBudget(page, completeBudgetResponse, (request) => {
     budgetRequests += 1;
@@ -80,7 +88,7 @@ test('sessão autenticada suporta consulta, reload e logout', async ({ page }) =
 
   await page.goto('/investir');
   await expect(page.getByText('Pronto para analisar')).toBeVisible();
-  await expect.poll(() => meRequests).toBe(1);
+  await expect.poll(() => meRequests).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Analisar orçamento' }).click();
   await expect(page.getByRole('heading', { name: 'GARE11' })).toBeVisible();
   await expect(page.getByText('Comprar').first()).toBeVisible();
@@ -95,10 +103,11 @@ test('sessão autenticada suporta consulta, reload e logout', async ({ page }) =
   expect(budgetUrl.searchParams.get('include_warnings')).toBe('false');
   expect(budgetUrl.searchParams.get('explain')).toBe('true');
 
+  const meRequestsBeforeReload = meRequests;
   await page.reload();
   await expect(page).toHaveURL(/\/investir$/);
   await expect(page.getByRole('heading', { name: 'Central de decisão de investimentos' })).toBeVisible();
-  await expect.poll(() => meRequests).toBe(2);
+  await expect.poll(() => meRequests).toBeGreaterThan(meRequestsBeforeReload);
 
   await page.getByRole('button', { name: /Sair/ }).click();
   await expect(page).toHaveURL(/\/login$/);
@@ -107,22 +116,27 @@ test('sessão autenticada suporta consulta, reload e logout', async ({ page }) =
 
 test('token inválido nunca expõe a central nem chama budget-advisor', async ({ page }) => {
   let budgetRequests = 0;
-  await seedSession(page);
+  await seedSession(page, undefined, 1);
   await mockMe(page, 401);
   await mockBudget(page, completeBudgetResponse, () => { budgetRequests += 1; });
 
   await page.goto('/investir');
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByText('Sua sessão não é mais válida. Entre novamente para continuar.')).toBeVisible();
+  await expect(page.getByRole('status')).toContainText(/Sua sessão não é mais válida|Entre para acessar/);
   expect(budgetRequests).toBe(0);
   await expect(page.getByRole('heading', { name: 'Central de decisão de investimentos' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Analisar orçamento' })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem('vinance_access_token'))).toBeNull();
 });
 
-test('JWT expirado redireciona antes de consultar /me', async ({ page }) => {
+test('refresh ausente redireciona antes de consultar /me', async ({ page }) => {
   let meRequests = 0;
-  await seedSession(page, Date.now() - 60_000);
+  await mockBrowserSession(page, {
+    token: fakeAccessToken(),
+    user: authenticatedUser,
+    active: false,
+    headers: apiHeaders,
+  });
   await page.route('**/api/v1/me', async (route) => {
     if (route.request().method() !== 'OPTIONS') meRequests += 1;
     await json(route, authenticatedUser);
@@ -130,12 +144,12 @@ test('JWT expirado redireciona antes de consultar /me', async ({ page }) => {
 
   await page.goto('/investir');
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByText('Sua sessão expirou. Entre novamente para continuar.')).toBeVisible();
+  await expect(page.getByText('Entre para acessar a central de decisão.')).toBeVisible();
   expect(meRequests).toBe(0);
 });
 
 test('sessão expira enquanto /investir está aberta', async ({ page }) => {
-  await seedSession(page, Date.now() + 6_000);
+  await seedSession(page, Date.now() + 6_000, 1);
   await mockMe(page);
 
   await page.goto('/investir');

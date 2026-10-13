@@ -84,7 +84,7 @@ def test_ml_feature_metadata_keeps_market_specific_contracts() -> None:
 def test_alembic_graph_has_one_resolvable_head() -> None:
     config = Config(str(ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["0026_fixed_income_v1"]
+    assert script.get_heads() == ["0027_auth_sessions"]
     revisions = list(script.walk_revisions())
     assert revisions[-1].down_revision is None
     assert len({revision.revision for revision in revisions}) == len(revisions)

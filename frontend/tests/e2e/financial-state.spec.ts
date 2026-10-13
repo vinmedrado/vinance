@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
+import { mockBrowserSession } from '../fixtures/authSessionFixture';
 import { authenticatedUser, fakeAccessToken } from '../fixtures/investmentFixtures';
 
 const apiHeaders = {
@@ -17,11 +18,11 @@ async function json(route: Route, body: unknown, status = 200) {
 }
 
 async function seedSession(page: Page) {
-  await page.goto('/login');
-  await page.evaluate(({ accessToken, user }) => {
-    window.localStorage.setItem('vinance_access_token', accessToken);
-    window.localStorage.setItem('vinance_user', JSON.stringify(user));
-  }, { accessToken: fakeAccessToken(), user: authenticatedUser });
+  return mockBrowserSession(page, {
+    token: fakeAccessToken(),
+    user: authenticatedUser,
+    headers: apiHeaders,
+  });
 }
 
 const household = {
@@ -658,7 +659,7 @@ test('isola dois membros e impede que um draft atravesse a troca de household', 
     return json(route, { detail: 'fixture não configurada' }, 404);
   });
 
-  await seedSession(page);
+  const session = await seedSession(page);
   await page.goto('/financial');
 
   await expect(page.getByText('Renda pessoal A E2E')).toBeVisible();
@@ -679,11 +680,8 @@ test('isola dois membros e impede que um draft atravesse a troca de household', 
   await expect(selector).toHaveValue('20');
   await expect(page.getByLabel('Descrição')).toHaveCount(0);
 
-  await page.evaluate(({ accessToken, user }) => {
-    window.localStorage.setItem('vinance_access_token', accessToken);
-    window.localStorage.setItem('vinance_user', JSON.stringify(user));
-    window.dispatchEvent(new CustomEvent('vinance:session-change', { detail: { reason: 'login' } }));
-  }, { accessToken: secondToken, user: secondUser });
+  session.activate(secondToken, secondUser);
+  await page.reload();
 
   await expect(page.getByText('Renda pessoal B E2E')).toBeVisible();
   await expect(page.getByText('Renda compartilhada E2E')).toBeVisible();

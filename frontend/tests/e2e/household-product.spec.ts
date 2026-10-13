@@ -35,14 +35,25 @@ test('two accounts create, invite and consent to a shared household', async ({ b
   async function configure(context: BrowserContext, email: keyof typeof users) {
     const page = await context.newPage();
     const accessToken = token(email);
+    let sessionActive = false;
     await page.route('**/api/v1/**', async (route) => {
       const request = route.request();
       const path = new URL(request.url()).pathname.replace('/api/v1', '');
       const user = users[email];
       if (path === '/register' && request.method() === 'POST') {
+        sessionActive = true;
         return reply(route, { access_token: accessToken, token_type: 'bearer', user }, 201);
       }
-      if (path === '/me') return reply(route, user);
+      if (path === '/refresh' && request.method() === 'POST') {
+        return sessionActive
+          ? reply(route, { access_token: accessToken, token_type: 'bearer', user })
+          : reply(route, { detail: 'Invalid session' }, 401);
+      }
+      if (path === '/logout' && request.method() === 'POST') {
+        sessionActive = false;
+        return route.fulfill({ status: 204, headers });
+      }
+      if (path === '/me') return sessionActive ? reply(route, user) : reply(route, { detail: 'Invalid session' }, 401);
       if (path === '/financial/households' && request.method() === 'GET') {
         const result = [personalA, personalB, ...(shared ? [shared] : [])].filter((household) => (memberships.get(household.id) ?? []).some((member) => member.user_id === user.id && member.status === 'ACTIVE'));
         return reply(route, result);

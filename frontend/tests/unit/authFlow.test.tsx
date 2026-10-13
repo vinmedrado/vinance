@@ -13,6 +13,8 @@ const authService = vi.hoisted(() => ({
   getMe: vi.fn(),
   login: vi.fn(),
   register: vi.fn(),
+  restoreSession: vi.fn(),
+  changePassword: vi.fn(),
   logout: vi.fn(async () => undefined),
 }));
 
@@ -43,6 +45,9 @@ beforeEach(() => {
   authService.getMe.mockReset();
   authService.login.mockReset();
   authService.register.mockReset();
+  authService.restoreSession.mockReset();
+  authService.restoreSession.mockRejectedValue(new ApiRequestError(401, 'Sessão não encontrada.', 'AUTH_REQUIRED'));
+  authService.changePassword.mockReset();
   authService.logout.mockReset();
 });
 
@@ -50,7 +55,7 @@ describe('guard autenticado', () => {
   test('redireciona anônimo e preserva rota completa de retorno', async () => {
     renderProtected();
     expect(await screen.findByText('Login required /investir?origem=teste#decisao')).toBeInTheDocument();
-    expect(authService.getMe).not.toHaveBeenCalled();
+    expect(authService.restoreSession).toHaveBeenCalledTimes(1);
   });
 
   test('bloqueia a tela durante /me e libera usuário autenticado', async () => {
