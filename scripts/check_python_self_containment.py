@@ -36,13 +36,28 @@ class ActiveImportProblem:
 
 
 def _tracked_python_paths() -> list[Path]:
-    result = subprocess.run(
-        ["git", "ls-files", "--", "*.py"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--", "*.py"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        ignored_parts = {
+            ".git",
+            ".venv",
+            "__pycache__",
+            "node_modules",
+            "dist",
+            "_archived",
+        }
+        return sorted(
+            path
+            for path in ROOT.rglob("*.py")
+            if not ignored_parts.intersection(path.relative_to(ROOT).parts)
+        )
     return [ROOT / line for line in result.stdout.splitlines() if line]
 
 

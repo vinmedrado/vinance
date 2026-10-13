@@ -1,0 +1,2 @@
+# Daily at 03:15 local host time. Install deliberately on the production host.
+15 3 * * * cd /opt/vinanceos && docker compose --env-file .env.production -f docker-compose.production.yml --profile ops run --rm backup >> /var/log/vinance-backup.log 2>&1
