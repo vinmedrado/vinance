@@ -45,18 +45,22 @@ export function RequireAuth({ children }: { children: ReactElement }) {
     if (token && (error?.code === 'AUTH_EXPIRED' || error?.status === 401)) clearSession('invalid');
   }, [error?.code, error?.status, token]);
 
-  if (!token || expired || error?.code === 'AUTH_EXPIRED' || error?.status === 401) {
-    const lastReason = getLastSessionChangeReason();
-    const reason = expired || lastReason === 'expired' ? 'expired' : error?.status === 401 || lastReason === 'invalid' ? 'invalid' : 'required';
-    return <Navigate to="/login" replace state={{ from, reason }} />;
-  }
-
   if (!session.data && session.isFetching) {
     return (
       <main className="vn-auth-gate" aria-label="Validação da sessão">
         <Card><LoadingState label="Validando sua sessão com o Vinance..." /></Card>
       </main>
     );
+  }
+
+  if ((!token && !session.data) || expired || error?.code === 'AUTH_EXPIRED' || error?.status === 401) {
+    const lastReason = getLastSessionChangeReason();
+    const reason = expired || lastReason === 'expired'
+      ? 'expired'
+      : error?.code !== 'AUTH_REQUIRED' && (error?.status === 401 || lastReason === 'invalid')
+        ? 'invalid'
+        : 'required';
+    return <Navigate to="/login" replace state={{ from, reason }} />;
   }
 
   if (error || !session.data) {

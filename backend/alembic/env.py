@@ -8,7 +8,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from backend.app.auth.models import User  # noqa: F401
+from backend.app.auth.models import AuthSession, User  # noqa: F401
 from backend.app.capital_allocation.models import CapitalAllocationDecision  # noqa: F401
 from backend.app.investment_orchestrator.models import (  # noqa: F401
     InvestmentOrchestrationDecision,

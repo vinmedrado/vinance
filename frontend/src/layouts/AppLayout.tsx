@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { BarChart3, Brain, House, Landmark, LayoutDashboard, ListChecks, LogOut, MessageCircle, ShieldCheck, WalletCards, TrendingUp } from 'lucide-react';
+import { BarChart3, Brain, House, KeyRound, Landmark, LayoutDashboard, ListChecks, LogOut, MessageCircle, ShieldCheck, WalletCards, TrendingUp } from 'lucide-react';
 import { Button } from '../components';
 import { useLogout, useCurrentUser } from '../features/auth/hooks/useAuth';
 import { useThemeMode } from '../hooks/useThemeMode';
@@ -13,6 +13,7 @@ const navItems = [
   { label: 'Inteligência', path: '/intelligence', icon: Brain },
   { label: 'Investir', path: '/investir', icon: TrendingUp },
   { label: 'Advisor IA', path: '/advisor', icon: MessageCircle },
+  { label: 'Segurança', path: '/account/security', icon: KeyRound },
 ];
 
 export function AppLayout() {

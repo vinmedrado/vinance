@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.auth.dependencies import get_current_user
 from backend.app.auth.models import User
+from backend.app.auth.rate_limit import enforce_auth_rate_limit
+from backend.app.core.config import settings
 from backend.app.continuous_autopilot import service
 from backend.app.continuous_autopilot.schemas import (
     ContinuousAutopilotHistory,
@@ -113,6 +115,11 @@ async def continuous_autopilot_evaluate(
     session: AsyncSession = Depends(get_session),
 ):
     _private(response)
+    await enforce_auth_rate_limit(
+        "continuous-evaluate",
+        f"user:{current_user.id}:household:{household_id}",
+        settings.continuous_evaluate_rate_limit,
+    )
     if idempotency_key.startswith("continuous-scheduled:"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

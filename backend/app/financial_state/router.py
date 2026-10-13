@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.auth.dependencies import get_current_user
 from backend.app.auth.models import User
+from backend.app.auth.rate_limit import enforce_auth_rate_limit
+from backend.app.core.config import settings
 from backend.app.core.database import get_session
 from backend.app.financial.models import Expense, Income
 from backend.app.financial_state import service
@@ -202,6 +204,11 @@ async def household_invitation_create(
     session: AsyncSession = Depends(get_session),
 ):
     _private(response)
+    await enforce_auth_rate_limit(
+        "household-invitation",
+        f"user:{current_user.id}:household:{household_id}",
+        settings.invitation_rate_limit,
+    )
     return await _domain_call(
         service.create_invitation,
         session,
@@ -242,6 +249,11 @@ async def household_invitation_cancel(
     session: AsyncSession = Depends(get_session),
 ):
     _private(response)
+    await enforce_auth_rate_limit(
+        "household-invitation",
+        f"user:{current_user.id}:household:{household_id}",
+        settings.invitation_rate_limit,
+    )
     return await _domain_call(
         service.cancel_invitation,
         session,
@@ -279,6 +291,11 @@ async def household_invitation_accept(
     session: AsyncSession = Depends(get_session),
 ):
     _private(response)
+    await enforce_auth_rate_limit(
+        "household-invitation",
+        f"user:{current_user.id}:invitation:{invitation_id}",
+        settings.invitation_rate_limit,
+    )
     return await _domain_call(
         service.accept_invitation,
         session,
@@ -298,6 +315,11 @@ async def household_invitation_decline(
     session: AsyncSession = Depends(get_session),
 ):
     _private(response)
+    await enforce_auth_rate_limit(
+        "household-invitation",
+        f"user:{current_user.id}:invitation:{invitation_id}",
+        settings.invitation_rate_limit,
+    )
     return await _domain_call(
         service.decline_invitation,
         session,

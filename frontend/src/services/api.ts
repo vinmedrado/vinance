@@ -1,16 +1,18 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const RAW_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const RAW_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 export const API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
 const API_PREFIX = import.meta.env.VITE_API_PREFIX ?? '/api/v1';
-
-const ACCESS_TOKEN_KEY = 'vinance_access_token';
-const USER_KEY = 'vinance_user';
 const SESSION_CHANGE_EVENT = 'vinance:session-change';
+const API_ROOT = `${API_BASE_URL}${API_PREFIX}`;
 
 export type SessionChangeReason = 'login' | 'logout' | 'expired' | 'invalid' | 'storage';
 
 let lastSessionChangeReason: SessionChangeReason | null = null;
+let accessToken: string | null = null;
+let currentUser: unknown = null;
+let refreshPromise: Promise<string | null> | null = null;
+let sessionVersion = 0;
 
 export type ApiErrorShape = {
   status: number;
@@ -35,6 +37,7 @@ export class ApiRequestError extends Error implements ApiErrorShape {
 
 function emitSessionChange(reason: SessionChangeReason) {
   lastSessionChangeReason = reason;
+  sessionVersion += 1;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(SESSION_CHANGE_EVENT, { detail: { reason } }));
   }
@@ -85,9 +88,17 @@ export function normalizeApiError(error: unknown): ApiRequestError {
 }
 
 export const api = axios.create({
-  baseURL: `${API_BASE_URL}${API_PREFIX}`,
+  baseURL: API_ROOT,
   timeout: 15000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
+});
+
+const sessionApi = axios.create({
+  baseURL: API_ROOT,
+  timeout: 15000,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
 });
 
 api.interceptors.request.use((config) => {
@@ -96,9 +107,49 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+type RetryableRequest = InternalAxiosRequestConfig & { _sessionRetry?: boolean };
+
+function isSessionEndpoint(url?: string) {
+  return Boolean(url && /\/(?:login|register|refresh|logout)(?:\?|$)/.test(url));
+}
+
+export async function refreshSession() {
+  if (!refreshPromise) {
+    const hadAccessToken = Boolean(accessToken);
+    refreshPromise = sessionApi.post<unknown>('/refresh')
+      .then(({ data }) => {
+        if (!data || typeof data !== 'object') throw new Error('Invalid refresh response');
+        const record = data as Record<string, unknown>;
+        const token = typeof record.access_token === 'string' ? record.access_token.trim() : '';
+        if (!token) throw new Error('Invalid refresh token response');
+        setSession(token, record.user, 'login');
+        return token;
+      })
+      .catch((error: unknown) => {
+        const normalized = normalizeApiError(error);
+        if (normalized.status === 401) {
+          if (hadAccessToken) clearSession('invalid');
+          return null;
+        }
+        throw normalized;
+      })
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ detail?: string | Array<{ msg?: string }>; error?: string }>) => {
+  async (error: AxiosError<{ detail?: string | Array<{ msg?: string }>; error?: string }>) => {
+    const original = error.config as RetryableRequest | undefined;
+    if (error.response?.status === 401 && original && !original._sessionRetry && !isSessionEndpoint(original.url)) {
+      original._sessionRetry = true;
+      const token = await refreshSession().catch(() => null);
+      if (token) {
+        original.headers.Authorization = `Bearer ${token}`;
+        return api.request(original);
+      }
+    }
     const normalized = normalizeApiError(error);
 
     if (normalized.status === 401) {
@@ -111,26 +162,22 @@ api.interceptors.response.use(
 );
 
 export function getAccessToken() {
-  return typeof window === 'undefined' ? null : window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  return accessToken;
 }
 
-export function setSession(token: string, user: unknown) {
-  window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
-  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
-  emitSessionChange('login');
+export function setSession(token: string, user: unknown, reason: SessionChangeReason = 'login') {
+  accessToken = token;
+  currentUser = user;
+  emitSessionChange(reason);
 }
 
 export function getStoredUser<T>() {
-  if (typeof window === 'undefined') return null;
-  const value = window.localStorage.getItem(USER_KEY);
-  if (!value) return null;
-  try { return JSON.parse(value) as T; } catch { return null; }
+  return currentUser as T | null;
 }
 
 export function clearSession(reason: SessionChangeReason = 'logout') {
-  if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
-  window.localStorage.removeItem(USER_KEY);
+  accessToken = null;
+  currentUser = null;
   emitSessionChange(reason);
 }
 
@@ -142,22 +189,18 @@ export function subscribeToSession(onStoreChange: () => void) {
     if (reason) lastSessionChangeReason = reason;
     onStoreChange();
   };
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key !== ACCESS_TOKEN_KEY && event.key !== USER_KEY) return;
-    lastSessionChangeReason = 'storage';
-    onStoreChange();
-  };
-
   window.addEventListener(SESSION_CHANGE_EVENT, handleSessionChange);
-  window.addEventListener('storage', handleStorage);
   return () => {
     window.removeEventListener(SESSION_CHANGE_EVENT, handleSessionChange);
-    window.removeEventListener('storage', handleStorage);
   };
 }
 
 export function getLastSessionChangeReason() {
   return lastSessionChangeReason;
+}
+
+export function getSessionVersion() {
+  return sessionVersion;
 }
 
 function decodeTokenPayload(token: string) {

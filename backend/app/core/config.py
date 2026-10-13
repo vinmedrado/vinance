@@ -22,10 +22,14 @@ class Settings(BaseSettings):
     app_version: str = "2.0.0-phase1"
     environment: Literal["local", "development", "staging", "production", "test"] = "development"
     debug: bool = False
+    demo_mode_enabled: bool = False
     log_level: str = "INFO"
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
     cors_origins: str = "http://localhost:3000,http://localhost:5173,http://localhost:9000"
+    trusted_hosts: str = "localhost,127.0.0.1,testserver"
+    api_docs_enabled: bool | None = None
+    app_commit_sha: str = "unknown"
 
     # DATABASE
     database_url: str = Field(default="postgresql+asyncpg://vinance:vinance@postgres:5432/vinance")
@@ -49,6 +53,19 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="change-me-before-real-use", min_length=16)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = Field(default=30, ge=1, le=365)
+    refresh_cookie_name: str = "vinance_refresh"
+    refresh_cookie_path: str = "/api/v1"
+    registration_enabled: bool = True
+    auth_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)
+    rate_limiting_enabled: bool | None = None
+    login_rate_limit: int = Field(default=10, ge=1, le=1000)
+    login_ip_rate_limit: int = Field(default=50, ge=1, le=5000)
+    register_rate_limit: int = Field(default=5, ge=1, le=1000)
+    refresh_rate_limit: int = Field(default=30, ge=1, le=5000)
+    password_change_rate_limit: int = Field(default=5, ge=1, le=1000)
+    invitation_rate_limit: int = Field(default=20, ge=1, le=1000)
+    continuous_evaluate_rate_limit: int = Field(default=6, ge=1, le=1000)
 
 
     @field_validator("log_level")
@@ -62,6 +79,26 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
+    @computed_field
+    @property
+    def trusted_host_list(self) -> list[str]:
+        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
+
+    @computed_field
+    @property
+    def effective_api_docs_enabled(self) -> bool:
+        return not self.is_production if self.api_docs_enabled is None else self.api_docs_enabled
+
+    @computed_field
+    @property
+    def refresh_cookie_secure(self) -> bool:
+        return self.is_production
+
+    @computed_field
+    @property
+    def effective_rate_limiting_enabled(self) -> bool:
+        return self.is_production if self.rate_limiting_enabled is None else self.rate_limiting_enabled
+
     @model_validator(mode="after")
     def validate_production_security(self):
         origins = self.cors_origin_list
@@ -70,17 +107,25 @@ class Settings(BaseSettings):
 
         if self.is_production:
             missing = []
+            if self.debug:
+                missing.append("DEBUG")
+            if self.demo_mode_enabled:
+                missing.append("DEMO_MODE_ENABLED")
             database_url = (self.database_url or "").strip()
             insecure_database_markers = (
                 "vinance:vinance@",
                 "postgres:postgres@",
                 "usuario:senha-forte@",
                 "user:password@",
+                "replace-with",
             )
             if not database_url or any(marker in database_url.lower() for marker in insecure_database_markers):
                 missing.append("DATABASE_URL")
             redis_url = (self.redis_url or "").strip()
-            if not redis_url or "usuario:senha-forte@" in redis_url.lower():
+            if not redis_url or any(
+                marker in redis_url.lower()
+                for marker in ("usuario:senha-forte@", "replace-with")
+            ):
                 missing.append("REDIS_URL")
 
             secret_key = (self.secret_key or "").strip()
@@ -93,6 +138,7 @@ class Settings(BaseSettings):
                 "chave-segura",
                 "mais-de-32",
                 "placeholder",
+                "replace-with",
             )
             secret_is_insecure = (
                 not secret_key
@@ -107,8 +153,20 @@ class Settings(BaseSettings):
                 "http://localhost:5173",
                 "http://localhost:9000",
             }
-            if not origins or any(origin in insecure_origins for origin in origins):
+            if not origins or any(
+                origin in insecure_origins
+                or ".invalid" in origin
+                or not origin.lower().startswith("https://")
+                for origin in origins
+            ):
                 missing.append("CORS_ORIGINS")
+
+            hosts = self.trusted_host_list
+            if not hosts or "*" in hosts or any(
+                host in {"localhost", "127.0.0.1", "testserver"} or host.endswith(".invalid")
+                for host in hosts
+            ):
+                missing.append("TRUSTED_HOSTS")
 
             if missing:
                 raise ValueError(f"Missing or insecure required production settings: {', '.join(missing)}")

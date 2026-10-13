@@ -1,4 +1,4 @@
-import { api, ApiRequestError, clearSession, getStoredUser, setSession } from '../../../services/api';
+import { api, ApiRequestError, clearSession, getStoredUser, refreshSession, setSession } from '../../../services/api';
 import type { LoginPayload, RegisterPayload, TokenResponse, User } from '../types/auth.types';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -52,5 +52,20 @@ export async function getMe(signal?: AbortSignal) {
   return normalizeUser(data);
 }
 
-export function logout() { clearSession(); }
+export async function restoreSession() {
+  const token = await refreshSession();
+  if (!token) throw new ApiRequestError(401, 'Sessão não encontrada.', 'AUTH_REQUIRED');
+  return getMe();
+}
+
+export async function logout() {
+  await api.post('/logout');
+  clearSession();
+}
+
+export async function changePassword(payload: { current_password: string; new_password: string }) {
+  await api.post('/password/change', payload);
+  clearSession('logout');
+}
+
 export function getCurrentStoredUser() { return getStoredUser<User>(); }

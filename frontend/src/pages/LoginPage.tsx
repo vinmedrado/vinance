@@ -14,12 +14,15 @@ export function LoginPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const routeState = location.state as { from?: string; reason?: 'required' | 'expired' | 'invalid' } | null;
+  const routeState = location.state as { from?: string; reason?: 'required' | 'expired' | 'invalid' | 'password-changed' } | null;
   const requestedPath = routeState?.from;
   const redirectTo = requestedPath?.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/dashboard';
   const error = (login.error || register.error) as ApiErrorShape | null;
   const isPending = login.isPending || register.isPending;
-  const sessionNotice = routeState?.reason === 'expired'
+  const registrationEnabled = import.meta.env.VITE_REGISTRATION_ENABLED !== 'false';
+  const sessionNotice = routeState?.reason === 'password-changed'
+    ? 'Senha alterada. Entre novamente com sua nova senha.'
+    : routeState?.reason === 'expired'
     ? 'Sua sessão expirou. Entre novamente para continuar.'
     : routeState?.reason === 'invalid'
       ? 'Sua sessão não é mais válida. Entre novamente para continuar.'
@@ -45,7 +48,7 @@ export function LoginPage() {
         <h1>Finanças pessoais com leitura de risco, mercado e contexto.</h1>
         <p>Entre com uma conta real do backend FastAPI para acessar diagnóstico, inteligência heurística e advisor conectado.</p>
       </section>
-      <Card className="vn-auth__card" title={mode === 'login' ? 'Entrar' : 'Criar conta'} description="Autenticação real via backend aprovado. O token é salvo localmente e limpo no logout.">
+      <Card className="vn-auth__card" title={mode === 'login' ? 'Entrar' : 'Criar conta'} description="Sessão protegida: credencial renovável em cookie HttpOnly e acesso mantido somente em memória.">
         <form className="vn-form" onSubmit={handleSubmit}>
           {sessionNotice && <p className="vn-session-notice" role="status">{sessionNotice}</p>}
           {mode === 'register' && <Input label="Nome" placeholder="Nome completo" value={fullName} onChange={(event) => setFullName(event.target.value)} />}
@@ -53,9 +56,11 @@ export function LoginPage() {
           <Input label="Senha" placeholder="••••••••" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required />
           {error && <p className="vn-error" role="alert">{error.message}</p>}
           <Button type="submit" disabled={isPending}>{isPending ? 'Conectando...' : mode === 'login' ? 'Entrar' : 'Registrar e entrar'}</Button>
-          <Button type="button" variant="ghost" onClick={() => { login.reset(); register.reset(); setMode(mode === 'login' ? 'register' : 'login'); }}>
-            {mode === 'login' ? 'Criar nova conta' : 'Já tenho conta'}
-          </Button>
+          {registrationEnabled && (
+            <Button type="button" variant="ghost" onClick={() => { login.reset(); register.reset(); setMode(mode === 'login' ? 'register' : 'login'); }}>
+              {mode === 'login' ? 'Criar nova conta' : 'Já tenho conta'}
+            </Button>
+          )}
           <p className="vn-disclaimer">Sem token demo e sem mock paralelo de autenticação.</p>
         </form>
       </Card>

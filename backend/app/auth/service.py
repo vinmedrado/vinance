@@ -57,3 +57,14 @@ async def authenticate_user(session: AsyncSession, email: str, password: str) ->
     if not user or not verify_password(password, user.hashed_password) or not user.is_active:
         return None
     return user
+
+
+async def change_user_password(session: AsyncSession, user: User, current_password: str, new_password: str) -> bool:
+    if not verify_password(current_password, user.hashed_password):
+        return False
+    user.hashed_password = get_password_hash(new_password)
+    from backend.app.auth.sessions import revoke_all_user_sessions
+
+    await revoke_all_user_sessions(session, user.id)
+    await session.commit()
+    return True

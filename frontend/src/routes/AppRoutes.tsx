@@ -11,6 +11,7 @@ import { AdvisorPage } from '../pages/AdvisorPage';
 import { InvestmentWorkspacePage } from '../pages/InvestmentWorkspacePage';
 import { HouseholdPage } from '../pages/HouseholdPage';
 import { FinancialDataPage } from '../pages/FinancialDataPage';
+import { AccountSecurityPage } from '../pages/AccountSecurityPage';
 
 export function AppRoutes() {
   return (
@@ -26,6 +27,7 @@ export function AppRoutes() {
         <Route path="intelligence" element={<IntelligencePage />} />
         <Route path="investir" element={<InvestmentWorkspacePage />} />
         <Route path="advisor" element={<AdvisorPage />} />
+        <Route path="account/security" element={<AccountSecurityPage />} />
       </Route>
       <Route path="*" element={<Navigate to={isAuthenticated() ? '/dashboard' : '/login'} replace />} />
     </Routes>
