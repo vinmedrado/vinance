@@ -137,7 +137,7 @@ export function HouseholdPage() {
     });
     setNewHouseholdName('');
     setSelectedId(created.id);
-    setNotice('Household compartilhado criado.');
+    setNotice('Casa compartilhada criada.');
   }
 
   async function submitInvitation(event: FormEvent) {
@@ -160,13 +160,13 @@ export function HouseholdPage() {
   return (
     <section className="vn-page">
       <SectionHeader
-        eyebrow="Household"
+        eyebrow="Compartilhamento"
         title="Casa e família"
         description="Cada pessoa mantém seus dados pessoais privados e compartilha somente o que escolher com a casa."
       />
 
       {(households.error || defaultHousehold.error || incoming.error) && (
-        <Card><ErrorState title="Não foi possível carregar os households" description={message(households.error || defaultHousehold.error || incoming.error)} /></Card>
+        <Card><ErrorState title="Não foi possível carregar suas casas" description={message(households.error || defaultHousehold.error || incoming.error)} /></Card>
       )}
       {actionError && <Card><ErrorState title="A ação não foi concluída" description={message(actionError)} /></Card>}
       {notice && <Toast message={notice} />}
@@ -190,9 +190,9 @@ export function HouseholdPage() {
       </Card>
 
       <div className="vn-grid vn-grid--two">
-        <Card title="Seus households" description="Seu household pessoal continua privado. O compartilhado é separado.">
+        <Card title="Suas casas" description="Seu espaço pessoal continua privado. A casa compartilhada permanece separada.">
           <SelectField
-            label="Household atual"
+            label="Casa atual"
             value={selectedId ?? ''}
             disabled={pending}
             onChange={(event) => chooseHousehold(Number(event.target.value))}
@@ -211,7 +211,7 @@ export function HouseholdPage() {
           )}
         </Card>
 
-        <Card title="Criar household compartilhado" description="O novo espaço não substitui nem abre seu household pessoal.">
+        <Card title="Criar casa compartilhada" description="O novo espaço não substitui nem abre seu espaço pessoal.">
           <form className="vn-form" onSubmit={submitHousehold}>
             <Input label="Nome da casa" value={newHouseholdName} onChange={(event) => setNewHouseholdName(event.target.value)} placeholder="Casa Medrado" maxLength={255} required />
             <Button type="submit" disabled={pending || !newHouseholdName.trim()}>{createHousehold.isPending ? 'Criando...' : 'Criar compartilhado'}</Button>
@@ -243,7 +243,7 @@ export function HouseholdPage() {
                         options={[{ value: 'MEMBER', label: 'Membro' }, { value: 'OWNER', label: 'Proprietário' }]}
                       />
                       <Button variant="ghost" disabled={pending} onClick={() => {
-                        if (window.confirm(`Remover ${member.full_name || member.email || 'este membro'} do household?`)) {
+                        if (window.confirm(`Remover ${member.full_name || member.email || 'este membro'} desta casa?`)) {
                           removeMember.mutate({ householdId: selected.id, sessionToken, payload: { memberId: member.id } });
                         }
                       }}>Remover</Button>
@@ -257,10 +257,10 @@ export function HouseholdPage() {
           {selected.household_type === 'SHARED' && currentMembership && (
             <div className="vn-inline-actions">
               <Button variant="ghost" disabled={pending || Boolean(isSoleOwner)} onClick={() => {
-                if (window.confirm('Sair deste household? Seus dados pessoais não serão transferidos nem apagados.')) {
+                if (window.confirm('Sair desta casa? Seus dados pessoais não serão transferidos nem apagados.')) {
                   leave.mutate({ householdId: selected.id, sessionToken, payload: undefined });
                 }
-              }}>Sair do household</Button>
+              }}>Sair da casa</Button>
               {isSoleOwner && <small>Transfira o papel de proprietário antes de sair.</small>}
             </div>
           )}
@@ -277,7 +277,7 @@ export function HouseholdPage() {
             </form>
           </Card>
 
-          <Card title="Convites do household" description="Convites pendentes ainda não concedem acesso.">
+          <Card title="Convites da casa" description="Convites pendentes ainda não concedem acesso.">
             {(outgoing.data ?? []).filter((item) => item.status === 'PENDING').length === 0 ? (
               <EmptyState title="Nenhum convite pendente" description="Convites criados aparecerão aqui até a decisão da pessoa." />
             ) : (
@@ -295,7 +295,7 @@ export function HouseholdPage() {
       )}
 
       <Modal open={pendingSwitchId !== null} title="Alterações não salvas" onClose={() => setPendingSwitchId(null)}>
-        <p>Trocar de household descartará os dados ainda não enviados deste formulário.</p>
+        <p>Trocar de casa descartará os dados ainda não enviados deste formulário.</p>
         <div className="vn-inline-actions">
           <Button variant="secondary" onClick={() => setPendingSwitchId(null)}>Cancelar</Button>
           <Button onClick={discardAndSwitch}>Descartar e trocar</Button>

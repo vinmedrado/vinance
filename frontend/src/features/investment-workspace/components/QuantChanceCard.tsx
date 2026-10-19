@@ -34,11 +34,11 @@ export function QuantChanceCard({ item, presentation = decisionPresentation(item
         <div><span className="vn-kicker">Chance estimada</span><strong className={`vn-score-reading vn-score-reading--${tone}`}>{chance}</strong><p>Indicador quantitativo, sem garantia de retorno.</p></div>
       </div>
       <dl className="vn-compact-metrics">
-        <div><dt><Gauge size={16} aria-hidden="true" /> Confidence Score</dt><dd>{scoreText(confidenceValue)}</dd></div>
+        <div><dt><Gauge size={16} aria-hidden="true" /> Confiança quantitativa</dt><dd>{scoreText(confidenceValue)}</dd></div>
         <div><dt><BarChart3 size={16} aria-hidden="true" /> Nível de confiança</dt><dd>{resolvedConfidenceLabel}</dd></div>
         <div><dt><BadgeCheck size={16} aria-hidden="true" /> Qualidade da explicação</dt><dd>{explanationQualityLabel(item.explanation_quality)}</dd></div>
       </dl>
-      {confidenceDivergent && <p className="vn-data-divergence" role="status">Dados de confiança divergentes: o nível exibido foi derivado do score numérico validado.</p>}
+      {confidenceDivergent && <p className="vn-data-divergence" role="status">Dados de confiança divergentes: o nível exibido foi derivado da pontuação numérica validada.</p>}
       {presentation.action.label !== 'Comprar' && tone === 'success' && (
         <p className={`vn-signal-context vn-signal-context--${presentation.tone}`} role="note">
           Score quantitativo alto, mas a decisão permanece {presentation.action.label}: {presentation.action.reason}

@@ -29,7 +29,21 @@ import { getInvestmentWorkspaceRecommendation } from '../features/investment-wor
 import type { ExplainedBudgetAdvisorResponse, InvestmentWorkspaceFilters, InvestorProfile } from '../features/investment-workspace/types/investmentWorkspace.types';
 import { decisionPresentation } from '../features/investment-workspace/utils/investmentDecision';
 import type { ApiErrorShape } from '../services/api';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatDateTime } from '../utils/formatters';
+
+const planStatusLabels: Record<string, string> = {
+  BLOCKED: 'Bloqueado',
+  PARTIAL: 'Parcial',
+  READY: 'Pronto',
+  NO_ACTION_REQUIRED: 'Nenhuma ação necessária',
+};
+
+const strategyStatusLabels: Record<string, string> = {
+  BLOCKED: 'Bloqueada',
+  LIMITED: 'Limitada',
+  ACTIVE: 'Ativa',
+  NO_SUITABLE_OPPORTUNITY: 'Sem oportunidade adequada',
+};
 
 const marketOptions = [
   { value: 'FII', label: 'FIIs' },
@@ -124,7 +138,7 @@ function WorkspaceResult({ data, userId }: { data: ExplainedBudgetAdvisorRespons
           eyebrow="Alternativas"
           id="decision-alternatives-title"
           title="Compare antes de decidir"
-          description="Entenda a posição da primeira opção e conheça os demais ativos avaliados no ranking."
+          description="Entenda a posição da primeira opção e conheça os demais ativos avaliados."
         />
         <AlternativesComparison comparison={best.comparison_with_alternatives} alternatives={data.alternatives} />
       </section>
@@ -234,7 +248,7 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
       />
 
       {isAutopilotMode && autopilotLoading && (
-        <Card title="Contexto do Financial Autopilot">
+        <Card title="Contexto do seu plano financeiro">
           <LoadingState label="Carregando o capital e a estratégia autorizados..." />
         </Card>
       )}
@@ -245,25 +259,25 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
         >
           <p>
             <Badge tone={frozenActionPlan.data.status === 'READY' ? 'success' : frozenActionPlan.data.status === 'BLOCKED' ? 'danger' : 'warning'}>
-              {frozenActionPlan.data.status}
+              {planStatusLabels[frozenActionPlan.data.status] ?? frozenActionPlan.data.status}
             </Badge>{' '}
             {frozenActionPlan.data.summary.primary_action ?? 'Plano sem ação principal.'}
           </p>
-          <p>Decisão de {new Date(frozenActionPlan.data.generated_at).toLocaleString('pt-BR')}.</p>
+          <p>Decisão de {formatDateTime(frozenActionPlan.data.generated_at)}.</p>
         </Card>
       )}
       {isAutopilotMode && autopilotError && (
-        <Card title="Contexto do Financial Autopilot">
+        <Card title="Contexto do seu plano financeiro">
           <ErrorState
-            title="Não foi possível carregar a estratégia do Autopilot"
+            title="Não foi possível carregar a estratégia do seu plano"
             description={autopilotError instanceof Error ? autopilotError.message : 'Volte à área financeira e tente novamente.'}
           />
         </Card>
       )}
       {isAutopilotMode && autopilot && (
         <Card
-          title="Contexto do Financial Autopilot"
-          description="Esta central recebeu o orçamento e o contexto do backend. A consulta abaixo continua sem executar ordens."
+          title="Contexto do seu plano financeiro"
+          description="Esta central recebeu o orçamento autorizado e a decisão já calculada pelo Vinance. Nenhuma ordem é executada por esta tela."
           action={<a className="vn-button vn-button--secondary" href="/financial">Voltar à situação financeira</a>}
         >
           <div className="vn-grid vn-grid--two">
@@ -273,15 +287,15 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
             </div>
             <div>
               <span>Estratégia congelada</span>
-              <p><Badge tone={autopilot.status === 'ACTIVE' ? 'success' : autopilot.status === 'BLOCKED' ? 'danger' : 'warning'}>{autopilot.status}</Badge></p>
+              <p><Badge tone={autopilot.status === 'ACTIVE' ? 'success' : autopilot.status === 'BLOCKED' ? 'danger' : 'warning'}>{strategyStatusLabels[autopilot.status] ?? autopilot.status}</Badge></p>
               <p>Sugerido: {formatCurrency(autopilot.suggested_capital ?? 0)} · preservado em caixa: {formatCurrency(autopilot.remaining_investment_cash ?? 0)}</p>
             </div>
           </div>
           {fixedIncomeOpportunities.length > 0 && (
             <div className="vn-section-gap">
-              <h4>Renda fixa avaliada pelo Autopilot</h4>
-              <p>Produtos reais do Tesouro avaliados pelo backend com o mesmo orçamento autorizado. Esta tela não recalcula suitability nem executa aplicação.</p>
-              <div className="vn-list" role="list" aria-label="Oportunidades de renda fixa do Autopilot">
+              <h4>Renda fixa avaliada pelo plano</h4>
+              <p>Produtos reais do Tesouro avaliados com o mesmo orçamento autorizado. Esta tela não recalcula a adequação nem executa aplicações.</p>
+              <div className="vn-list" role="list" aria-label="Oportunidades de renda fixa do plano financeiro">
                 {fixedIncomeOpportunities.map((item) => (
                   <div key={item.source_product_id ?? `${item.market}-${item.symbol}`} role="listitem">
                     <strong>{item.product_name ?? item.symbol} <Badge tone={item.action === 'BUY' ? 'success' : item.action === 'AVOID' ? 'danger' : 'warning'}>{item.action === 'BUY' ? 'Comprar' : item.action === 'WAIT' ? 'Aguardar' : item.action === 'AVOID' ? 'Evitar' : 'Sem recomendação'}</Badge></strong>
@@ -296,7 +310,7 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
         </Card>
       )}
 
-      <Card className="vn-investment-filters" title="Encontre a melhor oportunidade" description="Defina o orçamento, mercado e perfil para consultar o Budget Advisor.">
+      <Card className="vn-investment-filters" title="Compare oportunidades" description="Defina o orçamento, mercado e perfil para consultar a análise de orçamento.">
         <form className="vn-investment-filter-grid" onSubmit={submit}>
           <label className="vn-field">
             Orçamento
@@ -335,7 +349,7 @@ function InvestmentWorkspaceContent({ userId }: { userId?: number }) {
       <DecisionHistoryPanel userId={userId} refreshDecisionId={query.data?.decision_id} />
       <RecommendationPerformancePanel userId={userId} refreshDecisionId={query.data?.decision_id} />
 
-      {!hasSubmitted && <Card><EmptyState title="Pronto para analisar" description="Informe seu orçamento e clique em Analisar orçamento para descobrir a melhor oportunidade disponível." /></Card>}
+      {!hasSubmitted && <Card><EmptyState title="Pronto para analisar" description="Informe seu orçamento para avaliar quais oportunidades são compatíveis com os critérios atuais." /></Card>}
       <div className={query.isFetching && query.data ? 'vn-query-region vn-query-region--refreshing' : 'vn-query-region'} aria-busy={query.isFetching}>
         {query.isFetching && query.data && <div className="vn-refresh-notice" role="status">Atualizando análise — o resultado abaixo ainda é o anterior.</div>}
         {query.isLoading && <Card><LoadingState label="Comparando oportunidades para seu perfil..." /></Card>}

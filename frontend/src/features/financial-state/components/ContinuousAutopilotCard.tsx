@@ -7,6 +7,7 @@ import type {
   ContinuousMateriality,
   MoneyValue,
 } from '../types/financialState.types';
+import { formatDateTime } from '../../../utils/formatters';
 
 const statusLabels: Record<ContinuousAutopilotStatus, string> = {
   UP_TO_DATE: 'PLANO ATUALIZADO',
@@ -32,6 +33,21 @@ const materialityLabels: Record<ContinuousMateriality, string> = {
   MEDIUM: 'Média',
   HIGH: 'Alta',
   CRITICAL: 'Crítica',
+};
+
+const categoryLabels: Record<string, string> = {
+  FINANCIAL_DATA: 'Dados financeiros',
+  MARKET_DATA: 'Mercado',
+  PROFILE: 'Perfil',
+  GOALS: 'Objetivos',
+  DEBT: 'Dívidas',
+  ASSETS: 'Patrimônio',
+  HOUSEHOLD: 'Casa e família',
+  POLICY: 'Prioridade financeira',
+  ALLOCATION: 'Distribuição de capital',
+  INVESTMENT_OPPORTUNITY: 'Oportunidade de investimento',
+  DATA_QUALITY: 'Qualidade dos dados',
+  FRESHNESS: 'Atualidade dos dados',
 };
 
 function statusTone(
@@ -69,7 +85,7 @@ function currentMessage(decision: ContinuousAutopilot, status: ContinuousAutopil
   if (status === 'REEVALUATION_REQUIRED') {
     return 'Novas informações foram registradas e precisam ser avaliadas com segurança.';
   }
-  if (status === 'EVALUATING') return 'O VinanceOS está verificando a cadeia de decisões.';
+  if (status === 'EVALUATING') return 'O Vinance está verificando sua cadeia de decisões.';
   if (status === 'BLOCKED') {
     return 'Uma mudança foi detectada, mas faltam dados para atualizar o plano com segurança.';
   }
@@ -115,13 +131,13 @@ export function ContinuousAutopilotCard({
   onShowCurrent,
 }: ContinuousAutopilotCardProps) {
   if (isLoading) {
-    return <Card title="Seu Autopilot"><LoadingState label="Verificando se algo importante mudou..." /></Card>;
+    return <Card title="Acompanhamento do seu plano"><LoadingState label="Verificando se algo importante mudou..." /></Card>;
   }
   if (errorMessage) {
     return (
-      <Card title="Seu Autopilot">
+      <Card title="Acompanhamento do seu plano">
         <ErrorState
-          title="Não foi possível consultar o Autopilot"
+          title="Não foi possível consultar o acompanhamento"
           description={errorMessage}
           action={<Button variant="secondary" onClick={onRetry}>Tentar novamente</Button>}
         />
@@ -146,7 +162,7 @@ export function ContinuousAutopilotCard({
 
   return (
     <Card
-      title="Seu Autopilot"
+      title="Acompanhamento do seu plano"
       description="Monitora mudanças relevantes sem executar movimentações financeiras automaticamente."
       action={isHistorical
         ? <Button variant="secondary" onClick={onShowCurrent}>Voltar ao status atual</Button>
@@ -161,11 +177,11 @@ export function ContinuousAutopilotCard({
           <p><Badge tone={statusTone(displayedStatus)}>{statusLabels[displayedStatus]}</Badge></p>
           <p>{currentMessage(decision, displayedStatus)}</p>
           <small>
-            Última avaliação: {new Date(
+            Última avaliação: {formatDateTime(
               !isHistorical && decision.last_evaluated_at
                 ? decision.last_evaluated_at
                 : decision.observed_at,
-            ).toLocaleString('pt-BR')}.
+            )}.
           </small>
         </div>
         <div>
@@ -198,11 +214,11 @@ export function ContinuousAutopilotCard({
       {visibleChanges.length > 0 && (
         <div className="vn-section-gap">
           <h4>O que mudou</h4>
-          <div className="vn-list" role="list" aria-label="Mudanças relevantes do Autopilot">
+          <div className="vn-list" role="list" aria-label="Mudanças relevantes do plano">
             {visibleChanges.map((change) => (
               <div key={change.change_id} role="listitem">
                 <strong>{change.reason}</strong>
-                <span>{change.category.replace(/_/g, ' ')} · {change.materiality}</span>
+                <span>{categoryLabels[change.category] ?? 'Mudança relevante'} · {materialityLabels[change.materiality]}</span>
               </div>
             ))}
           </div>
@@ -221,7 +237,7 @@ export function ContinuousAutopilotCard({
           <div>
             <strong>Caixa preservado</strong>
             <p>{delta(decision.plan_diff.hold_cash_delta)}</p>
-            <p>{decision.plan_diff.changed_actions.length} ação(ões) alterada(s).</p>
+            <p>{decision.plan_diff.changed_actions.length} {decision.plan_diff.changed_actions.length === 1 ? 'ação alterada' : 'ações alteradas'}.</p>
           </div>
         </div>
       )}
@@ -273,12 +289,12 @@ export function ContinuousAutopilotCard({
             ? <LoadingState label="Carregando avaliações anteriores..." />
             : history && history.items.length > 0
               ? (
-                <div className="vn-list" role="list" aria-label="Histórico do Continuous Autopilot">
+                <div className="vn-list" role="list" aria-label="Histórico de acompanhamento do plano">
                   {history.items.slice(0, 5).map((item) => (
                     <div key={item.continuous_decision_id} role="listitem">
                       <strong>{item.title}</strong>
-                      <span>{new Date(item.observed_at).toLocaleString('pt-BR')} · {item.summary}</span>
-                      <small>{item.change_count} mudança(s) relevante(s) · {item.materiality}</small>
+                      <span>{formatDateTime(item.observed_at)} · {item.summary}</span>
+                      <small>{item.change_count} {item.change_count === 1 ? 'mudança relevante' : 'mudanças relevantes'} · {materialityLabels[item.materiality]}</small>
                       <Button
                         variant="secondary"
                         onClick={() => onSelectHistory(item.continuous_decision_id)}

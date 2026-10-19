@@ -127,7 +127,7 @@ describe('ContinuousAutopilotCard', () => {
     render(<ContinuousAutopilotCard {...baseProps} decision={decision('CHANGED')} />);
     expect(screen.getByText('SEU PLANO MUDOU')).toBeInTheDocument();
     expect(screen.getByText('O valor autorizado para investir ficou menor.')).toBeInTheDocument();
-    expect(screen.getByRole('list', { name: 'Mudanças relevantes do Autopilot' }))
+    expect(screen.getByRole('list', { name: 'Mudanças relevantes do plano' }))
       .toHaveTextContent('A capacidade financeira mensal mudou.');
     expect(screen.getByRole('link', { name: 'Ver novo plano' })).toHaveAttribute('href', '#action-plan');
   });

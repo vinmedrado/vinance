@@ -106,11 +106,11 @@ test('does not move a dirty goal draft when switching households', async () => {
   const goalsCard = (await screen.findByText('Objetivos')).closest('section');
   await user.click(within(goalsCard as HTMLElement).getByRole('button', { name: 'Adicionar' }));
   await user.type(screen.getByLabelText('Nome'), 'Viagem');
-  await user.selectOptions(screen.getByLabelText('Household'), '2');
+  await user.selectOptions(screen.getByLabelText('Casa'), '2');
   expect(await screen.findByRole('dialog', { name: 'Alterações não salvas' })).toBeInTheDocument();
-  expect(screen.getByLabelText('Household')).toHaveValue('1');
+  expect(screen.getByLabelText('Casa')).toHaveValue('1');
   await user.click(screen.getByRole('button', { name: 'Descartar e trocar' }));
-  expect(screen.getByLabelText('Household')).toHaveValue('2');
+  expect(screen.getByLabelText('Casa')).toHaveValue('2');
   expect(screen.queryByRole('dialog', { name: 'Adicionar objetivo' })).not.toBeInTheDocument();
 });
 
@@ -118,7 +118,7 @@ test('edits the personal financial profile without attaching a household id', as
   const user = userEvent.setup();
   renderPage();
   await user.click(await screen.findByRole('button', { name: 'Editar perfil' }));
-  const reserve = screen.getByLabelText('Reserva de emergência');
+  const reserve = screen.getByLabelText('Reserva de emergência atual');
   await user.clear(reserve);
   await user.type(reserve, '2500');
   const horizon = screen.getByRole('spinbutton', { name: /Horizonte de investimento/i });

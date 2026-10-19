@@ -9,7 +9,7 @@ export function ExecutiveSummaryCard({ item, presentation = decisionPresentation
   const engineSummary = item.executive_summary ?? item.decision_summary;
 
   return (
-    <Card className={`vn-executive-card vn-executive-card--${presentation.tone}`} title="Resumo executivo" description="A decisão em linguagem direta, com sua posição no ranking.">
+    <Card className={`vn-executive-card vn-executive-card--${presentation.tone}`} title="Resumo da decisão" description="A decisão em linguagem direta, com sua posição entre as opções avaliadas.">
       <p className={`vn-executive-card__decision vn-executive-card__decision--${presentation.tone}`}>{presentation.headline}</p>
       {presentation.action.label === 'Comprar' ? (
         <p className="vn-executive-card__summary">{engineSummary ?? 'A API não retornou um resumo executivo.'}</p>

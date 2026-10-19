@@ -42,6 +42,7 @@ function renderProtected(children: ReactNode = <div>Central autenticada</div>) {
 }
 
 beforeEach(() => {
+  clearSession('logout');
   authService.getMe.mockReset();
   authService.login.mockReset();
   authService.register.mockReset();

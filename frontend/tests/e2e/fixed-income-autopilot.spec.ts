@@ -129,9 +129,9 @@ test('apresenta renda fixa real do Orchestrator no contexto congelado do Action 
   await expect(page.getByRole('heading', { name: 'Central de decisão de investimentos' })).toBeVisible();
   await expect(page.getByText('Origem no plano de ação')).toBeVisible();
   await expect(page.getByText('Avaliar o Tesouro Selic com o capital autorizado.')).toBeVisible();
-  await expect(page.getByText('Renda fixa avaliada pelo Autopilot')).toBeVisible();
+  await expect(page.getByText('Renda fixa avaliada pelo plano')).toBeVisible();
 
-  const opportunity = page.getByRole('list', { name: 'Oportunidades de renda fixa do Autopilot' });
+  const opportunity = page.getByRole('list', { name: 'Oportunidades de renda fixa do plano financeiro' });
   await expect(opportunity).toContainText('Tesouro Selic 2031');
   await expect(opportunity).toContainText('Comprar');
   await expect(opportunity).toContainText('R$ 800,00');

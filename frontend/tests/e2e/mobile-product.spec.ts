@@ -1,0 +1,261 @@
+import { expect, test, type Page, type Route } from '@playwright/test';
+
+const headers = {
+  'access-control-allow-origin': 'http://127.0.0.1:4173',
+  'access-control-allow-headers': 'authorization,content-type',
+  'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+};
+
+const user = {
+  id: 118,
+  email: 'mobile-product@fixture.local',
+  full_name: 'Usuário Mobile',
+  is_active: true,
+};
+
+const household = {
+  id: 1180,
+  name: 'Casa Mobile',
+  household_type: 'SHARED',
+  created_by_user_id: user.id,
+  status: 'ACTIVE',
+  is_default: true,
+  created_at: '2026-10-18T10:00:00Z',
+  updated_at: '2026-10-18T10:00:00Z',
+};
+
+const profile = {
+  id: 118,
+  user_id: user.id,
+  monthly_salary: '8750.00',
+  emergency_reserve: '12500.00',
+  has_debt_default: false,
+  risk_profile: 'moderate',
+  investment_horizon_months: 60,
+  created_at: '2026-10-18T10:00:00Z',
+  updated_at: '2026-10-18T10:00:00Z',
+};
+
+const diagnosis = {
+  monthly_salary: '8750.00',
+  total_expenses_30d: '5100.00',
+  emergency_reserve: '12500.00',
+  has_debt_default: false,
+  risk_profile: 'moderate',
+  score: {
+    score: 78,
+    level: 'GOOD',
+    penalties: [],
+    recommendations: ['Mantenha as despesas recorrentes atualizadas.'],
+  },
+  budget: {
+    method: 'canonical',
+    committed_ratio: '0.5829',
+    total_expenses_30d: '5100.00',
+    investment_percentage: '0.15',
+    investment_capacity: '1312.50',
+    emergency_reserve_priority: false,
+    high_risk_allowed: false,
+    explanation: 'Capacidade calculada com os dados informados.',
+  },
+};
+
+const recommendations = {
+  financial_score: 78,
+  investment_capacity: '1312.50',
+  adjusted_risk_profile: 'moderate',
+  allocation: [
+    { asset_class: 'renda_fixa', percentage: '70', amount: '918.75' },
+    { asset_class: 'etf', percentage: '30', amount: '393.75' },
+  ],
+  recommendations_by_class: [],
+  warnings: ['CONFIDENCE_BELOW_POLICY_MINIMUM'],
+  methodology: ['financial-policy-v1'],
+};
+
+const fundamentals = {
+  fii: [
+    { id: 1, ticker: 'XPML11', price: '104.21', dy_12m: '10.54', p_vp: '0.98', liquidez_diaria: '8421000', source: 'INVESTIDOR10', date: '2026-10-17' },
+    { id: 2, ticker: 'XPLG11', price: '97.88', dy_12m: '9.72', p_vp: '0.91', liquidez_diaria: '4321000', source: 'INVESTIDOR10', date: '2026-10-17' },
+  ],
+  acoes: [
+    { id: 3, ticker: 'PETR4', price: '39.15', pl: '5.8', dy_12m: '13.75', liquidez_diaria: '27821014', source: 'INVESTIDOR10', date: '2026-10-17' },
+  ],
+  etf: [
+    { id: 4, ticker: 'BOVA11', price: '142.55', retorno_12m: '12.4', liquidez_diaria: '110000000', source: 'INVESTIDOR10', date: '2026-10-17' },
+  ],
+  bdr: [
+    { id: 5, ticker: 'AAPL34', price: '83.12', retorno_12m: '8.9', volume_medio_diario_brl: '1875000', source: 'INVESTIDOR10', date: '2026-10-17' },
+  ],
+  cripto: [
+    {
+      id: 6,
+      ticker: 'BITCOIN-TICKER-LONGO-PARA-REGRESSAO-DE-LARGURA',
+      price_brl: '365432.123456',
+      price_change_24h_pct: '0.050788',
+      market_cap_usd: '1278210140000.000000',
+      volume_24h_usd: '4827821014.000000',
+      source: 'COINGECKO',
+      date: '2026-10-18',
+    },
+  ],
+} as const;
+
+function accessToken() {
+  const payload = Buffer.from(JSON.stringify({ sub: user.email, exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url');
+  return `mobile.${payload}.signature`;
+}
+
+async function reply(route: Route, body: unknown, status = 200) {
+  if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+  return route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(body) });
+}
+
+async function installApiFixture(page: Page) {
+  await page.route('**/api/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = request.method();
+
+    if (path === '/refresh') return reply(route, { access_token: accessToken(), token_type: 'bearer', user });
+    if (path === '/me') return reply(route, user);
+    if (path === '/logout') return route.fulfill({ status: 204, headers });
+    if (path === '/financial/households/default') return reply(route, household);
+    if (path === '/financial/households' && method === 'GET') return reply(route, [household]);
+    if (path === `/financial/households/${household.id}/members`) return reply(route, [{
+      id: 1,
+      household_id: household.id,
+      user_id: user.id,
+      role: 'OWNER',
+      status: 'ACTIVE',
+      is_default: true,
+      joined_at: '2026-10-18T10:00:00Z',
+      updated_at: '2026-10-18T10:00:00Z',
+      email: user.email,
+      full_name: user.full_name,
+    }]);
+    if (path.includes('/invitations')) return reply(route, []);
+    if (/\/financial\/households\/\d+\/(?:incomes|expenses|debts|assets|goals)$/.test(path)) return reply(route, []);
+    if (path === '/financial/profile') return reply(route, profile);
+    if (path === '/financial/diagnosis') return reply(route, diagnosis);
+    if (path === '/intelligence/recommendations') return reply(route, recommendations);
+    if (path === '/market/macro') return reply(route, { items: [
+      { id: 1, code: 'CDI', name: 'CDI', value: '13.75', reference_date: '2026-10-17', source: 'BCB' },
+      { id: 2, code: 'SELIC', name: 'Meta Selic', value: '13.75', reference_date: '2026-11-04', source: 'BCB' },
+    ], total: 2 });
+    if (path === '/market/renda-fixa') return reply(route, { items: [{
+      id: 1,
+      source_product_id: 'tesouro-selic-2029',
+      nome: 'Tesouro Selic 2029',
+      indexador: 'SELIC',
+      purchase_rate: '0.050788',
+      minimum_investment: '151.23',
+      liquidity_type: 'DAILY_REPURCHASE',
+      maturity_date: '2029-03-01',
+      source: 'TESOURO_TRANSPARENTE',
+    }], total: 1 });
+
+    const fundamentalMatch = path.match(/^\/market\/fundamentals\/(fii|acoes|etf|bdr|cripto)$/);
+    if (fundamentalMatch) {
+      const kind = fundamentalMatch[1] as keyof typeof fundamentals;
+      const items = fundamentals[kind];
+      return reply(route, {
+        items,
+        total: items.length,
+        asset_total: items.length,
+        observation_total: kind === 'cripto' ? 10_719_444 : items.length,
+        limit: Number(url.searchParams.get('limit') ?? 20),
+        offset: Number(url.searchParams.get('offset') ?? 0),
+      });
+    }
+
+    if (/\/financial\/households\/\d+\/(?:financial-state|policy|capital-allocation|investment-orchestration|action-plan|continuous-autopilot)/.test(path)) {
+      return reply(route, { detail: 'Ainda não há decisão para este household.' }, 404);
+    }
+    if (path.startsWith('/investments/decisions')) return reply(route, { items: [], page: 1, page_size: 8, total: 0, total_pages: 0 });
+    if (path.startsWith('/investments/alerts')) return reply(route, { items: [], page: 1, page_size: 8, total: 0, total_pages: 0, unread_count: 0 });
+    if (path.startsWith('/investments/alert-subscriptions')) return reply(route, { items: [], total: 0, active: 0, limit: 20 });
+    if (path === '/advisor/chat' && method === 'POST') return reply(route, {
+      response: 'Considere primeiro os dados já informados e mantenha sua reserva separada.',
+      warnings: ['INVESTMENT_CAPACITY_UNKNOWN'],
+      context_used: { financial: true, market: false, memory: false },
+    });
+    return reply(route, { detail: `Fixture sem resposta para ${method} ${path}` }, 404);
+  });
+}
+
+async function assertNoGlobalOverflow(page: Page, context: string) {
+  const dimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth,
+  }));
+  expect(dimensions.scrollWidth, `${context}: ${JSON.stringify(dimensions)}`).toBeLessThanOrEqual(dimensions.viewportWidth);
+}
+
+const viewports = [375, 390, 393, 414, 430];
+const pages = [
+  ['/dashboard', 'inicio'],
+  ['/financial', 'situacao'],
+  ['/financial/manage', 'dados-financeiros'],
+  ['/household', 'casa-familia'],
+  ['/market', 'mercado'],
+  ['/intelligence', 'analises'],
+  ['/investir', 'investir'],
+  ['/advisor', 'assistente'],
+  ['/account/security', 'seguranca'],
+] as const;
+
+test('produto móvel permanece contido nas cinco larguras de referência', async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  await installApiFixture(page);
+
+  for (const width of viewports) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const [path, slug] of pages) {
+      await page.goto(path);
+      await expect(page.locator('.vn-page')).toBeVisible();
+      await assertNoGlobalOverflow(page, `${width}px ${path}`);
+      await page.screenshot({ path: testInfo.outputPath(`${width}-${slug}.png`), fullPage: true });
+    }
+
+    await page.goto('/market');
+    for (const label of ['FIIs', 'Ações', 'ETFs', 'BDRs', 'Cripto']) {
+      await page.getByRole('tab', { name: label, exact: true }).click();
+      await expect(page.getByRole('tabpanel')).toBeVisible();
+      await assertNoGlobalOverflow(page, `${width}px Mercado/${label}`);
+    }
+  }
+});
+
+test('menu móvel contém foco, bloqueia scroll e devolve foco ao acionador', async ({ page }) => {
+  await installApiFixture(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/dashboard');
+
+  const trigger = page.getByRole('button', { name: 'Menu', exact: true });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Conta' });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
+  await expect(dialog.getByRole('button', { name: 'Fechar menu', exact: true })).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
+});
+
+test('Cripto, BDR e retorno para Cripto não alteram a largura global', async ({ page }) => {
+  await installApiFixture(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/market');
+
+  for (const label of ['Cripto', 'BDRs', 'Cripto']) {
+    await page.getByRole('tab', { name: label, exact: true }).click();
+    await expect(page.getByRole('tabpanel')).toBeVisible();
+    await assertNoGlobalOverflow(page, `regressão Cripto → BDR → Cripto: ${label}`);
+  }
+  await expect(page.locator('.vn-market-mobile-list').getByText('BITCOIN-TICKER-LONGO-PARA-REGRESSAO-DE-LARGURA')).toBeVisible();
+  await expect(page.locator('.vn-bottom-nav')).toBeVisible();
+});

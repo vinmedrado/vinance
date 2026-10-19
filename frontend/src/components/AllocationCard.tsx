@@ -12,7 +12,7 @@ type AllocationCardProps = {
   emptyDescription?: string;
 };
 
-export function AllocationCard({ title = 'Alocação por classe', description = 'Distribuição educacional calculada pelo backend.', items, labels = {}, emptyDescription }: AllocationCardProps) {
+export function AllocationCard({ title = 'Alocação por classe', description = 'Distribuição estimada com os dados disponíveis.', items, labels = {}, emptyDescription }: AllocationCardProps) {
   return (
     <Card title={title} description={description}>
       {items.length > 0 ? (

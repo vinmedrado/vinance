@@ -76,6 +76,10 @@ services:
       start_period: 30s
 
   celery_beat:
+    # The development database is not an official market-data source. Keep
+    # scheduled collectors opt-in so a regular `docker compose up` cannot
+    # create a second persistent history alongside production.
+    profiles: ["scheduler-dev"]
     build: .
     command: celery -A backend.app.core.celery.celery_app beat --loglevel=info --pidfile=/app/run/celerybeat.pid --schedule=/app/run/celerybeat-schedule
     env_file:

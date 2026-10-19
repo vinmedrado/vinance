@@ -149,7 +149,7 @@ export function CapitalAllocationCard({
                   <strong>{itemTitle(item)}</strong>
                   <span>
                     {money(item.allocated_amount)}
-                    {item.ownership_scope ? ` · ${item.ownership_scope === 'PERSONAL' ? 'pessoal' : 'household'}` : ''}
+                    {item.ownership_scope ? ` · ${item.ownership_scope === 'PERSONAL' ? 'pessoal' : 'compartilhado'}` : ''}
                     {item.remaining_need !== null ? ` · ainda falta ${money(item.remaining_need)}` : ''}
                   </span>
                   <small>{item.reason}</small>

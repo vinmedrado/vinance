@@ -176,7 +176,7 @@ test('aceite completo: login, decisão, auditoria, performance, alerta, reload e
   await expect(page.getByText('Avaliações concluídas')).toBeVisible();
   await page.getByRole('button', { name: /Ver histórico/ }).click();
   await page.getByRole('button', { name: /GARE11/ }).click();
-  await expect(page.getByText('Snapshot imutável')).toBeVisible();
+  await expect(page.getByText('Decisão congelada')).toBeVisible();
   const historyDetail = page.locator('aside.vn-history-detail');
   await historyDetail.getByText('Rastreabilidade completa').click();
   await expect(historyDetail.getByText(completeBudgetResponse.decision_id)).toBeVisible();
@@ -209,7 +209,9 @@ test('aceite completo: login, decisão, auditoria, performance, alerta, reload e
 
   await page.reload();
   await expect(page).toHaveURL(/\/investir$/);
-  await page.getByRole('button', { name: /Sair/ }).click();
+  const mobileMenu = page.getByRole('button', { name: 'Menu', exact: true });
+  if (await mobileMenu.isVisible()) await mobileMenu.click();
+  await page.getByRole('button', { name: /Sair(?: da conta)?/ }).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto('/investir');
   await expect(page).toHaveURL(/\/login$/);

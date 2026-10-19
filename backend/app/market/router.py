@@ -63,6 +63,8 @@ async def _fundamentals_response(
     date_from: date | None,
     date_to: date | None,
     source: str | None,
+    search: str | None,
+    latest: bool,
     limit: int,
     offset: int,
 ):
@@ -72,6 +74,8 @@ async def _fundamentals_response(
         date_from=date_from,
         date_to=date_to,
         source=source,
+        search=search,
+        latest=latest,
         limit=limit,
         offset=offset,
     )
@@ -84,11 +88,13 @@ async def get_fii_fundamentals(
     date_from: date | None = None,
     date_to: date | None = None,
     source: str | None = None,
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    latest: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
-    return await _fundamentals_response(session, service.list_fii_fundamentals, FiiFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+    return await _fundamentals_response(session, service.list_fii_fundamentals, FiiFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)
 
 
 @router.get("/fundamentals/acoes", response_model=AcaoFundamentalListResponse)
@@ -97,11 +103,13 @@ async def get_acoes_fundamentals(
     date_from: date | None = None,
     date_to: date | None = None,
     source: str | None = None,
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    latest: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
-    return await _fundamentals_response(session, service.list_acoes_fundamentals, AcaoFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+    return await _fundamentals_response(session, service.list_acoes_fundamentals, AcaoFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)
 
 
 @router.get("/fundamentals/etf", response_model=EtfFundamentalListResponse)
@@ -110,11 +118,13 @@ async def get_etf_fundamentals(
     date_from: date | None = None,
     date_to: date | None = None,
     source: str | None = None,
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    latest: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
-    return await _fundamentals_response(session, service.list_etf_fundamentals, EtfFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+    return await _fundamentals_response(session, service.list_etf_fundamentals, EtfFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)
 
 
 @router.get("/fundamentals/bdr", response_model=BdrFundamentalListResponse)
@@ -123,11 +133,13 @@ async def get_bdr_fundamentals(
     date_from: date | None = None,
     date_to: date | None = None,
     source: str | None = None,
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    latest: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
-    return await _fundamentals_response(session, service.list_bdr_fundamentals, BdrFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+    return await _fundamentals_response(session, service.list_bdr_fundamentals, BdrFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)
 
 
 @router.get("/fundamentals/cripto", response_model=CriptoFundamentalListResponse)
@@ -136,8 +148,10 @@ async def get_cripto_fundamentals(
     date_from: date | None = None,
     date_to: date | None = None,
     source: str | None = None,
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    latest: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
-    return await _fundamentals_response(session, service.list_cripto_fundamentals, CriptoFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+    return await _fundamentals_response(session, service.list_cripto_fundamentals, CriptoFundamentalListResponse, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)

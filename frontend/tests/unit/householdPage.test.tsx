@@ -72,7 +72,7 @@ test('personal household never exposes invitation controls', async () => {
 test('owner creates a pending invitation instead of activating a member', async () => {
   const user = userEvent.setup();
   renderPage();
-  await user.selectOptions(await screen.findByLabelText('Household atual'), '2');
+  await user.selectOptions(await screen.findByLabelText('Casa atual'), '2');
   await screen.findByRole('button', { name: 'Criar convite' });
   await user.type(screen.getByLabelText('E-mail'), 'spouse@example.com');
   await user.click(screen.getByRole('button', { name: 'Criar convite' }));
@@ -87,10 +87,10 @@ test('dirty administrative form requires explicit discard before switching house
   const user = userEvent.setup();
   renderPage();
   await user.type(await screen.findByLabelText('Nome da casa'), 'Novo household');
-  await user.selectOptions(screen.getByLabelText('Household atual'), '2');
+  await user.selectOptions(screen.getByLabelText('Casa atual'), '2');
   expect(await screen.findByRole('dialog', { name: 'Alterações não salvas' })).toBeInTheDocument();
-  expect(screen.getByLabelText('Household atual')).toHaveValue('1');
+  expect(screen.getByLabelText('Casa atual')).toHaveValue('1');
   await user.click(screen.getByRole('button', { name: 'Descartar e trocar' }));
-  expect(screen.getByLabelText('Household atual')).toHaveValue('2');
+  expect(screen.getByLabelText('Casa atual')).toHaveValue('2');
   expect(screen.getByLabelText('Nome da casa')).toHaveValue('');
 });

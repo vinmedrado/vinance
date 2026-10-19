@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from backend.app.core.database import Base, get_session
 from backend.app.main import app
@@ -153,6 +154,78 @@ def test_fundamentals_endpoint_returns_empty_list(monkeypatch):
     _clear_overrides()
     assert response.status_code == 200
     assert response.json() == {"items": [], "total": 0, "limit": 100, "offset": 0}
+
+
+def test_latest_snapshot_endpoint_forwards_search_and_pagination(monkeypatch):
+    _install_overrides()
+    captured = {}
+
+    async def fake_list(session, **kwargs):
+        captured.update(kwargs)
+        return [], 0
+
+    monkeypatch.setattr(service, "list_fii_fundamentals", fake_list)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/market/fundamentals/fii"
+            "?latest=true&search=xpml&limit=20&offset=40"
+        )
+
+    _clear_overrides()
+    assert response.status_code == 200
+    assert captured["latest"] is True
+    assert captured["search"] == "xpml"
+    assert captured["limit"] == 20
+    assert captured["offset"] == 40
+
+
+@pytest.mark.asyncio
+async def test_latest_crypto_snapshot_is_bounded_and_deterministically_ordered():
+    class ScalarResult:
+        def scalar_one(self):
+            return 2
+
+    class RowsResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return []
+
+    class FakeSession:
+        def __init__(self):
+            self.statements = []
+
+        async def execute(self, statement):
+            self.statements.append(statement)
+            return ScalarResult() if len(self.statements) == 1 else RowsResult()
+
+    session = FakeSession()
+    items, total = await service._list_fundamentals(
+        session,
+        CriptoFundamental,
+        search="bitcoin",
+        latest=True,
+        limit=20,
+        offset=0,
+    )
+
+    sql = [
+        str(statement.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        ))
+        for statement in session.statements
+    ]
+    assert items == []
+    assert total == 2
+    assert "max(cripto_fundamentals.date)" in sql[0]
+    assert "row_number() OVER" in sql[0]
+    assert "PARTITION BY cripto_fundamentals.coin_id" in sql[0]
+    assert "count(*)" in sql[0]
+    assert "ORDER BY cripto_fundamentals.ticker ASC" in sql[1]
+    assert "cripto_fundamentals.id DESC" in sql[1]
 
 
 def test_fundamentals_response_model_accepts_items():

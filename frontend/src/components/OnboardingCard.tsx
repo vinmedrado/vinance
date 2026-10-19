@@ -49,14 +49,28 @@ export function OnboardingCard({ onCompleted }: { onCompleted?: () => void }) {
         <div>
           <span className="vn-kicker">Primeiro diagnóstico</span>
           <h2>Complete seu perfil financeiro inicial.</h2>
-          <p>O Vinance precisa desses dados para calcular score, capacidade de aporte, restrições de risco e sugestões educacionais com base real.</p>
+          <p>O Vinance precisa desses dados para calcular sua pontuação financeira, capacidade de aporte, restrições de risco e sugestões com base real.</p>
         </div>
       </div>
       {error && <ErrorState description={error.message} />}
       {saved && <Toast message="Perfil financeiro salvo. Atualizando seu diagnóstico real..." />}
       <form className="vn-form vn-form--onboarding" onSubmit={submit}>
-        <MoneyInput label="Salário mensal" value={form.monthly_salary} onChange={(event) => setForm({ ...form, monthly_salary: event.target.value })} placeholder="Ex.: 5000,00" required />
-        <MoneyInput label="Reserva de emergência" value={form.emergency_reserve} onChange={(event) => setForm({ ...form, emergency_reserve: event.target.value })} placeholder="Ex.: 10000,00" required />
+        <MoneyInput
+          label="Renda líquida mensal"
+          helper="Some tudo o que entra de forma recorrente no mês, já descontados impostos e descontos obrigatórios. Se recebe em mais de uma data, informe a soma mensal."
+          value={form.monthly_salary}
+          onChange={(event) => setForm({ ...form, monthly_salary: event.target.value })}
+          placeholder="Ex.: 5000,00"
+          required
+        />
+        <MoneyInput
+          label="Reserva de emergência atual"
+          helper="Informe quanto você já possui hoje disponível para emergências. Zero é um valor válido e ajuda o Vinance a priorizar a formação da reserva."
+          value={form.emergency_reserve}
+          onChange={(event) => setForm({ ...form, emergency_reserve: event.target.value })}
+          placeholder="Ex.: 10000,00"
+          required
+        />
         <SelectField label="Perfil de risco" value={form.risk_profile} onChange={(event) => setForm({ ...form, risk_profile: event.target.value as RiskProfile })} options={riskOptions} />
         <ToggleField label="Tenho inadimplência hoje" helper="Isso reduz exposição a risco e prioriza estabilidade no diagnóstico." checked={form.has_debt_default} onChange={(event) => setForm({ ...form, has_debt_default: event.target.checked })} />
         <SubmitButton loading={upsertProfile.isPending}>Criar perfil financeiro</SubmitButton>

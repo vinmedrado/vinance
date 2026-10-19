@@ -44,7 +44,7 @@ function DecisionDetail({ detail, onClose }: { detail: InvestmentDecisionDetail;
     <aside className="vn-history-detail" aria-labelledby="history-detail-title">
       <header>
         <div>
-          <span>Snapshot imutável</span>
+          <span>Decisão congelada</span>
           <h3 id="history-detail-title">{detail.asset ?? 'Decisão sem ativo'}</h3>
           <p>{dateTime(detail.created_at)}</p>
         </div>
@@ -53,11 +53,11 @@ function DecisionDetail({ detail, onClose }: { detail: InvestmentDecisionDetail;
       <div className="vn-history-detail__badges">
         <Badge tone={action.tone}>{action.label}</Badge>
         <Badge tone={riskTone(detail.risk_level)}>{riskLabel(detail.risk_level)}</Badge>
-        {detail.fallback_used && <Badge tone="warning">Fallback</Badge>}
+        {detail.fallback_used && <Badge tone="warning">Contingência</Badge>}
       </div>
       <dl className="vn-history-detail__metrics">
         <div><dt>Valor</dt><dd>{detail.invested_amount == null ? '—' : formatCurrency(detail.invested_amount)}</dd></div>
-        <div><dt>Score</dt><dd>{metric(detail.recommendation_score)}</dd></div>
+        <div><dt>Pontuação</dt><dd>{metric(detail.recommendation_score)}</dd></div>
         <div><dt>Confiança</dt><dd>{metric(detail.confidence)}</dd></div>
         <div><dt>Latência</dt><dd>{detail.latency_ms} ms</dd></div>
       </dl>
@@ -73,7 +73,7 @@ function DecisionDetail({ detail, onClose }: { detail: InvestmentDecisionDetail;
           <div><dt>Decision ID</dt><dd><code>{detail.decision_id}</code></dd></div>
           <div><dt>Correlation ID</dt><dd><code>{detail.correlation_id}</code></dd></div>
           <div><dt>Schema</dt><dd><code>{detail.snapshot_schema_version}</code></dd></div>
-          <div><dt>Score</dt><dd><code>{detail.score_version ?? '—'}</code></dd></div>
+          <div><dt>Pontuação</dt><dd><code>{detail.score_version ?? '—'}</code></dd></div>
           <div><dt>Guardrail</dt><dd><code>{detail.guardrail_version ?? '—'}</code></dd></div>
           <div><dt>Tendência</dt><dd><code>{detail.trend_version ?? '—'}</code></dd></div>
         </dl>
@@ -125,7 +125,7 @@ export function DecisionHistoryPanel({ userId, refreshDecisionId }: Props) {
                           <span className="vn-history-item__time"><Clock3 size={14} /> {dateTime(item.created_at)}</span>
                           <span className="vn-history-item__metrics">
                             <span>{item.invested_amount == null ? '—' : formatCurrency(item.invested_amount)}</span>
-                            <span>Score {metric(item.recommendation_score)}</span>
+                            <span>Pontuação {metric(item.recommendation_score)}</span>
                             <span>{riskLabel(item.risk_level)}</span>
                             <span>Conf. {metric(item.confidence)}</span>
                           </span>

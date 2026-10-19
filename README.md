@@ -113,6 +113,18 @@ GROQ_API_KEY=
 docker compose up --build
 ```
 
+O comando padrão mantém o Celery Beat de desenvolvimento desligado. Isso evita
+que o banco local construa, sem intenção, um segundo histórico persistente de
+mercado em paralelo à produção. Para testar tarefas agendadas localmente de
+forma explícita, habilite o perfil dedicado:
+
+```bash
+docker compose --profile scheduler-dev up --build celery_beat
+```
+
+O `docker-compose.production.yml` não usa esse perfil: o Beat de produção
+continua iniciando normalmente.
+
 4. Rode as migrations:
 
 ```bash
@@ -146,7 +158,7 @@ VITE_API_PREFIX=/api/v1
 Com Docker Compose:
 
 ```bash
-docker compose up celery_worker celery_beat
+docker compose --profile scheduler-dev up celery_worker celery_beat
 ```
 
 Manual:

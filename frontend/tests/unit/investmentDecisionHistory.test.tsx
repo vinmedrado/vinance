@@ -102,7 +102,7 @@ describe('painel de histórico', () => {
     expect(item).toHaveTextContent('R$ 296,28');
     await userEvent.click(item);
 
-    expect(await screen.findByText('Snapshot imutável')).toBeInTheDocument();
+    expect(await screen.findByText('Decisão congelada')).toBeInTheDocument();
     expect(screen.getByText('Engine budget-advisor-v1 · Regras investment-decision-presentation-v1')).toBeInTheDocument();
     expect(screen.getByText('GARE11 lidera o ranking relativo para os filtros informados.')).toBeInTheDocument();
     expect(serviceMock.getInvestmentDecisionDetail).toHaveBeenCalledWith(decisionDetailResponse.decision_id, expect.any(AbortSignal));

@@ -92,7 +92,7 @@ export function RecommendationPerformancePanel({ userId, refreshDecisionId }: Pr
                 </div>
               )}
 
-              {query.data.mixed_versions && <p className="vn-performance-version-note">A visão reúne versões diferentes. As métricas segmentadas por versão permanecem separadas no backend para evitar comparações silenciosas.</p>}
+              {query.data.mixed_versions && <p className="vn-performance-version-note">A visão reúne versões diferentes. As métricas permanecem separadas por versão para evitar comparações indevidas.</p>}
               <p className="vn-performance-disclaimer">Esta leitura observa o preço do ativo depois da recomendação. Não representa operação executada, rentabilidade de carteira, dividendos ou garantia de resultado.</p>
             </>
           )}

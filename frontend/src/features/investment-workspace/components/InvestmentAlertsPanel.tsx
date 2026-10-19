@@ -73,7 +73,7 @@ function StateColumn({ title, state }: { title: string; state: InvestmentAlertSt
       <h4>{title}</h4>
       <dl>
         <div><dt>Recomendação</dt><dd>{action(state.action)}</dd></div>
-        <div><dt>Score</dt><dd>{numeric(state.score ?? state.recommendation_score)}</dd></div>
+        <div><dt>Pontuação</dt><dd>{numeric(state.score ?? state.recommendation_score)}</dd></div>
         <div><dt>Confiança</dt><dd>{numeric(state.confidence)}</dd></div>
         <div><dt>Risco</dt><dd>{stateRisk(state.risk_level)}</dd></div>
       </dl>

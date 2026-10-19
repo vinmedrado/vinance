@@ -8,14 +8,14 @@ type ScoreRow = { label: string; value?: number | string };
 export function ScoreBreakdownBars({ breakdown, item }: { breakdown?: ScoreBreakdown; item: BudgetRecommendation }) {
   const source = breakdown ?? {};
   const rows: ScoreRow[] = [
-    { label: 'Recommendation Score', value: source.recommendation_score ?? item.recommendation_score },
-    { label: 'Fundamental Score', value: source.fundamental_score ?? item.score_total },
-    { label: 'Profile Score', value: source.profile_score ?? item.profile_score },
-    { label: 'Quality Score', value: source.quality_score ?? item.score_quality },
-    { label: 'Liquidity Score', value: source.liquidity_score ?? item.score_liquidity },
-    { label: 'Risk Score', value: source.risk_score ?? item.score_risk },
-    { label: 'Dividend Score', value: source.dividend_score ?? item.score_dividend },
-    { label: 'Momentum Score', value: source.momentum_score ?? item.momentum_score },
+    { label: 'Pontuação da recomendação', value: source.recommendation_score ?? item.recommendation_score },
+    { label: 'Fundamentos', value: source.fundamental_score ?? item.score_total },
+    { label: 'Compatibilidade com o perfil', value: source.profile_score ?? item.profile_score },
+    { label: 'Qualidade dos dados', value: source.quality_score ?? item.score_quality },
+    { label: 'Liquidez', value: source.liquidity_score ?? item.score_liquidity },
+    { label: 'Risco', value: source.risk_score ?? item.score_risk },
+    { label: 'Dividendos', value: source.dividend_score ?? item.score_dividend },
+    { label: 'Força do movimento', value: source.momentum_score ?? item.momentum_score },
   ];
 
   return (

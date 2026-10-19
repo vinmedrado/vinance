@@ -721,7 +721,7 @@ test('mantém a estratégia congelada no cache do household que iniciou o POST',
   const setQueryData = vi.spyOn(client, 'setQueryData');
 
   await userEvent.click(await screen.findByRole('button', { name: 'Salvar estratégia' }));
-  await userEvent.selectOptions(screen.getByLabelText('Household'), '20');
+  await userEvent.selectOptions(screen.getByLabelText('Casa'), '20');
   act(() => resolveOrchestration({
     ...orchestration,
     orchestration_id: 31,
@@ -754,7 +754,7 @@ test('mantém o plano congelado no cache do household que iniciou o POST', async
   const invalidateQueries = vi.spyOn(client, 'invalidateQueries');
 
   await userEvent.click(await screen.findByRole('button', { name: 'Salvar plano' }));
-  await userEvent.selectOptions(screen.getByLabelText('Household'), '20');
+  await userEvent.selectOptions(screen.getByLabelText('Casa'), '20');
   act(() => resolveAllocation({
     ...allocation,
     allocation_id: 23,
@@ -795,7 +795,7 @@ test('mantém a resposta da decisão no cache do household que iniciou o POST', 
     10,
     'financial-policy-10-00000000-0000-4000-8000-000000000001',
   ));
-  await userEvent.selectOptions(screen.getByLabelText('Household'), '20');
+  await userEvent.selectOptions(screen.getByLabelText('Casa'), '20');
   act(() => resolveDecision({
     ...policy,
     policy_id: 17,
@@ -879,7 +879,7 @@ test('mantém o draft no household original até o usuário confirmar o descarte
   const user = userEvent.setup();
   renderPage();
 
-  const selector = await screen.findByLabelText('Household');
+  const selector = await screen.findByLabelText('Casa');
   await user.click(screen.getByRole('button', { name: 'Nova receita' }));
   await user.type(screen.getByLabelText('Descrição'), 'Rascunho do household A');
   await user.selectOptions(selector, '20');
@@ -906,7 +906,7 @@ test('descarta também draft de despesa antes de trocar de household', async () 
   const user = userEvent.setup();
   renderPage();
 
-  const selector = await screen.findByLabelText('Household');
+  const selector = await screen.findByLabelText('Casa');
   await user.click(screen.getByRole('button', { name: 'Nova despesa' }));
   await user.type(screen.getByLabelText('Descrição'), 'Despesa privada A');
   await user.selectOptions(selector, '20');
@@ -927,7 +927,7 @@ test('impede troca durante mutation e invalida somente o household capturado', a
   const { client } = renderPage();
   const invalidateQueries = vi.spyOn(client, 'invalidateQueries');
 
-  const selector = await screen.findByLabelText('Household');
+  const selector = await screen.findByLabelText('Casa');
   await user.click(screen.getByRole('button', { name: 'Nova receita' }));
   await user.type(screen.getByLabelText('Descrição'), 'Salário A');
   await user.type(screen.getByLabelText('Valor'), '5000');
@@ -1012,5 +1012,5 @@ test('filtra registros PERSONAL de outro membro e mantém dados próprios e comp
   expect(screen.getByText('Despesa compartilhada')).toBeInTheDocument();
   expect(screen.queryByText('SEGREDO RECEITA B')).not.toBeInTheDocument();
   expect(screen.queryByText('SEGREDO DESPESA B')).not.toBeInTheDocument();
-  expect(screen.getAllByRole('heading', { name: 'Dados compartilhados do household' }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole('heading', { name: 'Dados compartilhados da casa' }).length).toBeGreaterThan(0);
 });

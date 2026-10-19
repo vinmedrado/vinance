@@ -147,7 +147,7 @@ test('snapshot histórico abre resultados 1d e mantém 7d e 30d pendentes', asyn
   await page.goto('/investir');
   await page.getByRole('button', { name: 'Ver histórico' }).click();
   await page.getByRole('button', { name: /GARE11/ }).click();
-  await expect(page.getByText('Snapshot imutável')).toBeVisible();
+  await expect(page.getByText('Decisão congelada')).toBeVisible();
   await page.getByRole('button', { name: 'Ver resultados posteriores' }).click();
   await expect(page.getByText('O que aconteceu depois')).toBeVisible();
   await expect(page.getByText('+4,00%')).toBeVisible();

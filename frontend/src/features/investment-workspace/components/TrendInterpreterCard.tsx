@@ -18,7 +18,7 @@ export function TrendInterpreterCard({ item, presentation = decisionPresentation
         <div><strong>{trendLabel(item.trend_label ?? undefined)}</strong><p>{trendDescription(item.trend_label ?? undefined)}</p></div>
       </div>
       <div className="vn-trend-facts">
-        <span>Momentum <strong>{scoreText(item.momentum_score)}</strong></span>
+        <span>Força do movimento <strong>{scoreText(item.momentum_score)}</strong></span>
         <span>Confiança da tendência <strong>{trendConfidenceLabel(item.trend_confidence)}</strong></span>
       </div>
       <div className="vn-potential-block">

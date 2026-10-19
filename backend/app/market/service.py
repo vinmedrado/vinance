@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 import hashlib
 from typing import Iterable
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.market.models import AssetPrice, MacroIndicator, RendaFixaProduto
@@ -328,32 +328,116 @@ def _base_filters(model, *, ticker: str | None = None, date_from: date | None = 
     return filters
 
 
-async def _list_fundamentals(session: AsyncSession, model, *, ticker=None, date_from=None, date_to=None, source=None, limit=100, offset=0):
+def _fundamentals_search_filter(model, search: str | None):
+    term = (search or "").strip()
+    if not term:
+        return None
+    fields = [model.ticker, model.name]
+    if model is CriptoFundamental:
+        fields.append(model.coin_id)
+    return or_(*(field.icontains(term, autoescape=True) for field in fields))
+
+
+async def _list_fundamentals(
+    session: AsyncSession,
+    model,
+    *,
+    ticker=None,
+    date_from=None,
+    date_to=None,
+    source=None,
+    search: str | None = None,
+    latest: bool = False,
+    limit=100,
+    offset=0,
+):
+    if latest:
+        # The product view is a current market snapshot, not a page from the
+        # historical observation stream. Restricting the ranking to the most
+        # recent market date keeps the cost bounded by one provider snapshot
+        # (especially important for the multi-million-row crypto history).
+        snapshot_filters = _base_filters(
+            model,
+            date_from=date_from,
+            date_to=date_to,
+            source=source,
+        )
+        snapshot_date = (
+            select(func.max(model.date))
+            .where(*snapshot_filters)
+            .scalar_subquery()
+        )
+        identity = model.coin_id if model is CriptoFundamental else model.ticker
+        ranked = (
+            select(
+                model.id.label("record_id"),
+                func.row_number()
+                .over(
+                    partition_by=identity,
+                    order_by=(model.coletado_em.desc(), model.id.desc()),
+                )
+                .label("snapshot_rank"),
+            )
+            .where(*snapshot_filters, model.date == snapshot_date)
+            .subquery()
+        )
+        result_filters = [ranked.c.snapshot_rank == 1]
+        if ticker:
+            result_filters.append(model.ticker == normalize_ticker(ticker))
+        search_filter = _fundamentals_search_filter(model, search)
+        if search_filter is not None:
+            result_filters.append(search_filter)
+
+        current_rows = (
+            select(model)
+            .join(ranked, ranked.c.record_id == model.id)
+            .where(*result_filters)
+        )
+        total_query = select(func.count()).select_from(current_rows.subquery())
+        total = int((await session.execute(total_query)).scalar_one() or 0)
+        query = (
+            current_rows
+            .order_by(model.ticker.asc(), model.name.asc(), model.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        items = list((await session.execute(query)).scalars().all())
+        return items, total
+
     filters = _base_filters(model, ticker=ticker, date_from=date_from, date_to=date_to, source=source)
+    search_filter = _fundamentals_search_filter(model, search)
+    if search_filter is not None:
+        filters.append(search_filter)
     total = int((await session.execute(select(func.count()).select_from(model).where(*filters))).scalar_one() or 0)
-    query = select(model).where(*filters).order_by(model.date.desc()).limit(limit).offset(offset)
+    query = (
+        select(model)
+        .where(*filters)
+        .order_by(model.date.desc(), model.coletado_em.desc(), model.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     items = list((await session.execute(query)).scalars().all())
     return items, total
 
 
-async def list_fii_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, limit: int = 100, offset: int = 0):
-    return await _list_fundamentals(session, FiiFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+async def list_fii_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, search: str | None = None, latest: bool = False, limit: int = 100, offset: int = 0):
+    return await _list_fundamentals(session, FiiFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)
 
 
-async def list_acoes_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, limit: int = 100, offset: int = 0):
-    return await _list_fundamentals(session, AcaoFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+async def list_acoes_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, search: str | None = None, latest: bool = False, limit: int = 100, offset: int = 0):
+    return await _list_fundamentals(session, AcaoFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)
 
 
-async def list_etf_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, limit: int = 100, offset: int = 0):
-    return await _list_fundamentals(session, EtfFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+async def list_etf_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, search: str | None = None, latest: bool = False, limit: int = 100, offset: int = 0):
+    return await _list_fundamentals(session, EtfFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)
 
 
-async def list_bdr_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, limit: int = 100, offset: int = 0):
-    return await _list_fundamentals(session, BdrFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+async def list_bdr_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, search: str | None = None, latest: bool = False, limit: int = 100, offset: int = 0):
+    return await _list_fundamentals(session, BdrFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)
 
 
-async def list_cripto_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, limit: int = 100, offset: int = 0):
-    return await _list_fundamentals(session, CriptoFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, limit=limit, offset=offset)
+async def list_cripto_fundamentals(session: AsyncSession, *, ticker: str | None = None, date_from: date | None = None, date_to: date | None = None, source: str | None = None, search: str | None = None, latest: bool = False, limit: int = 100, offset: int = 0):
+    return await _list_fundamentals(session, CriptoFundamental, ticker=ticker, date_from=date_from, date_to=date_to, source=source, search=search, latest=latest, limit=limit, offset=offset)
 
 
 async def _upsert_by_ticker_date_source(session: AsyncSession, model, payload: dict):

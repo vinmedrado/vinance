@@ -135,7 +135,7 @@ test('manages the five canonical financial resources and the personal profile', 
   });
 
   await page.getByRole('button', { name: 'Editar perfil' }).click();
-  await page.getByLabel('Reserva de emergência').fill('3500');
+  await page.getByLabel('Reserva de emergência atual').fill('3500');
   await page.getByRole('button', { name: 'Salvar perfil' }).click();
   await expect(page.getByText('R$ 3.500,00')).toBeVisible();
 

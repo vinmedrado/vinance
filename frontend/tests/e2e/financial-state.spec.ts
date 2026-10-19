@@ -519,7 +519,7 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await expect(page.getByRole('heading', { name: 'Plano deste período' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Como investir este valor' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Seu plano de ação' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Seu Autopilot' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Acompanhamento do seu plano' })).toBeVisible();
   await expect(page.getByText('REAVALIAÇÃO NECESSÁRIA')).toBeVisible();
   await expect(page.getByTestId('action-plan-item-EMERGENCY_RESERVE_CONTRIBUTION')).toContainText('Fortaleça sua reserva');
   await expect(page.getByTestId('action-plan-item-EMERGENCY_RESERVE_CONTRIBUTION')).toContainText('3.000,00');
@@ -539,7 +539,7 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await page.getByRole('button', { name: 'Avaliar agora' }).click();
   await expect(page.getByText('Não foi possível concluir a avaliação')).toBeVisible();
   await page.getByRole('button', { name: 'Tentar novamente' }).last().click();
-  await expect(page.getByText('Autopilot avaliado com segurança.')).toBeVisible();
+  await expect(page.getByText('Seu plano foi reavaliado com segurança.')).toBeVisible();
   await expect(page.getByText('SEU PLANO MUDOU')).toBeVisible();
   await expect(page.getByText('O capital autorizado para novos investimentos ficou menor.')).toBeVisible();
   expect(continuousKeys).toHaveLength(2);

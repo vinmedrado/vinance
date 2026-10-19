@@ -24,6 +24,7 @@ describe('Modal acessível', () => {
 
     await user.click(opener);
     expect(screen.getByRole('dialog', { name: 'Preferências de alerta' })).toBeVisible();
+    expect(document.body.style.overflow).toBe('hidden');
     const close = screen.getByRole('button', { name: 'Fechar Preferências de alerta' });
     const save = screen.getByRole('button', { name: 'Salvar' });
     expect(close).toHaveFocus();
@@ -36,6 +37,7 @@ describe('Modal acessível', () => {
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('');
     expect(opener).toHaveFocus();
   });
 });

@@ -216,7 +216,7 @@ test('decisão autenticada é rastreada até histórico e detalhe, e logout volt
   const historyItem = page.getByRole('button', { name: /GARE11/ });
   await expect(historyItem).toContainText('Comprar');
   await historyItem.click();
-  await expect(page.getByText('Snapshot imutável')).toBeVisible();
+  await expect(page.getByText('Decisão congelada')).toBeVisible();
   const decisionDetail = page.locator('aside.vn-history-detail');
   await decisionDetail.getByText('Rastreabilidade completa').click();
   await expect(decisionDetail.getByText(decisionId)).toBeVisible();

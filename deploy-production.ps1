@@ -39,8 +39,22 @@ function Invoke-Compose {
 function Invoke-ComposeCapture {
     param([Parameter(Mandatory = $true)][string[]]$ComposeArguments)
 
-    $result = @(& docker compose @ComposeBase @ComposeArguments 2>&1)
-    if ($LASTEXITCODE -ne 0) {
+    # Windows PowerShell promotes native stderr records to terminating errors
+    # when ErrorActionPreference is Stop. Docker Compose writes normal progress
+    # messages (for example, "Container ... Creating") to stderr, so capture
+    # those messages without mistaking them for a failed command. The native
+    # process exit code remains the authoritative success signal.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $result = @(& docker compose @ComposeBase @ComposeArguments 2>&1)
+        $composeExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($composeExitCode -ne 0) {
         throw "Docker Compose falhou durante uma verificacao segura. Nenhum segredo foi exibido."
     }
     return $result

@@ -29,7 +29,7 @@ export function AlternativesComparison({ comparison, alternatives }: Alternative
         )}
       </Card>
 
-      <Card className="vn-alternatives-card" title="Outros ativos avaliados" description="As dez alternativas seguintes no ranking para o mesmo orçamento e perfil." action={<span className="vn-alternatives-count">Top {topAlternatives.length}</span>}>
+      <Card className="vn-alternatives-card" title="Outros ativos avaliados" description="As alternativas seguintes para o mesmo orçamento e perfil." action={<span className="vn-alternatives-count">{topAlternatives.length} opções</span>}>
         {topAlternatives.length > 0 ? (
           <div className="vn-alternative-grid">
             {topAlternatives.map((item, index) => {

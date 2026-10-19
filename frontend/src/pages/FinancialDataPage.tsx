@@ -13,6 +13,7 @@ import {
 import type { OwnershipScope } from '../features/financial-state/types/financialState.types';
 import { useHouseholdDefault, useHouseholdList, useHouseholdMembers } from '../features/household/hooks/useHousehold';
 import { formatCurrency } from '../utils/formatters';
+import { riskProfileLabel } from '../features/intelligence/utils/presentation';
 import { localDateInputValue } from '../utils/localDate';
 import type { ApiErrorShape } from '../services/api';
 
@@ -62,6 +63,21 @@ const labels: Record<FinancialResource, { singular: string; plural: string; desc
 };
 
 const resources: FinancialResource[] = ['incomes', 'expenses', 'debts', 'assets', 'goals'];
+
+function resourceArticle(resource: FinancialResource) {
+  return resource === 'assets' || resource === 'goals' ? 'este' : 'esta';
+}
+
+function resourceEmptyTitle(resource: FinancialResource) {
+  const masculine = resource === 'assets' || resource === 'goals';
+  return `${masculine ? 'Nenhum' : 'Nenhuma'} ${labels[resource].singular} cadastrad${masculine ? 'o' : 'a'}`;
+}
+
+function resourceDeletedMessage(resource: FinancialResource) {
+  const masculine = resource === 'assets' || resource === 'goals';
+  const name = `${labels[resource].singular[0].toUpperCase()}${labels[resource].singular.slice(1)}`;
+  return `${name} excluíd${masculine ? 'o' : 'a'}.`;
+}
 
 function emptyDraft(): Draft {
   return {
@@ -327,7 +343,7 @@ export function FinancialDataPage() {
       throw new Error('O contexto mudou. Feche e abra o formulário novamente.');
     }
     if (editor.mode === 'edit' && editor.originalScope === 'PERSONAL' && editor.draft.scope === 'HOUSEHOLD') {
-      if (!window.confirm(`Compartilhar esta ${labels[editor.resource].singular}? Os membros ativos de ${selectedHousehold?.name ?? 'este household'} poderão visualizá-la.`)) return;
+      if (!window.confirm(`Compartilhar esta ${labels[editor.resource].singular}? Os membros ativos de ${selectedHousehold?.name ?? 'esta casa'} poderão visualizá-la.`)) return;
     }
     const payload = payloadFromDraft(editor.resource, editor.draft);
     if (editor.mode === 'create') {
@@ -341,9 +357,9 @@ export function FinancialDataPage() {
   }
 
   async function remove(resource: FinancialResource, item: FinancialResourceItem) {
-    if (selectedId === null || !window.confirm(`Excluir esta ${labels[resource].singular}? O Autopilot será reavaliado quando aplicável.`)) return;
+    if (selectedId === null || !window.confirm(`Excluir ${resourceArticle(resource)} ${labels[resource].singular}? Seu plano será reavaliado quando aplicável.`)) return;
     await deleteResource.mutateAsync({ householdId: selectedId, sessionToken, resource, recordId: item.id });
-    setNotice(`${labels[resource].singular[0].toUpperCase()}${labels[resource].singular.slice(1)} excluída.`);
+    setNotice(resourceDeletedMessage(resource));
   }
 
   async function submitProfile(event: FormEvent) {
@@ -376,7 +392,7 @@ export function FinancialDataPage() {
 
       <Card title="Contexto" description="Dados pessoais são visíveis só para você; dados compartilhados aparecem aos membros ativos.">
         <SelectField
-          label="Household"
+          label="Casa"
           value={selectedId ?? ''}
           disabled={pendingMutation}
           onChange={(event) => requestSwitch(Number(event.target.value))}
@@ -391,7 +407,7 @@ export function FinancialDataPage() {
           return (
             <Card key={resource} title={labels[resource].plural} description={`${labels[resource].description} ${groupedCounts[resource]} cadastrado(s).`} action={<Button onClick={() => openCreate(resource)}>Adicionar</Button>}>
               {query.isLoading ? <LoadingState label={`Carregando ${labels[resource].plural.toLowerCase()}...`} /> : items.length === 0 ? (
-                <EmptyState title={`Nenhuma ${labels[resource].singular} cadastrada`} description="Você pode adicionar agora ou voltar depois se ainda não souber a informação." action={<Button variant="secondary" onClick={() => openCreate(resource)}>Adicionar {labels[resource].singular}</Button>} />
+                <EmptyState title={resourceEmptyTitle(resource)} description="Você pode adicionar agora ou voltar depois se ainda não souber a informação." action={<Button variant="secondary" onClick={() => openCreate(resource)}>Adicionar {labels[resource].singular}</Button>} />
               ) : (
                 <div className="vn-list">
                   {items.map((item) => {
@@ -401,7 +417,7 @@ export function FinancialDataPage() {
                     <div key={item.id}>
                       <div>
                         <strong>{itemTitle(resource, item)}</strong>
-                        <p>{money(itemAmount(resource, item))} · {itemScope(item) === 'PERSONAL' ? 'Só eu' : `Compartilhado com ${selectedHousehold?.name ?? 'household'}`}</p>
+                        <p>{money(itemAmount(resource, item))} · {itemScope(item) === 'PERSONAL' ? 'Só eu' : `Compartilhado com ${selectedHousehold?.name ?? 'a casa'}`}</p>
                       </div>
                       <div className="vn-inline-actions">
                         <Badge tone={itemScope(item) === 'PERSONAL' ? 'warning' : 'success'}>{itemScope(item) === 'PERSONAL' ? 'Pessoal' : 'Compartilhado'}</Badge>
@@ -421,17 +437,17 @@ export function FinancialDataPage() {
       <Card title="Meu perfil financeiro" description="Este perfil é pessoal e não é o mesmo que seu perfil de investidor." action={<Button variant="secondary" onClick={() => setProfileEditing((value) => !value)}>{profileEditing ? 'Fechar' : profile.data ? 'Editar perfil' : 'Criar perfil'}</Button>}>
         {!profileEditing && profile.data && (
           <div className="vn-grid vn-grid--three">
-            <div><small>Renda mensal declarada</small><strong>{formatCurrency(profile.data.monthly_salary)}</strong></div>
-            <div><small>Reserva declarada</small><strong>{formatCurrency(profile.data.emergency_reserve)}</strong></div>
-            <div><small>Postura de risco</small><strong>{profile.data.risk_profile}</strong></div>
+            <div><small>Renda líquida mensal</small><strong>{formatCurrency(profile.data.monthly_salary)}</strong></div>
+            <div><small>Reserva de emergência atual</small><strong>{formatCurrency(profile.data.emergency_reserve)}</strong></div>
+            <div><small>Postura de risco</small><strong>{riskProfileLabel(profile.data.risk_profile)}</strong></div>
             <div><small>Horizonte de investimento</small><strong>{profile.data.investment_horizon_months == null ? 'Não informado' : `${profile.data.investment_horizon_months} meses`}</strong></div>
           </div>
         )}
         {!profileEditing && missingProfile && <EmptyState title="Perfil ainda não preenchido" description="Informe o básico para melhorar a leitura financeira. Você poderá editar depois." />}
         {profileEditing && (
           <form className="vn-form" onSubmit={submitProfile}>
-            <MoneyInput label="Renda mensal" value={profileDraft.monthlySalary} min="0.01" required onChange={(event) => { setProfileDraft((current) => ({ ...current, monthlySalary: event.target.value })); setProfileDirty(true); }} />
-            <MoneyInput label="Reserva de emergência" value={profileDraft.emergencyReserve} required onChange={(event) => { setProfileDraft((current) => ({ ...current, emergencyReserve: event.target.value })); setProfileDirty(true); }} />
+            <MoneyInput label="Renda líquida mensal" helper="Some as entradas recorrentes líquidas do mês, mesmo quando são recebidas em datas diferentes." value={profileDraft.monthlySalary} min="0.01" required onChange={(event) => { setProfileDraft((current) => ({ ...current, monthlySalary: event.target.value })); setProfileDirty(true); }} />
+            <MoneyInput label="Reserva de emergência atual" helper="Valor disponível hoje para emergências. Zero é válido e não representa informação ausente." value={profileDraft.emergencyReserve} required onChange={(event) => { setProfileDraft((current) => ({ ...current, emergencyReserve: event.target.value })); setProfileDirty(true); }} />
             <SelectField label="Perfil financeiro de risco" value={profileDraft.riskProfile} onChange={(event) => { setProfileDraft((current) => ({ ...current, riskProfile: event.target.value as any })); setProfileDirty(true); }} options={[{ value: 'conservative', label: 'Conservador' }, { value: 'moderate', label: 'Moderado' }, { value: 'aggressive', label: 'Agressivo' }]} />
             <Input label="Horizonte de investimento (meses, opcional)" type="number" min="1" max="1200" value={profileDraft.investmentHorizonMonths} onChange={(event) => { setProfileDraft((current) => ({ ...current, investmentHorizonMonths: event.target.value })); setProfileDirty(true); }} helper="Prazo esperado para o capital de investimento. Não é o prazo de um objetivo específico." />
             <ToggleField label="Possui inadimplência declarada" checked={profileDraft.hasDebtDefault} onChange={(event) => { setProfileDraft((current) => ({ ...current, hasDebtDefault: event.target.checked })); setProfileDirty(true); }} />
@@ -443,7 +459,7 @@ export function FinancialDataPage() {
       <Modal open={editor !== null} title={editor ? `${editor.mode === 'create' ? 'Adicionar' : 'Editar'} ${labels[editor.resource].singular}` : 'Dados financeiros'} onClose={() => { if (!editor?.dirty || window.confirm('Descartar alterações não salvas?')) setEditor(null); }}>
         {editor && (
           <form className="vn-form" onSubmit={submitEditor}>
-            <SelectField label="Quem pode ver este dado?" value={editor.draft.scope} disabled={editor.mode === 'edit' && editor.ownerUserId !== currentUser.data?.id} onChange={(event) => changeDraft({ scope: event.target.value as OwnershipScope })} options={[{ value: 'PERSONAL', label: 'Só eu' }, { value: 'HOUSEHOLD', label: `Compartilhado com ${selectedHousehold?.name ?? 'household'}` }]} helper={editor.mode === 'edit' && editor.ownerUserId !== currentUser.data?.id ? 'Somente quem criou o registro pode alterar seu compartilhamento.' : 'Novos registros começam como pessoais. Compartilhar exige sua escolha explícita.'} />
+            <SelectField label="Quem pode ver este dado?" value={editor.draft.scope} disabled={editor.mode === 'edit' && editor.ownerUserId !== currentUser.data?.id} onChange={(event) => changeDraft({ scope: event.target.value as OwnershipScope })} options={[{ value: 'PERSONAL', label: 'Só eu' }, { value: 'HOUSEHOLD', label: `Compartilhado com ${selectedHousehold?.name ?? 'a casa'}` }]} helper={editor.mode === 'edit' && editor.ownerUserId !== currentUser.data?.id ? 'Somente quem criou o registro pode alterar seu compartilhamento.' : 'Novos registros começam como pessoais. Compartilhar exige sua escolha explícita.'} />
             <Input label={editor.resource === 'incomes' || editor.resource === 'expenses' ? 'Descrição' : 'Nome'} value={editor.draft.description} onChange={(event) => changeDraft({ description: event.target.value })} required={editor.resource !== 'assets' || editor.draft.assetCatalogId === null} />
             {editor.resource === 'incomes' && <>
               <MoneyInput label="Valor" value={editor.draft.amount} onChange={(event) => changeDraft({ amount: event.target.value })} required />
@@ -491,7 +507,7 @@ export function FinancialDataPage() {
       </Modal>
 
       <Modal open={pendingSwitchId !== null} title="Alterações não salvas" onClose={() => setPendingSwitchId(null)}>
-        <p>Trocar de household descartará o formulário atual. Nenhum dado será movido para outro household.</p>
+        <p>Trocar de casa descartará o formulário atual. Nenhum dado será movido para outra casa.</p>
         <div className="vn-inline-actions"><Button variant="secondary" onClick={() => setPendingSwitchId(null)}>Cancelar</Button><Button onClick={discardAndSwitch}>Descartar e trocar</Button></div>
       </Modal>
     </section>

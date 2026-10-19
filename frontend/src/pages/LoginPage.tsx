@@ -45,8 +45,8 @@ export function LoginPage() {
     <main className="vn-auth">
       <section className="vn-auth__hero">
         <div className="vn-brand vn-brand--large"><div className="vn-brand__mark"><Landmark size={24} /></div><div><strong>Vinance</strong><span>Seu centro de inteligência financeira</span></div></div>
-        <h1>Finanças pessoais com leitura de risco, mercado e contexto.</h1>
-        <p>Entre com uma conta real do backend FastAPI para acessar diagnóstico, inteligência heurística e advisor conectado.</p>
+        <h1>Suas finanças, prioridades e próximos passos em um só lugar.</h1>
+        <p>Entre para acompanhar sua situação financeira, seus investimentos e as decisões preparadas pelo Vinance.</p>
       </section>
       <Card className="vn-auth__card" title={mode === 'login' ? 'Entrar' : 'Criar conta'} description="Sessão protegida: credencial renovável em cookie HttpOnly e acesso mantido somente em memória.">
         <form className="vn-form" onSubmit={handleSubmit}>
@@ -61,7 +61,7 @@ export function LoginPage() {
               {mode === 'login' ? 'Criar nova conta' : 'Já tenho conta'}
             </Button>
           )}
-          <p className="vn-disclaimer">Sem token demo e sem mock paralelo de autenticação.</p>
+          <p className="vn-disclaimer">O acesso é privado e protegido. Nenhuma movimentação financeira é executada automaticamente.</p>
         </form>
       </Card>
     </main>

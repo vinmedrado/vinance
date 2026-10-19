@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PropsWithChildren } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from './Button';
 
 export function Modal({ open, title, onClose, children }: PropsWithChildren<{ open: boolean; title: string; onClose: () => void }>) {
@@ -14,6 +15,8 @@ export function Modal({ open, title, onClose, children }: PropsWithChildren<{ op
   useEffect(() => {
     if (!open) return undefined;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const panel = panelRef.current;
     const focusTarget = panel?.querySelector<HTMLElement>(
       'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -29,6 +32,7 @@ export function Modal({ open, title, onClose, children }: PropsWithChildren<{ op
     document.addEventListener('keydown', handleEscape);
     return () => {
       document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = previousBodyOverflow;
       previouslyFocused?.focus();
     };
   }, [open]);
@@ -57,7 +61,7 @@ export function Modal({ open, title, onClose, children }: PropsWithChildren<{ op
   }
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="vn-modal">
       <div
         ref={panelRef}
@@ -71,6 +75,7 @@ export function Modal({ open, title, onClose, children }: PropsWithChildren<{ op
         <div className="vn-card__header"><h3 id={titleId}>{title}</h3><Button variant="ghost" aria-label={`Fechar ${title}`} onClick={onClose}>Fechar</Button></div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

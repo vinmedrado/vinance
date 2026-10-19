@@ -55,7 +55,7 @@ import type { DataQuality, MoneyValue, OwnershipScope } from '../features/financ
 import { useFinancialProfile } from '../features/financial/hooks/useFinancial';
 import { getStoredUser } from '../services/api';
 import type { ApiErrorShape } from '../services/api';
-import { formatCurrency, formatPercent } from '../utils/formatters';
+import { formatCurrency, formatDate, formatDateTime, formatPercent } from '../utils/formatters';
 import { localDateInputValue } from '../utils/localDate';
 
 type IncomeDraft = {
@@ -116,7 +116,7 @@ const categoryOptions = [
 ];
 const ownershipOptions = [
   { value: 'PERSONAL', label: 'Pessoal' },
-  { value: 'HOUSEHOLD', label: 'Compartilhada no household' },
+  { value: 'HOUSEHOLD', label: 'Compartilhada com a casa' },
 ];
 const expenseNatureOptions = [
   { value: 'FIXED', label: 'Fixa' },
@@ -414,7 +414,7 @@ export function FinancialPage() {
       incomeFormHouseholdId === null
       || incomeFormHouseholdId !== selectedHouseholdId
     ) {
-      setFormContextError('O household mudou. Revise o formulário antes de salvar.');
+      setFormContextError('A casa selecionada mudou. Revise o formulário antes de salvar.');
       return;
     }
     await createIncome.mutateAsync({
@@ -437,7 +437,7 @@ export function FinancialPage() {
       expenseFormHouseholdId === null
       || expenseFormHouseholdId !== selectedHouseholdId
     ) {
-      setFormContextError('O household mudou. Revise o formulário antes de salvar.');
+      setFormContextError('A casa selecionada mudou. Revise o formulário antes de salvar.');
       return;
     }
     await createExpense.mutateAsync({
@@ -479,7 +479,7 @@ export function FinancialPage() {
   return (
     <section className="vn-page">
       <SectionHeader
-        eyebrow="Financial Autopilot · fase 6"
+        eyebrow="Piloto financeiro"
         title="Minha situação financeira"
         description="Uma leitura objetiva da sua situação e da ordem de prioridades agora — com transparência sobre o que ainda falta informar."
         action={state ? <Button variant="secondary" onClick={() => createSnapshot.mutate()} disabled={createSnapshot.isPending}>{createSnapshot.isPending ? 'Salvando...' : 'Salvar retrato'}</Button> : undefined}
@@ -502,7 +502,7 @@ export function FinancialPage() {
       {createAllocationDecision.isSuccess && <Toast message="Plano de capital salvo no histórico." />}
       {createOrchestrationDecision.isSuccess && <Toast message="Estratégia de investimento salva no histórico." />}
       {createActionPlanDecision.isSuccess && <Toast message="Plano de ação salvo no histórico." />}
-      {evaluateContinuousAutopilot.isSuccess && <Toast message="Autopilot avaliado com segurança." />}
+      {evaluateContinuousAutopilot.isSuccess && <Toast message="Seu plano foi reavaliado com segurança." />}
       {incomeSaved && <Toast message="Receita cadastrada com sucesso." />}
       {expenseSaved && <Toast message="Despesa cadastrada com sucesso." />}
       {missingProfile && <OnboardingCard onCompleted={reload} />}
@@ -510,9 +510,9 @@ export function FinancialPage() {
       {(households.isLoading || defaultHousehold.isLoading || (selectedHouseholdId !== null && (financialState.isLoading || incomes.isLoading || expenses.isLoading))) && <Card><LoadingState label="Organizando sua situação financeira..." /></Card>}
 
       {households.data && households.data.length > 1 && (
-        <Card title="Visão financeira" description="Alterne entre sua situação pessoal e os households dos quais você participa.">
+        <Card title="Visão financeira" description="Alterne entre sua situação pessoal e as casas das quais você participa.">
           <label className="vn-field">
-            <span>Household</span>
+            <span>Casa</span>
             <select
               className="vn-input"
               value={selectedHouseholdId ?? ''}
@@ -530,7 +530,7 @@ export function FinancialPage() {
         title="Descartar alterações não salvas?"
         onClose={() => setPendingHouseholdSwitchId(null)}
       >
-        <p>Trocar de household descartará os dados ainda não salvos deste formulário.</p>
+        <p>Trocar de casa descartará os dados ainda não salvos deste formulário.</p>
         <div className="vn-actions">
           <Button variant="secondary" onClick={() => setPendingHouseholdSwitchId(null)}>Cancelar</Button>
           <Button
@@ -549,7 +549,7 @@ export function FinancialPage() {
         <div className="vn-grid vn-grid--two">
           <Card
             title="Receitas"
-            description="Entradas pessoais ou compartilhadas usadas pelo Financial State."
+            description="Entradas pessoais ou compartilhadas consideradas na análise financeira."
             action={<Button variant="secondary" onClick={toggleIncomeForm}>{showIncomeForm ? 'Fechar' : 'Nova receita'}</Button>}
           >
             {!showIncomeForm && incomes.data?.length === 0 && (
@@ -579,7 +579,7 @@ export function FinancialPage() {
                       {personalIncomes.map((item) => (
                         <div key={item.id}>
                           <strong>{item.description} <Badge>{item.is_recurring ? 'recorrente' : 'pontual'}</Badge><Badge>pessoal</Badge></strong>
-                          <span>{money(item.amount)} · {item.income_type} · {item.received_at}</span>
+                          <span>{money(item.amount)} · {item.income_type} · {formatDate(item.received_at)}</span>
                         </div>
                       ))}
                     </div>
@@ -587,12 +587,12 @@ export function FinancialPage() {
                 )}
                 {sharedIncomes.length > 0 && (
                   <div className="vn-section-gap">
-                    <h4>Dados compartilhados do household</h4>
+                    <h4>Dados compartilhados da casa</h4>
                     <div className="vn-list">
                       {sharedIncomes.map((item) => (
                         <div key={item.id}>
-                          <strong>{item.description} <Badge>{item.is_recurring ? 'recorrente' : 'pontual'}</Badge><Badge>household</Badge></strong>
-                          <span>{money(item.amount)} · {item.income_type} · {item.received_at}</span>
+                          <strong>{item.description} <Badge>{item.is_recurring ? 'recorrente' : 'pontual'}</Badge><Badge>compartilhado</Badge></strong>
+                          <span>{money(item.amount)} · {item.income_type} · {formatDate(item.received_at)}</span>
                         </div>
                       ))}
                     </div>
@@ -637,7 +637,7 @@ export function FinancialPage() {
                       {personalExpenses.map((item) => (
                         <div key={item.id}>
                           <strong>{item.description} <Badge tone={item.is_paid ? 'success' : 'warning'}>{item.is_paid ? 'paga' : 'pendente'}</Badge><Badge>pessoal</Badge></strong>
-                          <span>{money(item.amount)} · {item.category} · vence em {item.due_date}</span>
+                          <span>{money(item.amount)} · {item.category} · vence em {formatDate(item.due_date)}</span>
                         </div>
                       ))}
                     </div>
@@ -645,12 +645,12 @@ export function FinancialPage() {
                 )}
                 {sharedExpenses.length > 0 && (
                   <div className="vn-section-gap">
-                    <h4>Dados compartilhados do household</h4>
+                    <h4>Dados compartilhados da casa</h4>
                     <div className="vn-list">
                       {sharedExpenses.map((item) => (
                         <div key={item.id}>
-                          <strong>{item.description} <Badge tone={item.is_paid ? 'success' : 'warning'}>{item.is_paid ? 'paga' : 'pendente'}</Badge><Badge>household</Badge></strong>
-                          <span>{money(item.amount)} · {item.category} · vence em {item.due_date}</span>
+                          <strong>{item.description} <Badge tone={item.is_paid ? 'success' : 'warning'}>{item.is_paid ? 'paga' : 'pendente'}</Badge><Badge>compartilhado</Badge></strong>
+                          <span>{money(item.amount)} · {item.category} · vence em {formatDate(item.due_date)}</span>
                         </div>
                       ))}
                     </div>
@@ -777,7 +777,7 @@ export function FinancialPage() {
             description="A confiança mede completude e atualidade das informações; não é uma previsão de mercado."
             action={<Badge tone={qualityTone(state.data_quality)}>{qualityLabels[state.data_quality]} · {state.confidence}%</Badge>}
           >
-            <p>Avaliação em {new Date(state.evaluated_at).toLocaleString('pt-BR')} com o engine <strong>{state.engine_version}</strong>.</p>
+            <p>Avaliação em {formatDateTime(state.evaluated_at)} · versão do cálculo <strong>{state.engine_version}</strong>.</p>
           </Card>
 
           <div className="vn-metrics vn-metrics--refined">
@@ -820,15 +820,15 @@ export function FinancialPage() {
                 </div>
               )}
             </Card>
-            <Card title="Objetivos" description="Funding gaps consideram apenas valores conhecidos; deadlines nunca são inventadas.">
+            <Card title="Objetivos" description="Os valores restantes consideram apenas dados conhecidos; prazos nunca são inventados.">
               {visibleGoals.length === 0 ? (
                 <EmptyState title="Objetivos não informados" description="Cadastre um objetivo para acompanhar o valor necessário e o que já foi acumulado." />
               ) : (
                 <div className="vn-list">
                   {visibleGoals.map((goal) => (
                     <div key={goal.id}>
-                      <strong>{goal.name} <Badge>{goal.ownership_scope === 'HOUSEHOLD' ? 'household' : 'pessoal'}</Badge></strong>
-                      <span>Meta: {money(goal.target_amount)} · Atual: {money(goal.current_amount)} · Falta: {money(goal.funding_gap)} · Prazo: {goal.deadline ?? 'Não informado'}</span>
+                      <strong>{goal.name} <Badge>{goal.ownership_scope === 'HOUSEHOLD' ? 'compartilhado' : 'pessoal'}</Badge></strong>
+                      <span>Meta: {money(goal.target_amount)} · Atual: {money(goal.current_amount)} · Falta: {money(goal.funding_gap)} · Prazo: {formatDate(goal.deadline, 'Não informado')}</span>
                     </div>
                   ))}
                 </div>

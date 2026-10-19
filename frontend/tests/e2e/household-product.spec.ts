@@ -148,7 +148,7 @@ test('two accounts create, invite and consent to a shared household', async ({ b
 
   await pageA.getByLabel('Nome da casa').fill('Casa Medrado');
   await pageA.getByRole('button', { name: 'Criar compartilhado' }).click();
-  await expect(pageA.getByText('Household compartilhado criado.')).toBeVisible();
+  await expect(pageA.getByText('Casa compartilhada criada.')).toBeVisible();
   await pageA.getByLabel('E-mail').fill('b@example.com');
   await pageA.getByRole('button', { name: 'Criar convite' }).click();
   await expect(pageA.getByText('b@example.com')).toBeVisible();
@@ -162,21 +162,21 @@ test('two accounts create, invite and consent to a shared household', async ({ b
   await expect(pageB.getByRole('button', { name: 'Aceitar' })).toHaveCount(0);
 
   await pageA.reload();
-  await pageA.getByLabel('Household atual').selectOption('30');
+  await pageA.getByLabel('Casa atual').selectOption('30');
   await pageA.getByLabel('E-mail').fill('b@example.com');
   await pageA.getByRole('button', { name: 'Criar convite' }).click();
 
   await pageB.reload();
   await expect(pageB.getByText('Casa Medrado')).toBeVisible();
   await pageB.getByRole('button', { name: 'Aceitar' }).click();
-  await expect(pageB.getByLabel('Household atual')).toContainText('Casa Medrado');
-  await pageB.getByLabel('Household atual').selectOption('30');
+  await expect(pageB.getByLabel('Casa atual')).toContainText('Casa Medrado');
+  await pageB.getByLabel('Casa atual').selectOption('30');
   await expect(pageB.getByText('Compartilhado', { exact: true })).toBeVisible();
   await pageB.getByRole('button', { name: 'Definir como padrão' }).click();
   await expect(pageB.getByText('Padrão', { exact: true })).toBeVisible();
 
   await pageA.reload();
-  await pageA.getByLabel('Household atual').selectOption('30');
+  await pageA.getByLabel('Casa atual').selectOption('30');
   await expect(pageA.getByText('Esposa')).toBeVisible();
   const roleUpdated = pageA.waitForResponse((response) => (
     response.request().method() === 'PATCH'
@@ -185,20 +185,20 @@ test('two accounts create, invite and consent to a shared household', async ({ b
   await pageA.getByText('Esposa', { exact: true }).locator('xpath=../..//select').selectOption('OWNER');
   await roleUpdated;
   await pageB.reload();
-  await pageB.getByLabel('Household atual').selectOption('30');
-  await expect(pageB.getByRole('button', { name: 'Sair do household' })).toBeVisible();
+  await pageB.getByLabel('Casa atual').selectOption('30');
+  await expect(pageB.getByRole('button', { name: 'Sair da casa' })).toBeVisible();
   pageB.once('dialog', (dialog) => dialog.accept());
-  await pageB.getByRole('button', { name: 'Sair do household' }).click();
-  await expect(pageB.getByLabel('Household atual')).not.toContainText('Casa Medrado');
+  await pageB.getByRole('button', { name: 'Sair da casa' }).click();
+  await expect(pageB.getByLabel('Casa atual')).not.toContainText('Casa Medrado');
 
   await pageA.reload();
-  await pageA.getByLabel('Household atual').selectOption('30');
+  await pageA.getByLabel('Casa atual').selectOption('30');
   await pageA.getByLabel('E-mail').fill('b@example.com');
   await pageA.getByRole('button', { name: 'Criar convite' }).click();
   await pageB.reload();
   await pageB.getByRole('button', { name: 'Aceitar' }).click();
   await pageA.reload();
-  await pageA.getByLabel('Household atual').selectOption('30');
+  await pageA.getByLabel('Casa atual').selectOption('30');
   pageA.once('dialog', (dialog) => dialog.accept());
   await pageA.getByRole('button', { name: 'Remover' }).click();
   await expect(pageA.getByText('Esposa')).toHaveCount(0);

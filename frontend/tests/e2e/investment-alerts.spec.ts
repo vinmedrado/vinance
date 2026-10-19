@@ -155,7 +155,9 @@ test('subscription gera avaliação isolada, alerta in-app, leitura e desativaç
 
   await expect(page.getByText(/compre agora/i)).toHaveCount(0);
   await expect(page.getByText(/lucro garantido/i)).toHaveCount(0);
-  await page.getByRole('button', { name: /Sair/ }).click();
+  const mobileMenu = page.getByRole('button', { name: 'Menu', exact: true });
+  if (await mobileMenu.isVisible()) await mobileMenu.click();
+  await page.getByRole('button', { name: /Sair(?: da conta)?/ }).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto('/investir');
   await expect(page).toHaveURL(/\/login$/);
