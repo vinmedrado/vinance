@@ -33,6 +33,8 @@ x-app-environment: &app-environment
   PASSWORD_CHANGE_RATE_LIMIT: ${PASSWORD_CHANGE_RATE_LIMIT:-5}
   INVITATION_RATE_LIMIT: ${INVITATION_RATE_LIMIT:-20}
   CONTINUOUS_EVALUATE_RATE_LIMIT: ${CONTINUOUS_EVALUATE_RATE_LIMIT:-6}
+  ADVISOR_CHAT_RATE_LIMIT: ${ADVISOR_CHAT_RATE_LIMIT:-20}
+  TRADING_MUTATION_RATE_LIMIT: ${TRADING_MUTATION_RATE_LIMIT:-30}
   API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
   DEBUG: "false"
   DEMO_MODE_ENABLED: "false"
@@ -82,7 +84,10 @@ services:
   migrate:
     build: *app-build
     restart: "no"
-    command: ["alembic", "upgrade", "head"]
+    # The Vinance schema and the externally-owned Trading schema keep separate
+    # version histories, but one production gate upgrades both exactly once
+    # before any web/worker process is allowed to start.
+    command: ["sh", "-c", "alembic upgrade head && python -m backend.trading.storage.migrate upgrade"]
     environment: *app-environment
     depends_on:
       postgres:

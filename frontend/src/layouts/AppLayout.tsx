@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Brain, House, KeyRound, Landmark, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, ShieldCheck, SunMoon, WalletCards, TrendingUp, X } from 'lucide-react';
+import { BarChart3, Brain, FlaskConical, House, KeyRound, Landmark, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, ShieldCheck, SunMoon, WalletCards, TrendingUp, X } from 'lucide-react';
 import { Button } from '../components';
 import { useLogout, useCurrentUser } from '../features/auth/hooks/useAuth';
 import { useThemeMode } from '../hooks/useThemeMode';
@@ -24,6 +24,7 @@ const secondaryNavItems: NavigationItem[] = [
   { label: 'Dados financeiros', path: '/financial/manage', icon: ListChecks },
   { label: 'Casa e família', path: '/household', icon: House },
   { label: 'Análises', path: '/intelligence', icon: Brain },
+  { label: 'Trading', desktopLabel: 'Trading simulado', path: '/trading', icon: FlaskConical },
   { label: 'Segurança', path: '/account/security', icon: KeyRound },
 ];
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -66,6 +67,8 @@ class Settings(BaseSettings):
     password_change_rate_limit: int = Field(default=5, ge=1, le=1000)
     invitation_rate_limit: int = Field(default=20, ge=1, le=1000)
     continuous_evaluate_rate_limit: int = Field(default=6, ge=1, le=1000)
+    advisor_chat_rate_limit: int = Field(default=20, ge=1, le=1000)
+    trading_mutation_rate_limit: int = Field(default=30, ge=1, le=1000)
 
 
     @field_validator("log_level")
@@ -148,23 +151,42 @@ class Settings(BaseSettings):
             if secret_is_insecure:
                 missing.append("SECRET_KEY")
 
-            insecure_origins = {
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://localhost:9000",
-            }
-            if not origins or any(
-                origin in insecure_origins
-                or ".invalid" in origin
-                or not origin.lower().startswith("https://")
-                for origin in origins
-            ):
+            loopback_hosts = {"localhost", "127.0.0.1", "::1"}
+            parsed_origins = [urlsplit(origin) for origin in origins]
+            has_public_https_origin = any(
+                parsed.scheme.lower() == "https"
+                and bool(parsed.hostname)
+                and parsed.hostname.lower() not in loopback_hosts
+                and not parsed.hostname.lower().endswith(".invalid")
+                for parsed in parsed_origins
+            )
+            has_invalid_origin = any(
+                not parsed.hostname
+                or parsed.hostname.lower().endswith(".invalid")
+                or (
+                    parsed.scheme.lower() != "https"
+                    and not (
+                        parsed.scheme.lower() == "http"
+                        and parsed.hostname.lower() in loopback_hosts
+                    )
+                )
+                for parsed in parsed_origins
+            )
+            if not origins or not has_public_https_origin or has_invalid_origin:
                 missing.append("CORS_ORIGINS")
 
             hosts = self.trusted_host_list
-            if not hosts or "*" in hosts or any(
-                host in {"localhost", "127.0.0.1", "testserver"} or host.endswith(".invalid")
+            public_hosts = [
+                host
                 for host in hosts
+                if host.lower() not in loopback_hosts | {"testserver"}
+                and not host.lower().endswith(".invalid")
+            ]
+            if (
+                not hosts
+                or "*" in hosts
+                or not public_hosts
+                or any(host.lower().endswith(".invalid") for host in hosts)
             ):
                 missing.append("TRUSTED_HOSTS")
 

@@ -155,6 +155,34 @@ async function installApiFixture(page: Page) {
       maturity_date: '2029-03-01',
       source: 'TESOURO_TRANSPARENTE',
     }], total: 1 });
+    if (path === '/trading/overview') return reply(route, {
+      paper_only: true,
+      product_status: 'NOT_PAPER_READY',
+      risk_budget: {
+        paper_only: true,
+        real_trading_allowed: false,
+        real_trading_capital: '0',
+        paper_simulation_allowed: true,
+        financial_status: 'BLOCKED',
+        risk_budget_status: 'DATA_BLOCKED',
+        protected_capital: '12500',
+        speculative_capital: '0',
+        blocking_reasons: ['REAL_TRADING_NOT_SUPPORTED', 'TRADING_DISPATCH_DISABLED'],
+        context_fingerprints: {},
+        household_id: household.id,
+        simulation_rules: { quote_asset: 'USDT' },
+      },
+      paper_account: null,
+      counts: { opportunities: 0, open_positions: 0, pending_orders: 0 },
+      performance: { realized_pnl: '0', unrealized_pnl: '0', max_drawdown: '0' },
+      models: { status: 'NOT_PAPER_READY', paper_trading_ready: false },
+    });
+    if (path === '/trading/opportunities') return reply(route, { items: [], total: 0, limit: 50, offset: 0 });
+    if (path === '/trading/paper/orders') return reply(route, { items: [], total: 0, limit: 50, offset: 0 });
+    if (path === '/trading/paper/positions') return reply(route, { items: [], total: 0, limit: 50, offset: 0 });
+    if (path === '/trading/paper/events') return reply(route, { items: [], total: 0, limit: 100, offset: 0 });
+    if (path === '/trading/backtests') return reply(route, { items: [], total: 0, limit: 50, offset: 0 });
+    if (path === '/trading/models') return reply(route, { items: [], total: 0, limit: 100, offset: 0 });
 
     const fundamentalMatch = path.match(/^\/market\/fundamentals\/(fii|acoes|etf|bdr|cripto)$/);
     if (fundamentalMatch) {
@@ -185,6 +213,62 @@ async function installApiFixture(page: Page) {
   });
 }
 
+async function installTradingLifecycleFixture(page: Page) {
+  let orders: Record<string, unknown>[] = [];
+  let positions: Record<string, unknown>[] = [];
+  let events: Record<string, unknown>[] = [];
+  const now = '2026-10-26T10:00:00Z';
+  await page.route('**/api/v1/trading/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    if (path === '/trading/overview') return reply(route, {
+      paper_only: true,
+      product_status: 'PAPER_READY',
+      risk_budget: {
+        paper_only: true, real_trading_allowed: false, real_trading_capital: '0',
+        paper_simulation_allowed: true, financial_status: 'READY', risk_budget_status: 'PAPER_ONLY',
+        protected_capital: '12500', speculative_capital: '0',
+        blocking_reasons: ['REAL_TRADING_NOT_SUPPORTED'], context_fingerprints: {},
+        household_id: household.id, simulation_rules: { quote_asset: 'USDT' },
+      },
+      paper_account: {
+        id: 1, owner_user_id: user.id, ownership_scope: 'PERSONAL', status: 'ACTIVE', quote_asset: 'USDT',
+        initial_virtual_balance: '10000', cash: positions.some((item) => item.status === 'OPEN') ? '9900' : '10000', equity: '10000',
+        realized_pnl: '0', unrealized_pnl: '0', peak_equity: '10000', max_drawdown: '0', ruleset_version: 'paper-v2',
+        paper_only: true, optimistic_version: 1, created_at: now, updated_at: now,
+      },
+      counts: { opportunities: 1, open_positions: positions.filter((item) => item.status === 'OPEN').length, pending_orders: 0 },
+      performance: { realized_pnl: '0', unrealized_pnl: '0', max_drawdown: '0' },
+      models: { status: 'PAPER_READY', paper_trading_ready: true },
+    });
+    if (path === '/trading/opportunities') return reply(route, { items: [{
+      signal_id: 41, symbol: 'BTCUSDT', market: 'CRYPTO', interval: '5m', signal_time: now,
+      freshness: 'CURRENT', side: 'BUY_CANDIDATE', confidence: '0.81', score: '0.68',
+      reference_price: '68000', stop_price: '67660', target_price: '68680', model_version: 'model-v2',
+      feature_version: 'v2', target_version: 'v2', guardrail_status: 'APPROVED', reasons: ['Sinal atual e validado'],
+    }], total: 1, limit: 50, offset: 0 });
+    if (path === '/trading/paper/orders' && request.method() === 'GET') return reply(route, { items: orders, total: orders.length, limit: 50, offset: 0 });
+    if (path === '/trading/paper/orders' && request.method() === 'POST') {
+      const order = { id: 71, paper_account_id: 1, owner_user_id: user.id, idempotency_key: 'e2e', signal_id: 41, symbol: 'BTCUSDT', market: 'CRYPTO', interval: '5m', side: 'BUY', order_type: 'MARKET', quantity: '0.00147', notional: '100', reference_price: '68010', limit_price: null, stop_price: '67660', target_price: '68680', fee_paid: '0.1', status: 'FILLED', risk_decision: 'PAPER_APPROVED', paper_only: true, created_at: now, filled_at: now };
+      orders = [order];
+      positions = [{ id: 91, paper_account_id: 1, owner_user_id: user.id, symbol: 'BTCUSDT', market: 'CRYPTO', interval: '5m', side: 'LONG', status: 'OPEN', quantity: '0.00147', average_entry_price: '68010', current_reference_price: '68010', realized_pnl: '0', unrealized_pnl: '0', stop_price: '67660', target_price: '68680', paper_only: true, opened_at: now, closed_at: null }];
+      events = [{ id: 1, event_type: 'PAPER_POSITION_OPENED', symbol: 'BTCUSDT', event_payload: {}, decision_context: {}, risk_context: {}, correlation_id: 'e2e', created_at: now }];
+      return reply(route, order, 201);
+    }
+    if (path === '/trading/paper/positions' && request.method() === 'GET') return reply(route, { items: positions, total: positions.length, limit: 50, offset: 0 });
+    if (path === '/trading/paper/positions/91/close' && request.method() === 'POST') {
+      positions = positions.map((item) => ({ ...item, status: 'CLOSED', closed_at: now }));
+      events = [{ id: 2, event_type: 'PAPER_POSITION_CLOSED', symbol: 'BTCUSDT', event_payload: {}, decision_context: {}, risk_context: {}, correlation_id: 'e2e-close', created_at: now }, ...events];
+      return reply(route, positions[0]);
+    }
+    if (path === '/trading/paper/events') return reply(route, { items: events, total: events.length, limit: 100, offset: 0 });
+    if (path === '/trading/backtests') return reply(route, { items: [], total: 0, limit: 50, offset: 0 });
+    if (path === '/trading/models') return reply(route, { items: [], total: 0, limit: 100, offset: 0 });
+    return reply(route, { detail: `Fixture Trading sem resposta para ${request.method()} ${path}` }, 404);
+  });
+}
+
 async function assertNoGlobalOverflow(page: Page, context: string) {
   const dimensions = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -204,6 +288,7 @@ const pages = [
   ['/investir', 'investir'],
   ['/advisor', 'assistente'],
   ['/account/security', 'seguranca'],
+  ['/trading', 'trading'],
 ] as const;
 
 test('produto móvel permanece contido nas cinco larguras de referência', async ({ page }, testInfo) => {
@@ -258,4 +343,34 @@ test('Cripto, BDR e retorno para Cripto não alteram a largura global', async ({
   }
   await expect(page.locator('.vn-market-mobile-list').getByText('BITCOIN-TICKER-LONGO-PARA-REGRESSAO-DE-LARGURA')).toBeVisible();
   await expect(page.locator('.vn-bottom-nav')).toBeVisible();
+});
+
+test('Trading Paper permanece contido e honesto em todas as áreas móveis', async ({ page }) => {
+  await installApiFixture(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/trading');
+  await expect(page.getByText('PAPER ONLY')).toBeVisible();
+  await expect(page.getByText('Trading real', { exact: true })).toBeVisible();
+  for (const tab of ['Resumo', 'Oportunidades', 'Simulação', 'Backtests', 'Modelos', 'Histórico']) {
+    await page.getByRole('tab', { name: tab, exact: true }).click();
+    await expect(page.getByRole('tabpanel')).toBeVisible();
+    await assertNoGlobalOverflow(page, `375px Trading/${tab}`);
+  }
+});
+
+test('oportunidade validada abre e fecha somente uma posição simulada', async ({ page }) => {
+  await installApiFixture(page);
+  await installTradingLifecycleFixture(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/trading');
+  await page.getByRole('tab', { name: 'Oportunidades', exact: true }).click();
+  await expect(page.getByText('BTCUSDT')).toBeVisible();
+  await page.getByRole('button', { name: 'Ver e simular' }).click();
+  await expect(page.getByRole('dialog', { name: /Simular operação/ })).toContainText('Nenhuma ordem real');
+  await page.getByRole('button', { name: 'Simular compra' }).click();
+  await page.getByRole('tab', { name: 'Simulação', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Fechar posição simulada' })).toBeVisible();
+  await page.getByRole('button', { name: 'Fechar posição simulada' }).click();
+  await expect(page.getByText('Fechada')).toBeVisible();
+  await assertNoGlobalOverflow(page, '390px lifecycle Paper');
 });

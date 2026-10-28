@@ -49,6 +49,8 @@ describe('navegação do produto', () => {
     expect(screen.getAllByRole('link', { name: /Início/ })).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: /Assistente/ })).toHaveLength(2);
     expect(screen.getByRole('link', { name: /Dados financeiros/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Trading simulado/ })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Navegação principal no celular' })?.textContent).not.toContain('Trading');
     expect(screen.queryByText('Advisor IA')).not.toBeInTheDocument();
   });
 

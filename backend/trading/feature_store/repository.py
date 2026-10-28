@@ -55,7 +55,8 @@ class FeatureStoreRepository:
         if missing:
             raise RuntimeError(
                 "Trading schema is missing required tables: "
-                f"{sorted(missing)}. Apply backend/trading/storage/schema.sql before running Feature Store V2."
+                f"{sorted(missing)}. Run `python -m backend.trading.storage.migrate upgrade` "
+                "before running Feature Store V2."
             )
 
     def get_last_feature_time(self, symbol: str, interval: str, exchange: str, feature_version: str) -> datetime | None:

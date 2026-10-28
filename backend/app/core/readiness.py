@@ -9,16 +9,24 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 from backend.app.core.database import engine
+from backend.trading.storage.migrate import LATEST_TRADING_SCHEMA_VERSION
 
 
 @dataclass(frozen=True)
 class SchemaRevisionStatus:
     current: str | None
     expected: str | None
+    trading_current: str | None = None
+    trading_expected: str = LATEST_TRADING_SCHEMA_VERSION
 
     @property
     def compatible(self) -> bool:
-        return bool(self.current and self.expected and self.current == self.expected)
+        return bool(
+            self.current
+            and self.expected
+            and self.current == self.expected
+            and self.trading_current == self.trading_expected
+        )
 
 
 @lru_cache(maxsize=1)
@@ -36,6 +44,21 @@ async def schema_revision_status() -> SchemaRevisionStatus:
             result = await connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num"))
             revisions = [str(value) for value in result.scalars().all()]
             current = revisions[0] if len(revisions) == 1 else ",".join(revisions) or None
+            trading_version_table = await connection.execute(
+                text("SELECT to_regclass('public.trading_schema_version')")
+            )
+            if trading_version_table.scalar_one_or_none() is None:
+                trading_current = None
+            else:
+                trading_result = await connection.execute(
+                    text("SELECT version FROM trading_schema_version WHERE id = 1")
+                )
+                trading_current = trading_result.scalar_one_or_none()
     except Exception:
         current = None
-    return SchemaRevisionStatus(current=str(current) if current else None, expected=expected)
+        trading_current = None
+    return SchemaRevisionStatus(
+        current=str(current) if current else None,
+        expected=expected,
+        trading_current=str(trading_current) if trading_current else None,
+    )

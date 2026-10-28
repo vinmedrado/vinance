@@ -15,7 +15,15 @@ ROOT = Path(__file__).resolve().parents[2]
 def _repository_python_paths() -> list[Path]:
     try:
         result = subprocess.run(
-            ["git", "ls-files", "--", "*.py"],
+            [
+                "git",
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "--",
+                "*.py",
+            ],
             cwd=ROOT,
             check=True,
             capture_output=True,
@@ -38,7 +46,7 @@ def _repository_python_paths() -> list[Path]:
     return [ROOT / line for line in result.stdout.splitlines() if line]
 
 
-def test_tracked_python_sources_are_syntactically_self_contained() -> None:
+def test_repository_python_sources_are_syntactically_self_contained() -> None:
     modules, syntax_errors = load_modules(_repository_python_paths())
     import_problems = find_internal_import_problems(modules)
 

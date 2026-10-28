@@ -4,7 +4,8 @@ from collections.abc import Mapping
 from typing import Any
 
 
-# Trading V2 owns these tables through backend/trading/storage/schema.sql.
+# Trading V2 owns these tables through its versioned external-schema runner in
+# backend/trading/storage/migrate.py.
 # They share PostgreSQL's public schema with the application, but are not part
 # of the main ORM/Alembic metadata lifecycle.
 TRADING_EXTERNAL_TABLES = frozenset(
@@ -15,6 +16,12 @@ TRADING_EXTERNAL_TABLES = frozenset(
         "crypto_targets",
         "paper_trades",
         "trading_signals",
+        "trading_paper_accounts",
+        "trading_paper_orders",
+        "trading_paper_positions",
+        "trading_paper_events",
+        "trading_schema_version",
+        "trading_schema_migrations",
     }
 )
 

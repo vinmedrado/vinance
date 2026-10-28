@@ -114,6 +114,38 @@ def test_production_settings_accept_explicit_secure_values() -> None:
     assert settings.is_production is True
 
 
+def test_production_settings_allow_loopback_only_as_operational_supplement() -> None:
+    settings = Settings(
+        _env_file=None,
+        environment="production",
+        database_url="postgresql+asyncpg://app:strong-password@db.internal:5432/vinance",
+        redis_url="redis://app:strong-password@redis.internal:6379/0",
+        secret_key="5f98b98df53b425d8f7436d5ac21cbfdc886829c4f88b9bb",
+        cors_origins="http://127.0.0.1:18080,https://vinance.example.com",
+        trusted_hosts="127.0.0.1,localhost,vinance.example.com",
+    )
+
+    assert settings.is_production is True
+    assert settings.refresh_cookie_secure is True
+
+
+def test_production_settings_reject_loopback_as_only_origin_and_host() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            _env_file=None,
+            environment="production",
+            database_url="postgresql+asyncpg://app:strong-password@db.internal:5432/vinance",
+            redis_url="redis://app:strong-password@redis.internal:6379/0",
+            secret_key="5f98b98df53b425d8f7436d5ac21cbfdc886829c4f88b9bb",
+            cors_origins="http://127.0.0.1:18080",
+            trusted_hosts="127.0.0.1,localhost",
+        )
+
+    message = str(exc_info.value)
+    assert "CORS_ORIGINS" in message
+    assert "TRUSTED_HOSTS" in message
+
+
 def test_production_settings_reject_non_https_public_origin() -> None:
     with pytest.raises(ValidationError, match="CORS_ORIGINS"):
         Settings(

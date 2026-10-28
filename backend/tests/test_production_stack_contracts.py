@@ -10,6 +10,7 @@ def test_production_compose_has_complete_runtime_and_single_public_edge() -> Non
         assert f"  {service}:" in compose
     assert '"127.0.0.1:${EDGE_PORT:-8080}:8080"' in compose
     assert "service_completed_successfully" in compose
+    assert "alembic upgrade head && python -m backend.trading.storage.migrate upgrade" in compose
     assert "CELERY_WORKER_CONCURRENCY" in compose
     assert "networks: [internal, egress]" in compose
     assert "ml_artifacts_data:/app/data/ml_artifacts" in compose

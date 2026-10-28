@@ -7,6 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.financial.service import get_financial_profile
 from backend.app.intelligence.service import build_recommendation_base
+from backend.app.core.logging import get_logger
+
+
+logger = get_logger(__name__)
 
 MAX_TOP_ASSETS_PER_CLASS = 3
 
@@ -44,24 +48,50 @@ def _compact_top_assets(classes: list[dict[str, Any]]) -> dict[str, list[dict[st
     return result
 
 
-async def build_advisor_context(session: AsyncSession, *, user_id: int) -> dict[str, Any]:
+async def build_advisor_context(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    include_trading: bool = False,
+) -> dict[str, Any]:
     context: dict[str, Any] = {
         "financial": None,
         "allocation": [],
         "top_assets_by_class": {},
         "warnings": [],
         "context_available": False,
+        "trading": None,
     }
 
     profile = await get_financial_profile(session, user_id=user_id)
     if profile is None:
         context["warnings"].append("Perfil financeiro ainda não cadastrado; contexto financeiro limitado.")
+        if include_trading:
+            from backend.app.trading.advisor_context import build_trading_advisor_context
+
+            context["trading"], trading_warnings = await build_trading_advisor_context(
+                session, user_id=user_id
+            )
+            context["warnings"].extend(trading_warnings)
+            context["context_available"] = bool(context["trading"])
         return context
 
     try:
         recommendation = await build_recommendation_base(session, user_id=user_id)
     except Exception as exc:
-        context["warnings"].append(f"Contexto financeiro/mercado indisponível: {exc}")
+        logger.warning(
+            "Advisor context unavailable",
+            extra={"error_type": type(exc).__name__},
+        )
+        context["warnings"].append("Contexto financeiro/mercado indisponível.")
+        if include_trading:
+            from backend.app.trading.advisor_context import build_trading_advisor_context
+
+            context["trading"], trading_warnings = await build_trading_advisor_context(
+                session, user_id=user_id
+            )
+            context["warnings"].extend(trading_warnings)
+            context["context_available"] = bool(context["trading"])
         return context
 
     context["financial"] = {
@@ -74,4 +104,11 @@ async def build_advisor_context(session: AsyncSession, *, user_id: int) -> dict[
     context["warnings"] = list(recommendation.get("warnings", []))[:8]
     context["methodology"] = list(recommendation.get("methodology", []))[:5]
     context["context_available"] = True
+    if include_trading:
+        from backend.app.trading.advisor_context import build_trading_advisor_context
+
+        context["trading"], trading_warnings = await build_trading_advisor_context(
+            session, user_id=user_id
+        )
+        context["warnings"].extend(trading_warnings)
     return context

@@ -30,7 +30,8 @@ class PredictionRepository:
         if missing:
             raise RuntimeError(
                 "Trading schema is missing required tables: "
-                f"{sorted(missing)}. Apply backend/trading/storage/schema.sql before running Prediction Engine V2."
+                f"{sorted(missing)}. Run `python -m backend.trading.storage.migrate upgrade` "
+                "before running Prediction Engine V2."
             )
 
     def load_latest_features(self, *, symbol: str, interval: str) -> PredictionInput:

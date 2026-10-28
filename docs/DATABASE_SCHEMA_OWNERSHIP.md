@@ -45,9 +45,10 @@ ou reduzir a precisão com dados presentes seria destrutivo.
 
 ## Trading V2 externo
 
-Trading V2 usa SQL explícito em `backend/trading/storage/schema.sql`. As seis
-tabelas abaixo compartilham o schema PostgreSQL `public`, mas não pertencem ao
-metadata nem ao lifecycle do Alembic principal:
+Trading V2 usa um lifecycle externo versionado em
+`backend/trading/storage/migrate.py`. As tabelas abaixo compartilham o schema
+PostgreSQL `public`, mas não pertencem ao metadata nem ao lifecycle do Alembic
+principal:
 
 - `backtest_runs`;
 - `crypto_candles`;
@@ -55,6 +56,17 @@ metadata nem ao lifecycle do Alembic principal:
 - `crypto_targets`;
 - `paper_trades`;
 - `trading_signals`.
+- `trading_paper_accounts`;
+- `trading_paper_orders`;
+- `trading_paper_positions`;
+- `trading_paper_events`;
+- `trading_schema_version`;
+- `trading_schema_migrations`.
+
+`backend/trading/storage/schema.sql` permanece como referência histórica da
+revisão inicial. Novos ambientes e upgrades usam exclusivamente o runner
+externo. Ele mantém histórico e checksum por revisão, trava upgrades
+concorrentes e falha fechado se a aplicação encontrar uma versão incompatível.
 
 `backend/alembic/schema_ownership.py` é a lista canônica dessa exclusão. Uma
 migration da aplicação não pode criar, alterar ou remover essas tabelas. Uma

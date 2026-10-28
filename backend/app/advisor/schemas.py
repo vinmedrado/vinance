@@ -26,6 +26,7 @@ class AdvisorContextUsed(BaseModel):
     financial: bool = False
     market: bool = False
     memory: bool = False
+    trading: bool = False
 
 
 class AdvisorChatResponse(BaseModel):

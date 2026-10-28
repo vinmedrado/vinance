@@ -5,7 +5,7 @@ from backend.trading.storage.database import create_sync_engine
 
 from .config import DEFAULT_CONFIG, PredictionEngineConfig
 from .loader import PredictionArtifactLoader
-from .models import PredictionResult
+from .models import ManifestEntry, PredictionResult
 from .predictor import PredictionPredictor
 from .repository import PredictionRepository
 from .reports import PredictionReportWriter
@@ -35,8 +35,23 @@ class PredictionEngine:
     ) -> PredictionResult:
         self._assert_paper_only()
         entry = self.loader.select_best_model(symbol=symbol, interval=interval, target_name=target_name)
+        return self.predict_entry(entry)
+
+    def predict_entry(self, entry: ManifestEntry) -> PredictionResult:
+        """Run inference for one explicitly selected, server-side artifact.
+
+        Product orchestration uses this path only after the model registry has
+        authorized the exact artifact for Paper Trading.  Keeping inference in
+        this engine avoids a second prediction implementation while preventing
+        the generic ``best model`` lookup from bypassing promotion state.
+        """
+
+        self._assert_paper_only()
         artifacts = self.loader.load_artifacts(entry)
-        prediction_input = self.repository.load_latest_features(symbol=symbol, interval=interval)
+        prediction_input = self.repository.load_latest_features(
+            symbol=entry.symbol,
+            interval=entry.interval,
+        )
         result = self.predictor.predict(prediction_input, artifacts)
         return self.report_writer.write(result)
 

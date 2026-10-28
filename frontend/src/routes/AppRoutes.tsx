@@ -14,6 +14,7 @@ const InvestmentWorkspacePage = lazy(() => import('../pages/InvestmentWorkspaceP
 const HouseholdPage = lazy(() => import('../pages/HouseholdPage').then((module) => ({ default: module.HouseholdPage })));
 const FinancialDataPage = lazy(() => import('../pages/FinancialDataPage').then((module) => ({ default: module.FinancialDataPage })));
 const AccountSecurityPage = lazy(() => import('../pages/AccountSecurityPage').then((module) => ({ default: module.AccountSecurityPage })));
+const TradingPage = lazy(() => import('../pages/TradingPage').then((module) => ({ default: module.TradingPage })));
 
 function lazyPage(page: ReactNode) {
   return (
@@ -38,6 +39,7 @@ export function AppRoutes() {
         <Route path="investir" element={lazyPage(<InvestmentWorkspacePage />)} />
         <Route path="advisor" element={lazyPage(<AdvisorPage />)} />
         <Route path="account/security" element={lazyPage(<AccountSecurityPage />)} />
+        <Route path="trading" element={lazyPage(<TradingPage />)} />
       </Route>
       <Route path="*" element={<Navigate to={isAuthenticated() ? '/dashboard' : '/login'} replace />} />
     </Routes>

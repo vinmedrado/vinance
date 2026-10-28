@@ -32,7 +32,8 @@ class TargetRepository:
         if missing:
             raise RuntimeError(
                 "Trading schema is missing required tables: "
-                f"{sorted(missing)}. Apply backend/trading/storage/schema.sql before running Target Engine V2."
+                f"{sorted(missing)}. Run `python -m backend.trading.storage.migrate upgrade` "
+                "before running Target Engine V2."
             )
 
     def get_last_target_time(self, symbol: str, interval: str, exchange: str, specs: tuple[TargetSpec, ...]) -> datetime | None:

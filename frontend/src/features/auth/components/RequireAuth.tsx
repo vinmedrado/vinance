@@ -57,7 +57,7 @@ export function RequireAuth({ children }: { children: ReactElement }) {
     const lastReason = getLastSessionChangeReason();
     const reason = expired || lastReason === 'expired'
       ? 'expired'
-      : error?.code !== 'AUTH_REQUIRED' && (error?.status === 401 || lastReason === 'invalid')
+      : lastReason === 'invalid' || (error?.code !== 'AUTH_REQUIRED' && error?.status === 401)
         ? 'invalid'
         : 'required';
     return <Navigate to="/login" replace state={{ from, reason }} />;

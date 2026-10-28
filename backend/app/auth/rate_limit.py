@@ -8,7 +8,14 @@ from backend.app.core.config import settings
 from backend.app.core.redis import get_redis_client
 
 
-async def enforce_auth_rate_limit(scope: str, identifier: str, limit: int) -> None:
+async def enforce_auth_rate_limit(
+    scope: str,
+    identifier: str,
+    limit: int,
+    *,
+    unavailable_detail: str = "Authentication temporarily unavailable",
+    exceeded_detail: str = "Too many authentication attempts",
+) -> None:
     if not settings.effective_rate_limiting_enabled:
         return
     digest = hashlib.sha256(identifier.strip().lower().encode("utf-8")).hexdigest()
@@ -20,11 +27,14 @@ async def enforce_auth_rate_limit(scope: str, identifier: str, limit: int) -> No
             await client.expire(key, settings.auth_rate_limit_window_seconds)
     except Exception as exc:
         if settings.is_production:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authentication temporarily unavailable") from exc
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=unavailable_detail,
+            ) from exc
         return
     if count > limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many authentication attempts",
+            detail=exceeded_detail,
             headers={"Retry-After": str(settings.auth_rate_limit_window_seconds)},
         )

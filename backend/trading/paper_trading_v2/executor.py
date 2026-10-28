@@ -44,8 +44,8 @@ class PaperTradingExecutor:
         if notional <= 0:
             return ExecutionResult(None, None, portfolio, "insufficient_cash")
 
-        entry_price = self._entry_price(entry_candle.close)
-        entry_fee = self._fee(notional)
+        entry_price = self.entry_price(entry_candle.close)
+        entry_fee = self.fee(notional)
         quantity = notional / entry_price
         target_rules = parse_target_name(prediction.target_name)
         position = PaperPosition(
@@ -101,9 +101,9 @@ class PaperTradingExecutor:
         return None
 
     def _close(self, position: PaperPosition, candle: MarketCandle, raw_exit_price: float, reason: str, holding_candles: int) -> PaperTrade:
-        exit_price = self._exit_price(raw_exit_price)
+        exit_price = self.exit_price(raw_exit_price)
         gross_pnl = (exit_price - position.entry_price) * position.quantity
-        exit_fee = self._fee(exit_price * position.quantity)
+        exit_fee = self.fee(exit_price * position.quantity)
         fees = position.entry_fee + exit_fee
         net_pnl = gross_pnl - fees
         return PaperTrade(
@@ -124,14 +124,39 @@ class PaperTradingExecutor:
             holding_candles=holding_candles,
         )
 
-    def _entry_price(self, close: float) -> float:
-        return close * (1 + (self.config.spread_bps / 2 + self.config.slippage_bps) / 10_000)
+    def entry_price(self, reference_price: float) -> float:
+        """Apply the canonical simulated spread/slippage to an entry.
 
-    def _exit_price(self, price: float) -> float:
-        return price * (1 - (self.config.spread_bps / 2 + self.config.slippage_bps) / 10_000)
+        The assisted product persists the result, but deliberately reuses this
+        engine-owned pricing contract instead of duplicating execution math in
+        the API layer.
+        """
 
-    def _fee(self, notional: float) -> float:
+        if reference_price <= 0:
+            raise ValueError("reference_price must be positive")
+        return reference_price * (
+            1 + (self.config.spread_bps / 2 + self.config.slippage_bps) / 10_000
+        )
+
+    def exit_price(self, reference_price: float) -> float:
+        """Apply the canonical simulated spread/slippage to an exit."""
+
+        if reference_price <= 0:
+            raise ValueError("reference_price must be positive")
+        return reference_price * (
+            1 - (self.config.spread_bps / 2 + self.config.slippage_bps) / 10_000
+        )
+
+    def fee(self, notional: float) -> float:
+        if notional < 0:
+            raise ValueError("notional must be non-negative")
         return notional * self.config.fee_bps / 10_000
+
+    # Compatibility for any external research caller that used the former
+    # private helpers before the product boundary exposed explicit methods.
+    _entry_price = entry_price
+    _exit_price = exit_price
+    _fee = fee
 
 
 def parse_target_name(target_name: str) -> TargetRules:

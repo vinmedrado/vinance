@@ -1,3 +1,8 @@
+-- HISTORICAL REFERENCE ONLY.
+-- The canonical Trading V2 schema is versioned by
+-- `python -m backend.trading.storage.migrate upgrade`.
+-- Do not apply this file to provision or upgrade an environment.
+
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS crypto_candles (

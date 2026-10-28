@@ -26,17 +26,26 @@ para envio de ordens reais.
 - backtesting_v2: simulação cronológica e walk-forward.
 - research_v2 e validation_v2: pesquisa, robustez e validação.
 - paper_trading_v2: execução exclusivamente simulada.
-- storage: schema SQL explícito e repositórios compartilhados.
+- storage: migrations externas versionadas, backup/restore e repositórios compartilhados.
+- model_registry: promoção auditável de pesquisa para Paper, bloqueada por Validation V2.
+- paper_orchestration: execução manual `run-once` de predição para sinal Paper; sem scheduler.
+- app/trading: API autenticada, owner-only, risk budget e persistência do produto.
 - scripts/experiment_campaign_v2.py: campanha oficial V2.
 
 ## Propriedade do schema
 
-As seis tabelas operacionais de Trading V2 são mantidas pelo SQL explícito em
-storage/schema.sql. Elas são um domínio externo intencional ao Base.metadata do
-backend e são excluídas da comparação de autogenerate do Alembic principal.
+As tabelas operacionais de Trading V2 são mantidas pelo lifecycle externo em
+`storage/migrate.py`. `storage/schema.sql` é apenas a referência histórica da
+revisão inicial e não deve ser aplicado para provisionar ambientes novos. O
+domínio continua intencionalmente excluído de `Base.metadata` e do autogenerate
+do Alembic principal.
 
 ## Diagnóstico seguro
 
 Use python -m backend.trading.scripts.check_setup para verificar configuração e
 conectividade. Testes automatizados não executam campanhas de treino nem backtests
 persistentes.
+
+Use `python -m backend.trading.storage.migrate check` para validar o schema e
+`python -m backend.trading.model_registry.cli check` para consultar readiness.
+Nenhuma task Trading é registrada no Celery Beat.
