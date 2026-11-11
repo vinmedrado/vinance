@@ -8,16 +8,16 @@ Personal financial analysis becomes fragmented when budgets, transactions, inves
 
 ## System design
 
-\`\`\`text
+```text
 React / Vite interface
         ↓
 FastAPI services (finance, ERP, market, analysis)
         ↓
 PostgreSQL + data services and domain logic
         ↘ optional Redis / Celery background workflows
-\`\`\`
+```
 
-The official user interface lives in \`frontend/\`; the historical Streamlit UI remains in \`legacy_streamlit/\` for older administrative workflows. Business logic is distributed across \`backend/app/\`, \`services/\` and analytical modules.
+The official user interface lives in `frontend/`; the historical Streamlit UI remains in `legacy_streamlit/` for older administrative workflows. Business logic is distributed across `backend/app/`, `services/` and analytical modules.
 
 ## What this demonstrates
 
@@ -28,7 +28,7 @@ The official user interface lives in \`frontend/\`; the historical Streamlit UI 
 
 ## Quality evidence
 
-The [CI workflow](../.github/workflows/ci.yml) runs Python compilation and \`pytest\`, a React/Vite frontend build and Docker Compose syntax validation for development and production Compose files. CI uses example environment values instead of production secrets.
+The [CI workflow](../.github/workflows/ci.yml) runs Python compilation and `pytest`, a React/Vite frontend build and Docker Compose syntax validation for development and production Compose files. CI uses example environment values instead of production secrets.
 
 ## Trade-offs and limitations
 
