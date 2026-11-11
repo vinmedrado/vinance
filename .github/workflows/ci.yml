@@ -22,10 +22,18 @@ jobs:
         run: python -m compileall backend app services scripts tests
       - name: Run tests
         run: pytest -q
+      # Compose valida arquivos env_file mesmo sem iniciar os containers.
+      # No runner criamos arquivos temporários somente para validar a sintaxe.
+      - name: Prepare dummy Compose environment for CI
+        run: |
+          cp .env.example .env
+          cp .env.example .env.production
       - name: Validate Docker Compose
-        run: docker compose config
+        run: docker compose config --quiet
       - name: Validate production compose
-        run: docker compose -f docker-compose.production.yml config
+        env:
+          POSTGRES_PASSWORD: ci-placeholder-not-a-real-secret
+        run: docker compose -f docker-compose.production.yml config --quiet
 
   frontend:
     runs-on: ubuntu-latest
