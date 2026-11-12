@@ -1,0 +1,7 @@
+# Artefatos locais do dbt; nunca versionar credenciais.
+profiles.yml
+target/
+dbt_packages/
+logs/
+.venv/
+.env

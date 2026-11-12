@@ -1,0 +1,119 @@
+name: Vinance optional dbt CI
+
+on:
+  pull_request:
+    paths:
+      - "analytics_dbt/**"
+      - ".github/workflows/dbt-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  dbt-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: financeos
+          POSTGRES_PASSWORD: ci-local-only
+          POSTGRES_DB: financeos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U financeos -d financeos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      VINANCE_DBT_HOST: 127.0.0.1
+      VINANCE_DBT_PORT: "5432"
+      VINANCE_DBT_USER: financeos
+      VINANCE_DBT_PASSWORD: ci-local-only
+      VINANCE_DBT_DB: financeos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install isolated dbt dependencies
+        run: python -m pip install -r analytics_dbt/requirements.txt
+      - name: Seed disposable PostgreSQL table
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg2
+
+          conn = psycopg2.connect(
+              host=os.environ["VINANCE_DBT_HOST"],
+              port=os.environ["VINANCE_DBT_PORT"],
+              user=os.environ["VINANCE_DBT_USER"],
+              password=os.environ["VINANCE_DBT_PASSWORD"],
+              dbname=os.environ["VINANCE_DBT_DB"],
+          )
+          with conn:
+              with conn.cursor() as cur:
+                  cur.execute("""
+                      create table public.asset_prices (
+                          id integer primary key,
+                          symbol varchar(32) not null,
+                          "date" timestamptz not null,
+                          close double precision,
+                          volume double precision,
+                          source varchar(64),
+                          created_at timestamptz not null default now()
+                      )
+                  """)
+                  cur.executemany("""
+                      insert into public.asset_prices
+                      (id, symbol, "date", close, volume, source)
+                      values (%s, %s, %s, %s, %s, %s)
+                  """, [
+                      (1, "BTC-USD", "2026-11-01T10:00:00+00:00", 100.0, 5, "market"),
+                      (2, "BTC-USD", "2026-11-01T10:10:00+00:00", 105.0, 6, "market"),
+                      (3, "BTC-USD", "2026-11-02T10:10:00+00:00", 106.0, 7, "market"),
+                      (4, "AAPL", "2026-11-01T10:00:00+00:00", 210.0, 8, "market"),
+                      (5, "AAPL", "2026-11-02T10:00:00+00:00", -1.0, 8, "market"),
+                  ])
+          conn.close()
+          PY
+      - name: Compile, run and test isolated marts
+        working-directory: analytics_dbt
+        run: |
+          cp profiles.yml.example profiles.yml
+          dbt build --profiles-dir .
+      - name: Verify deduplication and invalid-price exclusion
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg2
+
+          conn = psycopg2.connect(
+              host=os.environ["VINANCE_DBT_HOST"],
+              port=os.environ["VINANCE_DBT_PORT"],
+              user=os.environ["VINANCE_DBT_USER"],
+              password=os.environ["VINANCE_DBT_PASSWORD"],
+              dbname=os.environ["VINANCE_DBT_DB"],
+          )
+          with conn.cursor() as cur:
+              cur.execute("select count(*) from vinance_analytics_marts.mart_daily_asset_prices")
+              assert cur.fetchone()[0] == 3
+              cur.execute("""
+                  select close_price
+                  from vinance_analytics_marts.mart_daily_asset_prices
+                  where symbol = 'BTC-USD' and price_date = '2026-11-01'
+              """)
+              assert cur.fetchone()[0] == 105.0
+              cur.execute("""
+                  select close_price
+                  from vinance_analytics_marts.mart_latest_asset_prices
+                  where symbol = 'BTC-USD'
+              """)
+              assert cur.fetchone()[0] == 106.0
+              cur.execute("""
+                  select close_price
+                  from vinance_analytics_marts.mart_latest_asset_prices
+                  where symbol = 'AAPL'
+              """)
+              assert cur.fetchone()[0] == 210.0
+          conn.close()
+          PY
