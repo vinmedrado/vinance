@@ -1,0 +1,15 @@
+# Copie para profiles.yml (ignorado pelo Git).
+# Conexao pensada para o PostgreSQL LOCAL do docker-compose.yml.
+# Nunca use credenciais corporativas ou de producao neste projeto.
+vinance_analytics:
+  target: local
+  outputs:
+    local:
+      type: postgres
+      host: "{{ env_var('VINANCE_DBT_HOST', 'localhost') }}"
+      port: "{{ env_var('VINANCE_DBT_PORT', '5434') | int }}"
+      user: "{{ env_var('VINANCE_DBT_USER', 'financeos') }}"
+      pass: "{{ env_var('VINANCE_DBT_PASSWORD') }}"
+      dbname: "{{ env_var('VINANCE_DBT_DB', 'financeos') }}"
+      schema: vinance_analytics
+      threads: 2

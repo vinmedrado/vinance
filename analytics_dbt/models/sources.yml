@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: vinance_app
+    description: "Tabelas de mercado da aplicacao Vinance (somente leitura)."
+    schema: public
+    tables:
+      - name: asset_prices
+        description: "Historico de precos coletado pelos pipelines existentes."
+        columns:
+          - name: id
+            tests:
+              - not_null
+              - unique
+          - name: symbol
+            tests:
+              - not_null
+          - name: date
+            tests:
+              - not_null

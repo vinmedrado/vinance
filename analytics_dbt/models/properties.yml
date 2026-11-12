@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: stg_asset_prices
+    description: "Normalizacao leve de precos brutos; dados invalidos permanecem visiveis para auditoria."
+    columns:
+      - name: price_id
+        tests:
+          - unique
+          - not_null
+      - name: price_timestamp
+        tests:
+          - not_null
+  - name: mart_daily_asset_prices
+    description: "Ultimo preco valido de cada dia por simbolo e fonte."
+    columns:
+      - name: price_day_key
+        tests:
+          - unique
+          - not_null
+      - name: close_price
+        tests:
+          - not_null
+      - name: price_date
+        tests:
+          - not_null
+  - name: mart_latest_asset_prices
+    description: "Ultimo preco diario valido disponivel para cada simbolo e fonte."
+    columns:
+      - name: asset_source_key
+        tests:
+          - unique
+          - not_null
+      - name: close_price
+        tests:
+          - not_null

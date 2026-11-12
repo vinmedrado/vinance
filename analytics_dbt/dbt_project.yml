@@ -1,0 +1,16 @@
+name: vinance_analytics
+version: '1.0.0'
+config-version: 2
+
+# Projeto independente. Nao altera a aplicacao nem as migrations.
+profile: vinance_analytics
+model-paths: ["models"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  vinance_analytics:
+    +materialized: view
+    staging:
+      +schema: staging
+    marts:
+      +schema: marts
