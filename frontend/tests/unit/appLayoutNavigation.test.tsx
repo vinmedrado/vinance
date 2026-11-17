@@ -13,6 +13,26 @@ vi.mock('../../src/features/auth/hooks/useAuth', () => ({
   useCurrentUser: () => ({ data: { id: 9, email: 'pessoa@fixture.local', full_name: 'Pessoa Fixture' } }),
 }));
 
+vi.mock('../../src/features/household/context/FinancialContextProvider', () => ({
+  financialContextCopy: () => ({
+    label: 'Minhas finanças',
+    description: 'Informações particulares.',
+  }),
+  useFinancialContext: () => ({
+    activeHousehold: { id: 10, name: 'Pessoal', household_type: 'PERSONAL', status: 'ACTIVE' },
+    personalHousehold: { id: 10, name: 'Pessoal', household_type: 'PERSONAL', status: 'ACTIVE' },
+    sharedHouseholds: [],
+    households: [{ id: 10, name: 'Pessoal', household_type: 'PERSONAL', status: 'ACTIVE' }],
+    label: 'Minhas finanças',
+    description: 'Informações particulares.',
+    isLoading: false,
+    isSwitching: false,
+    error: null,
+    switchContext: vi.fn(),
+    registerSwitchGuard: vi.fn(() => () => undefined),
+  }),
+}));
+
 vi.mock('../../src/hooks/useThemeMode', () => ({
   useThemeMode: () => ({ mode: 'dark', setMode: vi.fn() }),
 }));

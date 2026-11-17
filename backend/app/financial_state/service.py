@@ -850,14 +850,16 @@ async def _get_visible_record(
     household_id: int,
     record_id: int,
     user_id: int,
+    lock: bool = False,
 ) -> ResourceModel:
-    result = await session.execute(
-        select(model).where(
-            model.id == record_id,
-            model.household_id == household_id,
-            _visible_resource_clause(model, user_id=user_id),
-        )
+    statement = select(model).where(
+        model.id == record_id,
+        model.household_id == household_id,
+        _visible_resource_clause(model, user_id=user_id),
     )
+    if lock:
+        statement = statement.with_for_update()
+    result = await session.execute(statement)
     record = result.scalar_one_or_none()
     if record is None:
         # A private record owned by another member is indistinguishable from
@@ -893,6 +895,10 @@ async def create_resource(
         session, household_id=household_id, user_id=user_id
     )
     values = payload.model_dump()
+    if values.get("ownership_scope") == "HOUSEHOLD" and household.household_type != "SHARED":
+        raise FinancialStateValidationError(
+            "shared financial resources require a shared household"
+        )
     if model is OwnedAsset:
         await _validate_catalog_reference(
             session, asset_catalog_id=values.get("asset_catalog_id")
@@ -965,11 +971,25 @@ async def update_resource(
         household_id=household_id,
         record_id=record_id,
         user_id=user_id,
+        lock=True,
     )
     if not _can_mutate_record(record, membership, user_id):
         raise HouseholdPermissionError("financial resource permission denied")
     values = payload.model_dump(exclude_unset=True)
     previous_scope = str(record.ownership_scope)
+    if (
+        model in (Income, Expense)
+        and "ownership_scope" in values
+        and values["ownership_scope"] != previous_scope
+    ):
+        raise FinancialStateValidationError(
+            "use the audited transfer workflow to change income or expense visibility"
+        )
+    final_scope = values.get("ownership_scope", previous_scope)
+    if final_scope == "HOUSEHOLD" and household.household_type != "SHARED":
+        raise FinancialStateValidationError(
+            "shared financial resources require a shared household"
+        )
     if (
         previous_scope == "HOUSEHOLD"
         and values.get("ownership_scope") == "PERSONAL"
@@ -1022,6 +1042,7 @@ async def delete_resource(
         household_id=household_id,
         record_id=record_id,
         user_id=user_id,
+        lock=True,
     )
     if not _can_mutate_record(record, membership, user_id):
         raise HouseholdPermissionError("financial resource permission denied")

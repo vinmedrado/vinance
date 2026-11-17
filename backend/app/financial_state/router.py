@@ -11,7 +11,7 @@ from backend.app.auth.rate_limit import enforce_auth_rate_limit
 from backend.app.core.config import settings
 from backend.app.core.database import get_session
 from backend.app.financial.models import Expense, Income
-from backend.app.financial_state import service
+from backend.app.financial_state import service, transfers
 from backend.app.financial_state.models import FinancialGoal, FinancialLiability, OwnedAsset
 from backend.app.financial_state.schemas import (
     AssetCreate,
@@ -23,6 +23,10 @@ from backend.app.financial_state.schemas import (
     FinancialStateHistory,
     FinancialStateRead,
     FinancialStateSnapshotRead,
+    FinancialRecordTransferPreview,
+    FinancialRecordTransferPreviewRequest,
+    FinancialRecordTransferRead,
+    FinancialRecordTransferRequest,
     GoalCreate,
     GoalRead,
     GoalUpdate,
@@ -459,6 +463,53 @@ async def income_delete(
     )
 
 
+@router.post(
+    "/households/{household_id}/incomes/transfer-from-personal/preview",
+    response_model=FinancialRecordTransferPreview,
+)
+async def income_transfer_preview(
+    payload: FinancialRecordTransferPreviewRequest,
+    response: Response,
+    household_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        transfers.preview_records,
+        session,
+        model=Income,
+        target_household_id=household_id,
+        user_id=current_user.id,
+        record_ids=payload.record_ids,
+    )
+
+
+@router.post(
+    "/households/{household_id}/incomes/transfer-from-personal",
+    response_model=FinancialRecordTransferRead,
+)
+async def income_transfer(
+    payload: FinancialRecordTransferRequest,
+    response: Response,
+    household_id: int = Path(ge=1),
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        transfers.transfer_records,
+        session,
+        model=Income,
+        target_household_id=household_id,
+        user_id=current_user.id,
+        record_ids=payload.record_ids,
+        duplicate_reviewed=payload.duplicate_reviewed,
+        idempotency_key=idempotency_key,
+    )
+
+
 @router.get("/households/{household_id}/expenses", response_model=list[ExpenseRead])
 async def expenses_list(
     response: Response,
@@ -552,6 +603,53 @@ async def expense_delete(
         household_id=household_id,
         record_id=record_id,
         user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/households/{household_id}/expenses/transfer-from-personal/preview",
+    response_model=FinancialRecordTransferPreview,
+)
+async def expense_transfer_preview(
+    payload: FinancialRecordTransferPreviewRequest,
+    response: Response,
+    household_id: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        transfers.preview_records,
+        session,
+        model=Expense,
+        target_household_id=household_id,
+        user_id=current_user.id,
+        record_ids=payload.record_ids,
+    )
+
+
+@router.post(
+    "/households/{household_id}/expenses/transfer-from-personal",
+    response_model=FinancialRecordTransferRead,
+)
+async def expense_transfer(
+    payload: FinancialRecordTransferRequest,
+    response: Response,
+    household_id: int = Path(ge=1),
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _private(response)
+    return await _domain_call(
+        transfers.transfer_records,
+        session,
+        model=Expense,
+        target_household_id=household_id,
+        user_id=current_user.id,
+        record_ids=payload.record_ids,
+        duplicate_reviewed=payload.duplicate_reviewed,
+        idempotency_key=idempotency_key,
     )
 
 

@@ -29,6 +29,9 @@ import type {
   LiabilityUpdatePayload,
   AssetUpdatePayload,
   GoalUpdatePayload,
+  FinancialRecordTransferPreview,
+  FinancialRecordTransferResult,
+  FinancialTransferResource,
 } from '../types/financialState.types';
 
 export async function listHouseholds() {
@@ -356,4 +359,31 @@ export async function deleteAsset(householdId: number, recordId: number) {
 
 export async function deleteGoal(householdId: number, recordId: number) {
   await api.delete(`/financial/households/${householdId}/goals/${recordId}`);
+}
+
+export async function previewFinancialRecordTransfer(
+  resource: FinancialTransferResource,
+  targetHouseholdId: number,
+  recordIds: number[],
+) {
+  const { data } = await api.post<FinancialRecordTransferPreview>(
+    `/financial/households/${targetHouseholdId}/${resource}/transfer-from-personal/preview`,
+    { record_ids: recordIds },
+  );
+  return data;
+}
+
+export async function commitFinancialRecordTransfer(
+  resource: FinancialTransferResource,
+  targetHouseholdId: number,
+  recordIds: number[],
+  duplicateReviewed: boolean,
+  idempotencyKey: string,
+) {
+  const { data } = await api.post<FinancialRecordTransferResult>(
+    `/financial/households/${targetHouseholdId}/${resource}/transfer-from-personal`,
+    { record_ids: recordIds, duplicate_reviewed: duplicateReviewed },
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  );
+  return data;
 }

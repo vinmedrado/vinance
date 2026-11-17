@@ -43,6 +43,44 @@ export type HouseholdExpense = {
   updated_at: string;
 };
 
+export type FinancialTransferResource = 'incomes' | 'expenses';
+
+export type FinancialRecordDuplicateCandidate = {
+  candidate_id: number;
+  description: string;
+  amount: MoneyValue;
+  effective_date: string;
+};
+
+export type FinancialRecordTransferPreviewItem = {
+  record_id: number;
+  source_household_id: number;
+  description: string;
+  amount: MoneyValue;
+  effective_date: string;
+  possible_duplicates: FinancialRecordDuplicateCandidate[];
+};
+
+export type FinancialRecordTransferPreview = {
+  resource_type: 'INCOME' | 'EXPENSE';
+  target_household_id: number;
+  record_count: number;
+  requires_duplicate_review: boolean;
+  items: FinancialRecordTransferPreviewItem[];
+};
+
+export type FinancialRecordTransferResult = {
+  transfer_id: number;
+  resource_type: 'INCOME' | 'EXPENSE';
+  target_household_id: number;
+  record_count: number;
+  moved_record_ids: number[];
+  source_household_ids: number[];
+  status: 'COMMITTED';
+  replayed: boolean;
+  created_at: string;
+};
+
 export type HouseholdLiability = {
   id: number;
   household_id: number;

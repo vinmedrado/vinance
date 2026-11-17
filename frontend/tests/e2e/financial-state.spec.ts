@@ -552,9 +552,11 @@ test('financial state preserva ausência, ownership e idempotência de snapshot'
   await page.getByRole('button', { name: 'Nova receita' }).click();
   await page.getByLabel('Descrição').fill('Renda compartilhada');
   await page.getByLabel('Valor').fill('2500');
-  await page.getByLabel('Pertence a').selectOption('HOUSEHOLD');
+  await page.getByRole('radio', { name: /Finanças do casal/ }).check();
   await page.getByRole('button', { name: 'Salvar receita' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Receita cadastrada' })).toContainText('Receita cadastrada');
+  await expect(page.getByRole('status').filter({ hasText: 'Receita registrada em Finanças do casal.' })).toContainText(
+    'Receita registrada em Finanças do casal.',
+  );
   expect(incomePayloads).toEqual([expect.objectContaining({ ownership_scope: 'HOUSEHOLD', amount: 2500 })]);
 
   await page.getByRole('button', { name: 'Salvar retrato' }).click();
@@ -608,6 +610,7 @@ test('isola dois membros e impede que um draft atravesse a troca de household', 
   const householdB = { ...household, id: 20, name: 'Casa alternativa' };
   const secondUser = { ...authenticatedUser, id: authenticatedUser.id + 1, email: 'membro-b@fixture.local' };
   const secondToken = fakeAccessToken(Date.now() + 2 * 60 * 60_000);
+  let selectedDefault = household;
 
   await page.route('**/api/v1/me', async (route) => {
     const authorization = route.request().headers().authorization ?? '';
@@ -618,7 +621,12 @@ test('isola dois membros e impede que um draft atravesse a troca de household', 
     const path = new URL(request.url()).pathname;
     if (request.method() === 'OPTIONS') return json(route, null);
     if (path.endsWith('/financial/profile')) return json(route, { id: 1 });
-    if (path.endsWith('/households/default')) return json(route, household);
+    const defaultMatch = path.match(/\/households\/(\d+)\/default$/);
+    if (defaultMatch && request.method() === 'POST') {
+      selectedDefault = Number(defaultMatch[1]) === householdB.id ? householdB : household;
+      return json(route, selectedDefault);
+    }
+    if (path.endsWith('/households/default')) return json(route, selectedDefault);
     if (path.endsWith('/financial/households')) return json(route, [household, householdB]);
 
     const householdId = path.includes('/households/20/') ? 20 : 10;
@@ -666,18 +674,19 @@ test('isola dois membros e impede que um draft atravesse a troca de household', 
   await expect(page.getByText('Renda compartilhada E2E')).toBeVisible();
   await expect(page.getByText('Renda pessoal B E2E')).toHaveCount(0);
 
-  const selector = page.locator('select.vn-input').first();
+  const selector = page.getByRole('button', { name: /Contexto financeiro:/ });
   await page.getByRole('button', { name: 'Nova receita' }).click();
   await page.getByLabel('Descrição').fill('Draft preso ao household A');
-  await selector.selectOption('20');
-  await expect(selector).toHaveValue('10');
-  await expect(page.getByRole('dialog', { name: 'Descartar alterações não salvas?' })).toBeVisible();
-  await page.getByRole('button', { name: 'Cancelar' }).click();
+  await selector.click();
+  await page.getByRole('menuitemradio', { name: /Casa alternativa/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Mudar de contexto financeiro?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar editando' }).click();
   await expect(page.getByLabel('Descrição')).toHaveValue('Draft preso ao household A');
 
-  await selector.selectOption('20');
-  await page.getByRole('button', { name: 'Descartar e trocar' }).click();
-  await expect(selector).toHaveValue('20');
+  await selector.click();
+  await page.getByRole('menuitemradio', { name: /Casa alternativa/ }).click();
+  await page.getByRole('button', { name: 'Descartar e mudar' }).click();
+  await expect(selector.getByText('Casa alternativa')).toBeVisible();
   await expect(page.getByLabel('Descrição')).toHaveCount(0);
 
   session.activate(secondToken, secondUser);

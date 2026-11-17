@@ -9,7 +9,6 @@ import {
   Input,
   LoadingState,
   MetricCard,
-  Modal,
   MoneyInput,
   OnboardingCard,
   SectionHeader,
@@ -37,20 +36,20 @@ import {
   useCurrentFinancialPolicy,
   useCurrentFinancialState,
   useCurrentInvestmentOrchestration,
-  useDefaultHousehold,
   useFinancialPolicyHistory,
   useHouseholdExpenses,
   useHouseholdIncomes,
-  useHouseholds,
   useInvestmentOrchestrationHistory,
   useEvaluateContinuousAutopilot,
 } from '../features/financial-state/hooks/useFinancialState';
 import { useSessionToken } from '../features/auth/hooks/useAuth';
 import { ActionPlanCard } from '../features/financial-state/components/ActionPlanCard';
+import { OwnershipDestinationField } from '../features/financial-state/components/OwnershipDestinationField';
 import { FinancialPolicyCard } from '../features/financial-state/components/FinancialPolicyCard';
 import { CapitalAllocationCard } from '../features/financial-state/components/CapitalAllocationCard';
 import { InvestmentOrchestrationCard } from '../features/financial-state/components/InvestmentOrchestrationCard';
 import { ContinuousAutopilotCard } from '../features/financial-state/components/ContinuousAutopilotCard';
+import { useFinancialContext } from '../features/household/context/FinancialContextProvider';
 import type { DataQuality, MoneyValue, OwnershipScope } from '../features/financial-state/types/financialState.types';
 import { useFinancialProfile } from '../features/financial/hooks/useFinancial';
 import { getStoredUser } from '../services/api';
@@ -65,6 +64,7 @@ type IncomeDraft = {
   received_at: string;
   is_recurring: boolean;
   ownership_scope: OwnershipScope;
+  destination_household_id: number | null;
 };
 
 type ExpenseDraft = {
@@ -77,6 +77,7 @@ type ExpenseDraft = {
   is_recurring: boolean;
   expense_nature: 'FIXED' | 'VARIABLE';
   ownership_scope: OwnershipScope;
+  destination_household_id: number | null;
 };
 
 const newIncomeDraft = (): IncomeDraft => ({
@@ -86,6 +87,7 @@ const newIncomeDraft = (): IncomeDraft => ({
   received_at: localDateInputValue(),
   is_recurring: true,
   ownership_scope: 'PERSONAL',
+  destination_household_id: null,
 });
 
 const newExpenseDraft = (): ExpenseDraft => ({
@@ -98,6 +100,7 @@ const newExpenseDraft = (): ExpenseDraft => ({
   is_recurring: true,
   expense_nature: 'FIXED',
   ownership_scope: 'PERSONAL',
+  destination_household_id: null,
 });
 const incomeTypeOptions = [
   { value: 'salario', label: 'Salário' },
@@ -113,10 +116,6 @@ const categoryOptions = [
   { value: 'educacao', label: 'Educação' },
   { value: 'lazer', label: 'Lazer' },
   { value: 'outros', label: 'Outros' },
-];
-const ownershipOptions = [
-  { value: 'PERSONAL', label: 'Pessoal' },
-  { value: 'HOUSEHOLD', label: 'Compartilhada com a casa' },
 ];
 const expenseNatureOptions = [
   { value: 'FIXED', label: 'Fixa' },
@@ -219,11 +218,9 @@ export function FinancialPage() {
   const sessionToken = useSessionToken();
   const storedUser = getStoredUser<{ id?: number }>();
   const viewerUserId = typeof storedUser?.id === 'number' ? storedUser.id : null;
-  const households = useHouseholds();
-  const defaultHousehold = useDefaultHousehold();
+  const financialContext = useFinancialContext();
   const profile = useFinancialProfile();
-  const [selectedHouseholdId, setSelectedHouseholdId] = useState<number | null>(null);
-  const [pendingHouseholdSwitchId, setPendingHouseholdSwitchId] = useState<number | null>(null);
+  const selectedHouseholdId = financialContext.activeHousehold?.id ?? null;
   const [selectedActionPlanId, setSelectedActionPlanId] = useState<number | null>(null);
   const [selectedContinuousDecisionId, setSelectedContinuousDecisionId] = useState<number | null>(null);
   const [showIncomeForm, setShowIncomeForm] = useState(false);
@@ -233,17 +230,11 @@ export function FinancialPage() {
   const [incomeDirty, setIncomeDirty] = useState(false);
   const [expenseDirty, setExpenseDirty] = useState(false);
   const [formContextError, setFormContextError] = useState<string | null>(null);
-  const [incomeSaved, setIncomeSaved] = useState(false);
-  const [expenseSaved, setExpenseSaved] = useState(false);
+  const [incomeSaved, setIncomeSaved] = useState<string | null>(null);
+  const [expenseSaved, setExpenseSaved] = useState<string | null>(null);
   const [income, setIncome] = useState<IncomeDraft>(newIncomeDraft);
   const [expense, setExpense] = useState<ExpenseDraft>(newExpenseDraft);
   const previousSessionToken = useRef(sessionToken);
-
-  useEffect(() => {
-    if (selectedHouseholdId === null && defaultHousehold.data) {
-      setSelectedHouseholdId(defaultHousehold.data.id);
-    }
-  }, [defaultHousehold.data, selectedHouseholdId]);
 
   const financialState = useCurrentFinancialState(selectedHouseholdId);
   const financialPolicy = useCurrentFinancialPolicy(selectedHouseholdId);
@@ -273,8 +264,7 @@ export function FinancialPage() {
   const evaluateContinuousAutopilot = useEvaluateContinuousAutopilot(selectedHouseholdId);
   const missingProfile = (profile.error as ApiErrorShape | null)?.status === 404;
   const loadError = getActionError(
-    households.error,
-    defaultHousehold.error,
+    financialContext.error,
     financialState.error,
     incomes.error,
     expenses.error,
@@ -283,16 +273,6 @@ export function FinancialPage() {
   const entryError = getActionError(createIncome.error, createExpense.error);
   const state = financialState.data;
   const metrics = state?.metrics;
-  const hasPendingFinancialMutation = [
-    createIncome,
-    createExpense,
-    createSnapshot,
-    createPolicyDecision,
-    createAllocationDecision,
-    createOrchestrationDecision,
-    createActionPlanDecision,
-    evaluateContinuousAutopilot,
-  ].some((mutation) => mutation.isPending);
   const visibleIncomes = (incomes.data ?? []).filter(
     (item) => item.ownership_scope === 'HOUSEHOLD'
       || (viewerUserId !== null && item.user_id === viewerUserId),
@@ -313,11 +293,16 @@ export function FinancialPage() {
   useEffect(() => {
     if (!incomeSaved && !expenseSaved) return;
     const timer = window.setTimeout(() => {
-      setIncomeSaved(false);
-      setExpenseSaved(false);
+      setIncomeSaved(null);
+      setExpenseSaved(null);
     }, 3600);
     return () => window.clearTimeout(timer);
   }, [incomeSaved, expenseSaved]);
+
+  useEffect(() => financialContext.registerSwitchGuard({
+    isDirty: () => showIncomeForm || showExpenseForm || incomeDirty || expenseDirty,
+    discard: resetFinancialDrafts,
+  }), [expenseDirty, financialContext.registerSwitchGuard, incomeDirty, showExpenseForm, showIncomeForm]);
 
   useEffect(() => {
     setSelectedActionPlanId(null);
@@ -327,8 +312,6 @@ export function FinancialPage() {
   useEffect(() => {
     if (previousSessionToken.current === sessionToken) return;
     previousSessionToken.current = sessionToken;
-    setSelectedHouseholdId(null);
-    setPendingHouseholdSwitchId(null);
     setSelectedActionPlanId(null);
     setSelectedContinuousDecisionId(null);
     setShowIncomeForm(false);
@@ -339,8 +322,8 @@ export function FinancialPage() {
     setExpenseDirty(false);
     setIncome(newIncomeDraft());
     setExpense(newExpenseDraft());
-    setIncomeSaved(false);
-    setExpenseSaved(false);
+    setIncomeSaved(null);
+    setExpenseSaved(null);
     setFormContextError(null);
   }, [sessionToken]);
 
@@ -353,26 +336,9 @@ export function FinancialPage() {
     setExpenseDirty(false);
     setIncome(newIncomeDraft());
     setExpense(newExpenseDraft());
-    setIncomeSaved(false);
-    setExpenseSaved(false);
+    setIncomeSaved(null);
+    setExpenseSaved(null);
     setFormContextError(null);
-  }
-
-  function completeHouseholdSwitch(householdId: number) {
-    resetFinancialDrafts();
-    setPendingHouseholdSwitchId(null);
-    setSelectedActionPlanId(null);
-    setSelectedContinuousDecisionId(null);
-    setSelectedHouseholdId(householdId);
-  }
-
-  function requestHouseholdSwitch(householdId: number) {
-    if (householdId === selectedHouseholdId || hasPendingFinancialMutation) return;
-    if (incomeDirty || expenseDirty) {
-      setPendingHouseholdSwitchId(householdId);
-      return;
-    }
-    completeHouseholdSwitch(householdId);
   }
 
   function toggleIncomeForm() {
@@ -414,19 +380,31 @@ export function FinancialPage() {
       incomeFormHouseholdId === null
       || incomeFormHouseholdId !== selectedHouseholdId
     ) {
-      setFormContextError('A casa selecionada mudou. Revise o formulário antes de salvar.');
+      setFormContextError('O contexto financeiro mudou. Revise o formulário antes de salvar.');
       return;
     }
+    const destination = financialContext.households.find(
+      (household) => household.id === income.destination_household_id,
+    );
+    if (!destination) {
+      setFormContextError('Escolha onde deseja registrar esta receita.');
+      return;
+    }
+    const { destination_household_id: _destinationId, ...incomePayload } = income;
     await createIncome.mutateAsync({
-      householdId: incomeFormHouseholdId,
+      householdId: destination.id,
       sessionToken,
-      payload: { ...income, amount: Number(income.amount) },
+      payload: {
+        ...incomePayload,
+        ownership_scope: destination.household_type === 'PERSONAL' ? 'PERSONAL' : 'HOUSEHOLD',
+        amount: Number(income.amount),
+      },
     });
     setIncome(newIncomeDraft());
     setIncomeFormHouseholdId(null);
     setIncomeDirty(false);
     setShowIncomeForm(false);
-    setIncomeSaved(true);
+    setIncomeSaved(`Receita registrada em ${destination.household_type === 'PERSONAL' ? 'Minhas finanças' : 'Finanças do casal'}.`);
     setFormContextError(null);
   }
 
@@ -437,14 +415,23 @@ export function FinancialPage() {
       expenseFormHouseholdId === null
       || expenseFormHouseholdId !== selectedHouseholdId
     ) {
-      setFormContextError('A casa selecionada mudou. Revise o formulário antes de salvar.');
+      setFormContextError('O contexto financeiro mudou. Revise o formulário antes de salvar.');
       return;
     }
+    const destination = financialContext.households.find(
+      (household) => household.id === expense.destination_household_id,
+    );
+    if (!destination) {
+      setFormContextError('Escolha onde deseja registrar esta despesa.');
+      return;
+    }
+    const { destination_household_id: _destinationId, ...expensePayload } = expense;
     await createExpense.mutateAsync({
-      householdId: expenseFormHouseholdId,
+      householdId: destination.id,
       sessionToken,
       payload: {
-        ...expense,
+        ...expensePayload,
+        ownership_scope: destination.household_type === 'PERSONAL' ? 'PERSONAL' : 'HOUSEHOLD',
         amount: Number(expense.amount),
         paid_at: expense.paid_at || null,
       },
@@ -453,13 +440,11 @@ export function FinancialPage() {
     setExpenseFormHouseholdId(null);
     setExpenseDirty(false);
     setShowExpenseForm(false);
-    setExpenseSaved(true);
+    setExpenseSaved(`Despesa registrada em ${destination.household_type === 'PERSONAL' ? 'Minhas finanças' : 'Finanças do casal'}.`);
     setFormContextError(null);
   }
 
   function reload() {
-    households.refetch();
-    defaultHousehold.refetch();
     financialState.refetch();
     financialPolicy.refetch();
     policyHistory.refetch();
@@ -503,47 +488,11 @@ export function FinancialPage() {
       {createOrchestrationDecision.isSuccess && <Toast message="Estratégia de investimento salva no histórico." />}
       {createActionPlanDecision.isSuccess && <Toast message="Plano de ação salvo no histórico." />}
       {evaluateContinuousAutopilot.isSuccess && <Toast message="Seu plano foi reavaliado com segurança." />}
-      {incomeSaved && <Toast message="Receita cadastrada com sucesso." />}
-      {expenseSaved && <Toast message="Despesa cadastrada com sucesso." />}
+      {incomeSaved && <Toast message={incomeSaved} />}
+      {expenseSaved && <Toast message={expenseSaved} />}
       {missingProfile && <OnboardingCard onCompleted={reload} />}
 
-      {(households.isLoading || defaultHousehold.isLoading || (selectedHouseholdId !== null && (financialState.isLoading || incomes.isLoading || expenses.isLoading))) && <Card><LoadingState label="Organizando sua situação financeira..." /></Card>}
-
-      {households.data && households.data.length > 1 && (
-        <Card title="Visão financeira" description="Alterne entre sua situação pessoal e as casas das quais você participa.">
-          <label className="vn-field">
-            <span>Casa</span>
-            <select
-              className="vn-input"
-              value={selectedHouseholdId ?? ''}
-              onChange={(event) => requestHouseholdSwitch(Number(event.target.value))}
-              disabled={hasPendingFinancialMutation}
-            >
-              {households.data.map((household) => <option key={household.id} value={household.id}>{household.name}</option>)}
-            </select>
-          </label>
-        </Card>
-      )}
-
-      <Modal
-        open={pendingHouseholdSwitchId !== null}
-        title="Descartar alterações não salvas?"
-        onClose={() => setPendingHouseholdSwitchId(null)}
-      >
-        <p>Trocar de casa descartará os dados ainda não salvos deste formulário.</p>
-        <div className="vn-actions">
-          <Button variant="secondary" onClick={() => setPendingHouseholdSwitchId(null)}>Cancelar</Button>
-          <Button
-            onClick={() => {
-              if (pendingHouseholdSwitchId !== null) {
-                completeHouseholdSwitch(pendingHouseholdSwitchId);
-              }
-            }}
-          >
-            Descartar e trocar
-          </Button>
-        </div>
-      </Modal>
+      {(financialContext.isLoading || (selectedHouseholdId !== null && (financialState.isLoading || incomes.isLoading || expenses.isLoading))) && <Card><LoadingState label="Organizando sua situação financeira..." /></Card>}
 
       {selectedHouseholdId !== null && (
         <div className="vn-grid vn-grid--two">
@@ -561,10 +510,16 @@ export function FinancialPage() {
             )}
             {showIncomeForm && (
               <form className="vn-form vn-compact-form" onSubmit={submitIncome}>
+                <OwnershipDestinationField
+                  name="financial-page-income-destination"
+                  households={financialContext.households}
+                  value={income.destination_household_id}
+                  suggestedHouseholdId={selectedHouseholdId}
+                  onChange={(destination_household_id) => updateIncome({ destination_household_id })}
+                />
                 <Input label="Descrição" placeholder="Ex.: Salário CLT" value={income.description} onChange={(event) => updateIncome({ description: event.target.value })} required />
                 <MoneyInput label="Valor" value={income.amount} onChange={(event) => updateIncome({ amount: event.target.value })} required />
                 <SelectField label="Tipo" value={income.income_type} onChange={(event) => updateIncome({ income_type: event.target.value })} options={incomeTypeOptions} />
-                <SelectField label="Pertence a" value={income.ownership_scope} onChange={(event) => updateIncome({ ownership_scope: event.target.value as OwnershipScope })} options={ownershipOptions} />
                 <FormField label="Data de recebimento"><input className="vn-input" type="date" value={income.received_at} onChange={(event) => updateIncome({ received_at: event.target.value })} required /></FormField>
                 <ToggleField label="Receita recorrente" checked={income.is_recurring} onChange={(event) => updateIncome({ is_recurring: event.target.checked })} />
                 <SubmitButton loading={createIncome.isPending}>Salvar receita</SubmitButton>
@@ -616,11 +571,17 @@ export function FinancialPage() {
             )}
             {showExpenseForm && (
               <form className="vn-form vn-compact-form" onSubmit={submitExpense}>
+                <OwnershipDestinationField
+                  name="financial-page-expense-destination"
+                  households={financialContext.households}
+                  value={expense.destination_household_id}
+                  suggestedHouseholdId={selectedHouseholdId}
+                  onChange={(destination_household_id) => updateExpense({ destination_household_id })}
+                />
                 <Input label="Descrição" placeholder="Ex.: Aluguel" value={expense.description} onChange={(event) => updateExpense({ description: event.target.value })} required />
                 <MoneyInput label="Valor" value={expense.amount} onChange={(event) => updateExpense({ amount: event.target.value })} required />
                 <SelectField label="Categoria" value={expense.category} onChange={(event) => updateExpense({ category: event.target.value })} options={categoryOptions} />
                 <SelectField label="Natureza" value={expense.expense_nature} onChange={(event) => updateExpense({ expense_nature: event.target.value as 'FIXED' | 'VARIABLE' })} options={expenseNatureOptions} />
-                <SelectField label="Pertence a" value={expense.ownership_scope} onChange={(event) => updateExpense({ ownership_scope: event.target.value as OwnershipScope })} options={ownershipOptions} />
                 <FormField label="Vencimento"><input className="vn-input" type="date" value={expense.due_date} onChange={(event) => updateExpense({ due_date: event.target.value })} required /></FormField>
                 <FormField label="Pagamento"><input className="vn-input" type="date" value={expense.paid_at} onChange={(event) => updateExpense({ paid_at: event.target.value })} /></FormField>
                 <ToggleField label="Despesa paga" checked={expense.is_paid} onChange={(event) => updateExpense({ is_paid: event.target.checked })} />

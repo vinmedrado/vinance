@@ -163,7 +163,10 @@ async function createEditDelete(
 ) {
   const card = page.getByRole('heading', { name: sectionTitle, exact: true }).locator('xpath=ancestor::section[1]');
   await card.getByRole('button', { name: 'Adicionar', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: createDialogTitle })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: createDialogTitle });
+  await expect(dialog).toBeVisible();
+  const destination = dialog.getByRole('radio');
+  if (await destination.count()) await destination.first().check();
   await fillCreate();
   await page.getByRole('button', { name: 'Salvar', exact: true }).click();
   await expect(card.getByText(originalName, { exact: true })).toBeVisible();

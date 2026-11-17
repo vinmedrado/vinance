@@ -1,0 +1,475 @@
+/* Financial context and audited PERSONAL -> HOUSEHOLD transfer workflow.
+ * Kept separate from the unpublished shell redesign so this release remains
+ * compatible with the currently published Vinance layout.
+ */
+
+.vn-topbar__financial-context {
+  min-width: 0;
+  margin-left: auto;
+}
+
+.vn-financial-context-switcher {
+  position: relative;
+  min-width: 0;
+}
+
+.vn-financial-context-switcher__trigger {
+  width: clamp(160px, 22vw, 220px);
+  min-height: 44px;
+  padding: 6px 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--vn-border-strong);
+  border-radius: var(--vn-radius-sm);
+  background: var(--vn-surface);
+  color: var(--vn-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vn-financial-context-switcher__trigger > span,
+.vn-financial-context-switcher__menu > button span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.vn-financial-context-switcher__trigger strong,
+.vn-financial-context-switcher__trigger small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vn-financial-context-switcher__trigger strong {
+  font-size: 0.78rem;
+  font-weight: 770;
+}
+
+.vn-financial-context-switcher__trigger small,
+.vn-financial-context-switcher__menu small {
+  color: var(--vn-subtle);
+  font-size: 0.7rem;
+}
+
+.vn-financial-context-switcher__trigger:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.vn-financial-context-switcher__error {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 91;
+  width: min(320px, calc(100vw - 32px));
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--vn-danger);
+  border-radius: var(--vn-radius-sm);
+  background: var(--vn-bg-soft);
+  color: var(--vn-text);
+  font-size: 0.75rem;
+}
+
+.vn-financial-context-switcher__menu {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 90;
+  width: min(390px, calc(100vw - 32px));
+  padding: 8px;
+  border: 1px solid var(--vn-border-strong);
+  border-radius: var(--vn-radius);
+  background: var(--vn-bg-soft);
+  box-shadow: var(--vn-shadow);
+}
+
+.vn-financial-context-switcher__menu header {
+  padding: 10px 10px 8px;
+}
+
+.vn-financial-context-switcher__menu header strong,
+.vn-financial-context-switcher__menu > button strong {
+  font-size: 0.82rem;
+}
+
+.vn-financial-context-switcher__menu header p {
+  margin: 3px 0 0;
+  color: var(--vn-subtle);
+  font-size: 0.73rem;
+}
+
+.vn-financial-context-switcher__menu > button {
+  width: 100%;
+  min-height: 58px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--vn-radius-sm);
+  background: transparent;
+  color: var(--vn-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vn-financial-context-switcher__menu > button:hover,
+.vn-financial-context-switcher__menu > button.is-active {
+  border-color: var(--vn-border);
+  background: var(--vn-surface);
+}
+
+.vn-financial-context-switcher__menu > button small {
+  line-height: 1.35;
+}
+
+.vn-financial-context-switcher__menu > button i {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--vn-border-strong);
+  border-radius: 50%;
+}
+
+.vn-financial-context-switcher__menu > button.is-active i {
+  border-color: var(--vn-primary);
+  background: var(--vn-primary);
+}
+
+.vn-financial-context-switcher button:focus-visible,
+.vn-destination-field input:focus-visible,
+.vn-transfer-select input:focus-visible,
+.vn-transfer-dialog__review input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--vn-primary) 68%, white);
+  outline-offset: 3px;
+}
+
+.vn-context-confirmation,
+.vn-transfer-dialog {
+  display: grid;
+  gap: 16px;
+}
+
+.vn-context-confirmation p,
+.vn-transfer-dialog > p {
+  margin: 0;
+  color: var(--vn-muted);
+}
+
+.vn-context-confirmation .vn-context-confirmation__error {
+  color: var(--vn-danger);
+  font-weight: 700;
+}
+
+.vn-destination-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.vn-destination-field > legend {
+  padding: 0;
+  color: var(--vn-text);
+  font-size: 0.88rem;
+  font-weight: 760;
+}
+
+.vn-destination-field > p {
+  margin: 4px 0 10px;
+  color: var(--vn-muted);
+  font-size: 0.78rem;
+}
+
+.vn-destination-field__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.vn-destination-field__options label {
+  min-width: 0;
+  min-height: 78px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  border: 1px solid var(--vn-border);
+  border-radius: var(--vn-radius-sm);
+  background: var(--vn-surface);
+  cursor: pointer;
+}
+
+.vn-destination-field__options label.is-selected {
+  border-color: var(--vn-primary);
+  background: var(--vn-primary-soft);
+}
+
+.vn-destination-field__options input,
+.vn-transfer-dialog__review input,
+.vn-transfer-select input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--vn-primary);
+}
+
+.vn-destination-field__options input {
+  margin: 1px 0 0;
+}
+
+.vn-destination-field__options label > svg {
+  margin-top: 1px;
+  color: var(--vn-primary);
+}
+
+.vn-destination-field__options label > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.vn-destination-field__options strong {
+  font-size: 0.84rem;
+}
+
+.vn-destination-field__options small {
+  color: var(--vn-muted);
+  line-height: 1.45;
+}
+
+.vn-destination-field__options em {
+  width: fit-content;
+  color: var(--vn-primary);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.vn-context-guidance {
+  min-width: 0;
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-block: 1px solid var(--vn-border);
+}
+
+.vn-context-guidance > div:first-child {
+  min-width: 0;
+}
+
+.vn-context-guidance strong {
+  font-size: 0.9rem;
+}
+
+.vn-context-guidance p {
+  margin: 3px 0 0;
+  color: var(--vn-muted);
+  font-size: 0.8rem;
+}
+
+.vn-context-guidance--review {
+  border-top: 3px solid var(--vn-primary);
+}
+
+.vn-transfer-target {
+  max-width: 420px;
+}
+
+.vn-transfer-select {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -8px 8px -8px -8px;
+  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vn-transfer-select input {
+  margin: 0;
+}
+
+.vn-transfer-batch {
+  margin-top: 12px;
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--vn-border);
+  color: var(--vn-muted);
+  font-size: 0.8rem;
+}
+
+.vn-transfer-dialog__route {
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-block: 1px solid var(--vn-border);
+}
+
+.vn-transfer-dialog__route span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 720;
+}
+
+.vn-transfer-dialog__route span:last-child {
+  justify-content: flex-end;
+}
+
+.vn-transfer-dialog__atomic {
+  font-size: 0.78rem;
+}
+
+.vn-transfer-dialog__records {
+  display: grid;
+  gap: 0;
+  border-block: 1px solid var(--vn-border);
+}
+
+.vn-transfer-dialog__records > div {
+  padding: 11px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  border-bottom: 1px solid var(--vn-border);
+}
+
+.vn-transfer-dialog__records > div:last-child {
+  border-bottom: 0;
+}
+
+.vn-transfer-dialog__records span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.vn-transfer-dialog__records small {
+  color: var(--vn-muted);
+}
+
+.vn-transfer-dialog__duplicate {
+  grid-column: 1 / -1;
+  padding: 9px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  background: color-mix(in srgb, var(--vn-warning) 10%, var(--vn-surface));
+  color: var(--vn-text);
+}
+
+.vn-transfer-dialog__duplicate ul {
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--vn-border);
+  list-style: none;
+}
+
+.vn-transfer-dialog__duplicate li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.74rem;
+}
+
+.vn-transfer-dialog__review {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  font-size: 0.8rem;
+}
+
+.vn-transfer-dialog__review input {
+  margin: 0;
+}
+
+@media (max-width: 1040px) {
+  .vn-topbar {
+    gap: 10px;
+  }
+
+  .vn-topbar__financial-context {
+    margin-left: auto;
+  }
+
+  .vn-financial-context-switcher__trigger {
+    width: clamp(150px, 43vw, 205px);
+  }
+}
+
+@media (max-width: 600px) {
+  .vn-topbar__identity {
+    flex: 0 1 auto;
+  }
+
+  .vn-financial-context-switcher__trigger {
+    width: clamp(142px, 42vw, 184px);
+  }
+
+  .vn-destination-field__options,
+  .vn-transfer-dialog__route {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vn-context-guidance,
+  .vn-context-guidance .vn-inline-actions,
+  .vn-transfer-batch {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vn-context-guidance .vn-button,
+  .vn-transfer-batch .vn-button {
+    width: 100%;
+  }
+
+  .vn-transfer-dialog__route b {
+    transform: rotate(90deg);
+    text-align: center;
+  }
+
+  .vn-transfer-dialog__route span:last-child {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 390px) {
+  .vn-topbar {
+    padding-inline: 10px;
+    gap: 7px;
+  }
+
+  .vn-financial-context-switcher__trigger {
+    width: 145px;
+    padding-inline: 8px;
+  }
+
+  .vn-financial-context-switcher__trigger strong {
+    font-size: 0.72rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vn-financial-context-switcher *,
+  .vn-context-guidance * {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}

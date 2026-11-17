@@ -4,6 +4,7 @@ import { isAuthenticated } from '../services/api';
 import { RequireAuth } from '../features/auth/components/RequireAuth';
 import { AppLayout } from '../layouts/AppLayout';
 import { LoginPage } from '../pages/LoginPage';
+import { FinancialContextProvider } from '../features/household/context/FinancialContextProvider';
 
 const DashboardPage = lazy(() => import('../pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
 const FinancialPage = lazy(() => import('../pages/FinancialPage').then((module) => ({ default: module.FinancialPage })));
@@ -28,7 +29,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>}>
+      <Route path="/" element={<RequireAuth><FinancialContextProvider><AppLayout /></FinancialContextProvider></RequireAuth>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={lazyPage(<DashboardPage />)} />
         <Route path="financial" element={lazyPage(<FinancialPage />)} />

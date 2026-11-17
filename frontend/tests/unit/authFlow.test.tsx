@@ -20,6 +20,26 @@ const authService = vi.hoisted(() => ({
 
 vi.mock('../../src/features/auth/services/auth.service', () => authService);
 
+vi.mock('../../src/features/household/context/FinancialContextProvider', () => ({
+  financialContextCopy: () => ({
+    label: 'Minhas finanças',
+    description: 'Informações particulares.',
+  }),
+  useFinancialContext: () => ({
+    activeHousehold: { id: 34, name: 'Casa de teste', household_type: 'PERSONAL', status: 'ACTIVE' },
+    personalHousehold: { id: 34, name: 'Casa de teste', household_type: 'PERSONAL', status: 'ACTIVE' },
+    sharedHouseholds: [],
+    households: [{ id: 34, name: 'Casa de teste', household_type: 'PERSONAL', status: 'ACTIVE' }],
+    label: 'Minhas finanças',
+    description: 'Informações particulares, visíveis somente para você.',
+    isLoading: false,
+    isSwitching: false,
+    error: null,
+    switchContext: vi.fn(),
+    registerSwitchGuard: vi.fn(() => () => undefined),
+  }),
+}));
+
 function LoginProbe() {
   const location = useLocation();
   const reason = (location.state as { reason?: string } | null)?.reason ?? 'none';

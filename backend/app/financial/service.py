@@ -10,6 +10,7 @@ from backend.app.financial.budget_engine import calculate_budget_strategy
 from backend.app.financial.models import Expense, FinancialProfile, Income
 from backend.app.financial.schemas import ExpenseCreate, FinancialProfileCreate, IncomeCreate
 from backend.app.financial.scoring import calculate_financial_score
+from backend.app.financial_state.models import Household
 from backend.app.financial_state.service import get_default_household
 
 
@@ -115,8 +116,13 @@ async def _sum_user_expenses_30d(session: AsyncSession, *, user_id: int, today: 
     start = today or date.today()
     end = start + timedelta(days=30)
     result = await session.execute(
-        select(func.coalesce(func.sum(Expense.amount), 0)).where(
+        select(func.coalesce(func.sum(Expense.amount), 0))
+        .join(Household, Household.id == Expense.household_id)
+        .where(
             Expense.user_id == user_id,
+            Expense.ownership_scope == "PERSONAL",
+            Household.household_type == "PERSONAL",
+            Household.status == "ACTIVE",
             Expense.due_date >= start,
             Expense.due_date <= end,
         )

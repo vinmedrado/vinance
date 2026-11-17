@@ -4,6 +4,8 @@ import { BarChart3, Brain, FlaskConical, House, KeyRound, Landmark, LayoutDashbo
 import { Button } from '../components';
 import { useLogout, useCurrentUser } from '../features/auth/hooks/useAuth';
 import { useThemeMode } from '../hooks/useThemeMode';
+import { FinancialContextSwitcher } from '../features/household/components/FinancialContextSwitcher';
+import { SharedFinanceIntro } from '../features/household/components/SharedFinanceIntro';
 
 type NavigationItem = {
   label: string;
@@ -133,6 +135,9 @@ export function AppLayout() {
             <span className="vn-topbar__product">Vinance</span>
             <strong>{user?.full_name || user?.email || 'Sessão autenticada'}</strong>
           </div>
+          <div className="vn-topbar__financial-context">
+            <FinancialContextSwitcher compact />
+          </div>
           <div className="vn-topbar__actions vn-desktop-actions">
             <Button variant="ghost" onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}>{mode === 'dark' ? 'Tema claro' : 'Tema escuro'}</Button>
             <Button variant="secondary" onClick={handleLogout}><LogOut size={16} /> Sair</Button>
@@ -142,7 +147,10 @@ export function AppLayout() {
             <span>Menu</span>
           </button>
         </header>
-        <div className="vn-content"><Outlet /></div>
+        <div className="vn-content">
+          <SharedFinanceIntro />
+          <Outlet />
+        </div>
       </main>
 
       <nav className="vn-bottom-nav" aria-label="Navegação principal no celular">

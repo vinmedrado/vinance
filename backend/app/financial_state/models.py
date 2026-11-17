@@ -145,6 +145,115 @@ class HouseholdInvitation(Base):
     )
 
 
+class FinancialRecordTransfer(Base):
+    """Immutable audit header for one atomic PERSONAL -> HOUSEHOLD transfer."""
+
+    __tablename__ = "financial_record_transfers"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_user_id",
+            "idempotency_key",
+            name="uq_financial_record_transfers_actor_idempotency",
+        ),
+        CheckConstraint(
+            "resource_type IN ('INCOME','EXPENSE')",
+            name="ck_financial_record_transfers_resource_type",
+        ),
+        CheckConstraint(
+            "record_count BETWEEN 1 AND 100",
+            name="ck_financial_record_transfers_record_count",
+        ),
+        CheckConstraint(
+            "status = 'COMMITTED'",
+            name="ck_financial_record_transfers_status",
+        ),
+        Index(
+            "ix_financial_record_transfers_actor_created",
+            "actor_user_id",
+            "created_at",
+        ),
+        Index(
+            "ix_financial_record_transfers_target_created",
+            "target_household_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    actor_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    target_household_id: Mapped[int] = mapped_column(
+        ForeignKey("households.id", ondelete="RESTRICT"), nullable=False
+    )
+    resource_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    record_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    duplicate_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="COMMITTED")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class FinancialRecordTransferItem(Base):
+    """Per-record before image and visibility transition for audit/recovery."""
+
+    __tablename__ = "financial_record_transfer_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "resource_type",
+            "resource_id",
+            name="uq_financial_record_transfer_items_resource",
+        ),
+        CheckConstraint(
+            "resource_type IN ('INCOME','EXPENSE')",
+            name="ck_financial_record_transfer_items_resource_type",
+        ),
+        CheckConstraint(
+            "source_ownership_scope = 'PERSONAL'",
+            name="ck_financial_record_transfer_items_source_scope",
+        ),
+        CheckConstraint(
+            "target_ownership_scope = 'HOUSEHOLD'",
+            name="ck_financial_record_transfer_items_target_scope",
+        ),
+        CheckConstraint(
+            "possible_duplicate_count >= 0",
+            name="ck_financial_record_transfer_items_duplicate_count",
+        ),
+        Index(
+            "ix_financial_record_transfer_items_transfer",
+            "transfer_id",
+            "id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    transfer_id: Mapped[int] = mapped_column(
+        ForeignKey("financial_record_transfers.id", ondelete="CASCADE"), nullable=False
+    )
+    resource_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    resource_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    source_household_id: Mapped[int] = mapped_column(
+        ForeignKey("households.id", ondelete="RESTRICT"), nullable=False
+    )
+    target_household_id: Mapped[int] = mapped_column(
+        ForeignKey("households.id", ondelete="RESTRICT"), nullable=False
+    )
+    source_ownership_scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_ownership_scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    before_data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    possible_duplicate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class FinancialLiability(Base):
     __tablename__ = "financial_liabilities"
     __table_args__ = (

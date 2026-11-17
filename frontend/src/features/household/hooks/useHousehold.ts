@@ -171,13 +171,17 @@ export function useRemoveMember() {
 
 export function useSetDefaultHousehold() {
   const currentToken = useSessionToken();
+  const client = useQueryClient();
   const invalidate = useInvalidateHouseholds();
   return useMutation({
     mutationFn: (request: ScopedRequest) => {
       assertSession(request.sessionToken, currentToken);
       return setDefaultHousehold(request.householdId);
     },
-    onSuccess: (_data, request) => invalidate(request.sessionToken, request.householdId),
+    onSuccess: (data, request) => {
+      client.setQueryData(householdQueryKey(request.sessionToken, 'default'), data);
+      invalidate(request.sessionToken, request.householdId);
+    },
   });
 }
 

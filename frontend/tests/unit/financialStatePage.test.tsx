@@ -53,9 +53,25 @@ const service = vi.hoisted(() => ({
 }));
 
 const financialHooks = vi.hoisted(() => ({ useFinancialProfile: vi.fn() }));
+const financialContext = vi.hoisted(() => ({
+  activeHousehold: null as any,
+  personalHousehold: null as any,
+  sharedHouseholds: [] as any[],
+  households: [] as any[],
+  label: 'Minhas finanças',
+  description: 'Informações particulares, visíveis somente para você.',
+  isLoading: false,
+  isSwitching: false,
+  error: null as unknown,
+  switchContext: vi.fn(),
+  registerSwitchGuard: vi.fn((_guard: { isDirty: () => boolean; discard: () => void }) => () => undefined),
+}));
 
 vi.mock('../../src/features/financial-state/services/financialState.service', () => service);
 vi.mock('../../src/features/financial/hooks/useFinancial', () => financialHooks);
+vi.mock('../../src/features/household/context/FinancialContextProvider', () => ({
+  useFinancialContext: () => financialContext,
+}));
 
 const household: Household = {
   id: 10,
@@ -503,6 +519,19 @@ beforeEach(() => {
   clearSession('logout');
   service.listHouseholds.mockReset().mockResolvedValue([household]);
   service.getDefaultHousehold.mockReset().mockResolvedValue(household);
+  Object.assign(financialContext, {
+    activeHousehold: household,
+    personalHousehold: household,
+    sharedHouseholds: [],
+    households: [household],
+    label: 'Minhas finanças',
+    description: 'Informações particulares, visíveis somente para você.',
+    isLoading: false,
+    isSwitching: false,
+    error: null,
+  });
+  financialContext.registerSwitchGuard.mockClear();
+  financialContext.switchContext.mockReset();
   service.getCurrentFinancialState.mockReset().mockResolvedValue(state);
   service.getCurrentFinancialPolicy.mockReset().mockResolvedValue(policy);
   service.getFinancialPolicyHistory.mockReset().mockResolvedValue({ items: [], total: 0 });
@@ -601,7 +630,7 @@ test('não reutiliza dados financeiros quando a identidade da sessão muda', asy
   expect(service.getCurrentCapitalAllocation).toHaveBeenCalledTimes(2);
   expect(service.getCurrentInvestmentOrchestration).toHaveBeenCalledTimes(2);
   expect(service.getCurrentActionPlan).toHaveBeenCalledTimes(2);
-  expect(service.listHouseholds).toHaveBeenCalledTimes(2);
+  expect(service.listHouseholds).not.toHaveBeenCalled();
 });
 
 test('isola falha da política sem esconder o Financial State', async () => {
@@ -712,7 +741,6 @@ test('congela o plano de ação com chave idempotente própria', async () => {
 });
 
 test('mantém a estratégia congelada no cache do household que iniciou o POST', async () => {
-  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
   let resolveOrchestration!: (decision: InvestmentOrchestration) => void;
   service.createInvestmentOrchestrationDecision.mockReturnValueOnce(
     new Promise<InvestmentOrchestration>((resolve) => { resolveOrchestration = resolve; }),
@@ -721,7 +749,6 @@ test('mantém a estratégia congelada no cache do household que iniciou o POST',
   const setQueryData = vi.spyOn(client, 'setQueryData');
 
   await userEvent.click(await screen.findByRole('button', { name: 'Salvar estratégia' }));
-  await userEvent.selectOptions(screen.getByLabelText('Casa'), '20');
   act(() => resolveOrchestration({
     ...orchestration,
     orchestration_id: 31,
@@ -744,7 +771,6 @@ test('mantém a estratégia congelada no cache do household que iniciou o POST',
 });
 
 test('mantém o plano congelado no cache do household que iniciou o POST', async () => {
-  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
   let resolveAllocation!: (decision: CapitalAllocation) => void;
   service.createCapitalAllocationDecision.mockReturnValueOnce(
     new Promise<CapitalAllocation>((resolve) => { resolveAllocation = resolve; }),
@@ -754,7 +780,6 @@ test('mantém o plano congelado no cache do household que iniciou o POST', async
   const invalidateQueries = vi.spyOn(client, 'invalidateQueries');
 
   await userEvent.click(await screen.findByRole('button', { name: 'Salvar plano' }));
-  await userEvent.selectOptions(screen.getByLabelText('Casa'), '20');
   act(() => resolveAllocation({
     ...allocation,
     allocation_id: 23,
@@ -782,7 +807,6 @@ test('mantém o plano congelado no cache do household que iniciou o POST', async
 });
 
 test('mantém a resposta da decisão no cache do household que iniciou o POST', async () => {
-  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
   let resolveDecision!: (decision: FinancialPolicy) => void;
   service.createFinancialPolicyDecision.mockReturnValueOnce(
     new Promise<FinancialPolicy>((resolve) => { resolveDecision = resolve; }),
@@ -795,7 +819,6 @@ test('mantém a resposta da decisão no cache do household que iniciou o POST', 
     10,
     'financial-policy-10-00000000-0000-4000-8000-000000000001',
   ));
-  await userEvent.selectOptions(screen.getByLabelText('Casa'), '20');
   act(() => resolveDecision({
     ...policy,
     policy_id: 17,
@@ -863,6 +886,7 @@ test('mantém o cadastro de receita e envia ownership explícito ao household se
 
   await screen.findByRole('heading', { name: 'Minha situação financeira' });
   await user.click(await screen.findByRole('button', { name: 'Nova receita' }));
+  await user.click(screen.getByRole('radio', { name: /Minhas finanças/ }));
   await user.type(screen.getByLabelText('Descrição'), 'Salário');
   await user.type(screen.getByLabelText('Valor'), '5000');
   await user.click(screen.getByRole('button', { name: 'Salvar receita' }));
@@ -874,51 +898,31 @@ test('mantém o cadastro de receita e envia ownership explícito ao household se
   })));
 });
 
-test('mantém o draft no household original até o usuário confirmar o descarte', async () => {
-  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
+test('protege o formulário de receita aberto antes da primeira digitação', async () => {
   const user = userEvent.setup();
   renderPage();
-
-  const selector = await screen.findByLabelText('Casa');
-  await user.click(screen.getByRole('button', { name: 'Nova receita' }));
-  await user.type(screen.getByLabelText('Descrição'), 'Rascunho do household A');
-  await user.selectOptions(selector, '20');
-
-  expect(selector).toHaveValue('10');
-  expect(screen.getByRole('dialog', { name: 'Descartar alterações não salvas?' })).toBeInTheDocument();
-  expect(screen.getByLabelText('Descrição')).toHaveValue('Rascunho do household A');
-
-  await user.click(screen.getByRole('button', { name: 'Cancelar' }));
-  expect(selector).toHaveValue('10');
-  expect(screen.getByLabelText('Descrição')).toHaveValue('Rascunho do household A');
-
-  await user.selectOptions(selector, '20');
-  await user.click(screen.getByRole('button', { name: 'Descartar e trocar' }));
-  expect(selector).toHaveValue('20');
-  expect(screen.queryByLabelText('Descrição')).not.toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: 'Nova receita' }));
   expect(screen.getByLabelText('Descrição')).toHaveValue('');
+  const guard = financialContext.registerSwitchGuard.mock.calls.at(-1)?.[0];
+  expect(guard?.isDirty()).toBe(true);
+  act(() => guard?.discard());
+  expect(screen.queryByLabelText('Descrição')).not.toBeInTheDocument();
 });
 
-test('descarta também draft de despesa antes de trocar de household', async () => {
-  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
+test('registra também o draft de despesa no guard global', async () => {
   const user = userEvent.setup();
   renderPage();
 
-  const selector = await screen.findByLabelText('Casa');
   await user.click(screen.getByRole('button', { name: 'Nova despesa' }));
   await user.type(screen.getByLabelText('Descrição'), 'Despesa privada A');
-  await user.selectOptions(selector, '20');
-
-  expect(selector).toHaveValue('10');
-  await user.click(screen.getByRole('button', { name: 'Descartar e trocar' }));
-  expect(selector).toHaveValue('20');
+  const guard = financialContext.registerSwitchGuard.mock.calls.at(-1)?.[0];
+  expect(guard?.isDirty()).toBe(true);
+  act(() => guard?.discard());
   expect(screen.queryByDisplayValue('Despesa privada A')).not.toBeInTheDocument();
 });
 
-test('impede troca durante mutation e invalida somente o household capturado', async () => {
-  service.listHouseholds.mockResolvedValueOnce([household, secondHousehold]);
+test('mantém o guard ativo durante mutation e invalida somente o household capturado', async () => {
   let resolveIncome!: (value: { id: number }) => void;
   service.createIncome.mockReturnValueOnce(
     new Promise<{ id: number }>((resolve) => { resolveIncome = resolve; }),
@@ -927,8 +931,8 @@ test('impede troca durante mutation e invalida somente o household capturado', a
   const { client } = renderPage();
   const invalidateQueries = vi.spyOn(client, 'invalidateQueries');
 
-  const selector = await screen.findByLabelText('Casa');
   await user.click(screen.getByRole('button', { name: 'Nova receita' }));
+  await user.click(screen.getByRole('radio', { name: /Minhas finanças/ }));
   await user.type(screen.getByLabelText('Descrição'), 'Salário A');
   await user.type(screen.getByLabelText('Valor'), '5000');
   await user.click(screen.getByRole('button', { name: 'Salvar receita' }));
@@ -937,11 +941,11 @@ test('impede troca durante mutation e invalida somente o household capturado', a
     10,
     expect.objectContaining({ description: 'Salário A' }),
   ));
-  expect(selector).toBeDisabled();
-  expect(selector).toHaveValue('10');
+  const guard = financialContext.registerSwitchGuard.mock.calls.at(-1)?.[0];
+  expect(guard?.isDirty()).toBe(true);
 
   act(() => resolveIncome({ id: 1 }));
-  await waitFor(() => expect(selector).not.toBeDisabled());
+  await waitFor(() => expect(screen.queryByLabelText('Descrição')).not.toBeInTheDocument());
   expect(invalidateQueries).toHaveBeenCalledWith({
     queryKey: financialStateQueryKey(null, 'incomes', 10),
   });

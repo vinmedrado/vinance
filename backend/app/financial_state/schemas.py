@@ -26,6 +26,7 @@ AssetStatus = Literal["ACTIVE", "DISPOSED"]
 GoalPriority = Literal["LOW", "MEDIUM", "HIGH"]
 GoalStatus = Literal["ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"]
 DataQuality = Literal["COMPLETE", "PARTIAL", "INSUFFICIENT", "STALE", "INCONSISTENT"]
+TransferResourceType = Literal["INCOME", "EXPENSE"]
 
 
 class StrictModel(BaseModel):
@@ -175,6 +176,59 @@ class ExpenseRead(OrmModel):
     expense_nature: Literal["FIXED", "VARIABLE"] | None
     created_at: datetime
     updated_at: datetime
+
+
+class FinancialRecordTransferPreviewRequest(StrictModel):
+    record_ids: list[int] = Field(min_length=1, max_length=100)
+
+    @field_validator("record_ids")
+    @classmethod
+    def validate_unique_record_ids(cls, value: list[int]) -> list[int]:
+        if any(record_id < 1 for record_id in value):
+            raise ValueError("record_ids must contain positive identifiers")
+        if len(set(value)) != len(value):
+            raise ValueError("record_ids must not contain duplicates")
+        return value
+
+
+class FinancialRecordTransferRequest(FinancialRecordTransferPreviewRequest):
+    duplicate_reviewed: bool = False
+
+
+class FinancialRecordDuplicateCandidate(StrictModel):
+    candidate_id: int
+    description: str
+    amount: Decimal
+    effective_date: date
+
+
+class FinancialRecordTransferPreviewItem(StrictModel):
+    record_id: int
+    source_household_id: int
+    description: str
+    amount: Decimal
+    effective_date: date
+    possible_duplicates: list[FinancialRecordDuplicateCandidate]
+
+
+class FinancialRecordTransferPreview(StrictModel):
+    resource_type: TransferResourceType
+    target_household_id: int
+    record_count: int
+    requires_duplicate_review: bool
+    items: list[FinancialRecordTransferPreviewItem]
+
+
+class FinancialRecordTransferRead(StrictModel):
+    transfer_id: int
+    resource_type: TransferResourceType
+    target_household_id: int
+    record_count: int
+    moved_record_ids: list[int]
+    source_household_ids: list[int]
+    status: Literal["COMMITTED"]
+    replayed: bool
+    created_at: datetime
 
 
 class LiabilityCreate(StrictModel):

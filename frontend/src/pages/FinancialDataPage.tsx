@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState, Modal, MoneyInput, SectionHeader, SelectField, Toast, ToggleField } from '../components';
 import { useCurrentUser, useSessionToken } from '../features/auth/hooks/useAuth';
+import { OwnershipDestinationField } from '../features/financial-state/components/OwnershipDestinationField';
+import { TransferFinancialRecordsDialog } from '../features/financial-state/components/TransferFinancialRecordsDialog';
 import { useFinancialProfile, useScopedUpsertProfile } from '../features/financial/hooks/useFinancial';
 import {
   useCreateFinancialResource,
@@ -10,8 +12,9 @@ import {
   type FinancialResource,
   type FinancialResourceItem,
 } from '../features/financial-state/hooks/useFinancialResources';
-import type { OwnershipScope } from '../features/financial-state/types/financialState.types';
-import { useHouseholdDefault, useHouseholdList, useHouseholdMembers } from '../features/household/hooks/useHousehold';
+import type { FinancialTransferResource, OwnershipScope } from '../features/financial-state/types/financialState.types';
+import { useFinancialContext } from '../features/household/context/FinancialContextProvider';
+import { useHouseholdMembers } from '../features/household/hooks/useHousehold';
 import { formatCurrency } from '../utils/formatters';
 import { riskProfileLabel } from '../features/intelligence/utils/presentation';
 import { localDateInputValue } from '../utils/localDate';
@@ -20,6 +23,7 @@ import type { ApiErrorShape } from '../services/api';
 type EditorMode = 'create' | 'edit';
 type Draft = {
   scope: OwnershipScope;
+  destinationHouseholdId: number | null;
   description: string;
   amount: string;
   kind: string;
@@ -82,6 +86,7 @@ function resourceDeletedMessage(resource: FinancialResource) {
 function emptyDraft(): Draft {
   return {
     scope: 'PERSONAL',
+    destinationHouseholdId: null,
     description: '',
     amount: '',
     kind: '',
@@ -140,6 +145,7 @@ function itemAmount(resource: FinancialResource, item: FinancialResourceItem) {
 function draftFromItem(resource: FinancialResource, item: FinancialResourceItem): Draft {
   const draft = emptyDraft();
   draft.scope = item.ownership_scope;
+  draft.destinationHouseholdId = item.household_id;
   if (resource === 'incomes') {
     const value = item as any;
     return { ...draft, description: value.description, amount: String(value.amount), kind: value.income_type, date: value.received_at, recurring: value.is_recurring };
@@ -227,18 +233,24 @@ function emptyProfileDraft() {
 export function FinancialDataPage() {
   const sessionToken = useSessionToken();
   const currentUser = useCurrentUser();
-  const households = useHouseholdList();
-  const defaultHousehold = useHouseholdDefault();
+  const financialContext = useFinancialContext();
   const profile = useFinancialProfile();
   const saveProfile = useScopedUpsertProfile();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [pendingSwitchId, setPendingSwitchId] = useState<number | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [profileEditing, setProfileEditing] = useState(false);
   const [profileDirty, setProfileDirty] = useState(false);
   const [profileDraft, setProfileDraft] = useState(emptyProfileDraft);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selectedTransferIds, setSelectedTransferIds] = useState<Record<FinancialTransferResource, number[]>>({
+    incomes: [],
+    expenses: [],
+  });
+  const [transferResource, setTransferResource] = useState<FinancialTransferResource | null>(null);
+  const [transferRecordIds, setTransferRecordIds] = useState<number[]>([]);
+  const [transferTargetId, setTransferTargetId] = useState<number | null>(null);
+  const [reviewPromptDismissed, setReviewPromptDismissed] = useState(true);
   const previousSession = useRef(sessionToken);
+  const selectedId = financialContext.activeHousehold?.id ?? null;
 
   const incomes = useFinancialResourceList('incomes', selectedId);
   const expenses = useFinancialResourceList('expenses', selectedId);
@@ -250,22 +262,45 @@ export function FinancialDataPage() {
   const createResource = useCreateFinancialResource();
   const updateResource = useUpdateFinancialResource();
   const deleteResource = useDeleteFinancialResource();
-  const selectedHousehold = households.data?.find((item) => item.id === selectedId) ?? null;
+  const selectedHousehold = financialContext.activeHousehold;
   const currentMembership = members.data?.find((item) => item.user_id === currentUser.data?.id);
   const pendingMutation = createResource.isPending || updateResource.isPending || deleteResource.isPending || saveProfile.isPending;
   const missingProfile = (profile.error as ApiErrorShape | null)?.status === 404;
-  const loadError = households.error || defaultHousehold.error || members.error || (!missingProfile && profile.error) || resources.map((resource) => queryByResource[resource].error).find(Boolean);
+  const loadError = financialContext.error || members.error || (!missingProfile && profile.error) || resources.map((resource) => queryByResource[resource].error).find(Boolean);
   const actionError = createResource.error || updateResource.error || deleteResource.error || saveProfile.error;
 
-  useEffect(() => {
-    if (selectedId === null && defaultHousehold.data) setSelectedId(defaultHousehold.data.id);
-  }, [defaultHousehold.data, selectedId]);
+  useEffect(() => financialContext.registerSwitchGuard({
+    isDirty: () => Boolean(editor || profileEditing || profileDirty),
+    discard: () => {
+      setEditor(null);
+      setProfileEditing(false);
+      setProfileDirty(false);
+    },
+  }), [editor, financialContext.registerSwitchGuard, profileDirty, profileEditing]);
 
   useEffect(() => {
-    if (!households.data?.length) return;
-    if (selectedId !== null && households.data.some((item) => item.id === selectedId)) return;
-    setSelectedId(defaultHousehold.data?.id ?? households.data[0].id);
-  }, [defaultHousehold.data?.id, households.data, selectedId]);
+    setSelectedTransferIds({ incomes: [], expenses: [] });
+    setTransferResource(null);
+    setTransferRecordIds([]);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (financialContext.sharedHouseholds.length === 1) {
+      setTransferTargetId(financialContext.sharedHouseholds[0].id);
+      return;
+    }
+    if (!financialContext.sharedHouseholds.some((household) => household.id === transferTargetId)) {
+      setTransferTargetId(null);
+    }
+  }, [financialContext.sharedHouseholds, transferTargetId]);
+
+  useEffect(() => {
+    if (!currentUser.data?.id || !selectedHousehold) return;
+    const reviewKey = `vinance:personal-transfer-review:${currentUser.data.id}:${selectedHousehold.id}`;
+    setReviewPromptDismissed(
+      selectedHousehold.household_type !== 'PERSONAL' || window.localStorage.getItem(reviewKey) === 'dismissed',
+    );
+  }, [currentUser.data?.id, selectedHousehold]);
 
   useEffect(() => {
     if (!profile.data || profileDirty) return;
@@ -283,12 +318,13 @@ export function FinancialDataPage() {
   useEffect(() => {
     if (previousSession.current === sessionToken) return;
     previousSession.current = sessionToken;
-    setSelectedId(null);
-    setPendingSwitchId(null);
     setEditor(null);
     setProfileEditing(false);
     setProfileDirty(false);
     setProfileDraft(emptyProfileDraft());
+    setSelectedTransferIds({ incomes: [], expenses: [] });
+    setTransferResource(null);
+    setTransferRecordIds([]);
     setNotice(null);
   }, [sessionToken]);
 
@@ -298,27 +334,12 @@ export function FinancialDataPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  const groupedCounts = useMemo(() => Object.fromEntries(resources.map((resource) => [resource, (queryByResource[resource].data ?? []).length])), [assets.data, debts.data, expenses.data, goals.data, incomes.data]);
-
-  function requestSwitch(nextId: number) {
-    if (nextId === selectedId || pendingMutation) return;
-    if (editor?.dirty || profileDirty) {
-      setPendingSwitchId(nextId);
-      return;
-    }
-    setEditor(null);
-    setProfileEditing(false);
-    setSelectedId(nextId);
-  }
-
-  function discardAndSwitch() {
-    if (pendingSwitchId === null) return;
-    setEditor(null);
-    setProfileEditing(false);
-    setProfileDirty(false);
-    setSelectedId(pendingSwitchId);
-    setPendingSwitchId(null);
-  }
+  const groupedCounts = useMemo(() => Object.fromEntries(resources.map((resource) => [
+    resource,
+    ((queryByResource[resource].data ?? []) as FinancialResourceItem[]).filter(
+      (item) => item.ownership_scope === 'HOUSEHOLD' || item.user_id === currentUser.data?.id,
+    ).length,
+  ])), [assets.data, currentUser.data?.id, debts.data, expenses.data, goals.data, incomes.data]);
 
   function openCreate(resource: FinancialResource) {
     if (selectedId === null) return;
@@ -342,18 +363,77 @@ export function FinancialDataPage() {
     if (editor.householdId !== selectedId || editor.sessionToken !== sessionToken) {
       throw new Error('O contexto mudou. Feche e abra o formulário novamente.');
     }
-    if (editor.mode === 'edit' && editor.originalScope === 'PERSONAL' && editor.draft.scope === 'HOUSEHOLD') {
-      if (!window.confirm(`Compartilhar esta ${labels[editor.resource].singular}? Os membros ativos de ${selectedHousehold?.name ?? 'esta casa'} poderão visualizá-la.`)) return;
-    }
     const payload = payloadFromDraft(editor.resource, editor.draft);
     if (editor.mode === 'create') {
-      await createResource.mutateAsync({ householdId: editor.householdId, sessionToken: editor.sessionToken, resource: editor.resource, payload });
+      let destinationHouseholdId = editor.householdId;
+      if (editor.resource === 'incomes' || editor.resource === 'expenses') {
+        const destination = financialContext.households.find(
+          (household) => household.id === editor.draft.destinationHouseholdId,
+        );
+        if (!destination) throw new Error('Escolha onde deseja registrar este lançamento.');
+        destinationHouseholdId = destination.id;
+        (payload as { ownership_scope: OwnershipScope }).ownership_scope = destination.household_type === 'PERSONAL'
+          ? 'PERSONAL'
+          : 'HOUSEHOLD';
+      }
+      await createResource.mutateAsync({
+        householdId: destinationHouseholdId,
+        sessionToken: editor.sessionToken,
+        resource: editor.resource,
+        payload,
+      });
+      const destination = financialContext.households.find((household) => household.id === destinationHouseholdId);
+      const resourceName = labels[editor.resource].singular[0].toUpperCase() + labels[editor.resource].singular.slice(1);
+      const destinationLabel = destination?.household_type === 'SHARED' ? 'Finanças do casal' : 'Minhas finanças';
+      setNotice(`${resourceName} registrada em ${destinationLabel}.`);
     } else {
-      if (editor.ownerUserId !== currentUser.data?.id) delete (payload as { ownership_scope?: OwnershipScope }).ownership_scope;
+      if (editor.resource === 'incomes' || editor.resource === 'expenses' || editor.ownerUserId !== currentUser.data?.id) {
+        delete (payload as { ownership_scope?: OwnershipScope }).ownership_scope;
+      }
       await updateResource.mutateAsync({ householdId: editor.householdId, sessionToken: editor.sessionToken, resource: editor.resource, recordId: editor.recordId as number, payload });
+      setNotice(`${labels[editor.resource].singular[0].toUpperCase()}${labels[editor.resource].singular.slice(1)} atualizada com sucesso.`);
     }
-    setNotice(`${labels[editor.resource].singular[0].toUpperCase()}${labels[editor.resource].singular.slice(1)} salva com sucesso.`);
     setEditor(null);
+  }
+
+  function toggleTransferSelection(resource: FinancialTransferResource, recordId: number) {
+    setSelectedTransferIds((current) => ({
+      ...current,
+      [resource]: current[resource].includes(recordId)
+        ? current[resource].filter((id) => id !== recordId)
+        : [...current[resource], recordId],
+    }));
+  }
+
+  function openTransfer(resource: FinancialTransferResource, recordIds: number[]) {
+    if (recordIds.length === 0 || transferTargetId === null) return;
+    setTransferResource(resource);
+    setTransferRecordIds(recordIds);
+  }
+
+  function closeTransfer() {
+    setTransferResource(null);
+    setTransferRecordIds([]);
+  }
+
+  function transferred(count: number) {
+    if (transferResource) {
+      setSelectedTransferIds((current) => ({ ...current, [transferResource]: [] }));
+    }
+    const label = transferResource === 'incomes'
+      ? (count === 1 ? 'receita transferida' : 'receitas transferidas')
+      : (count === 1 ? 'despesa transferida' : 'despesas transferidas');
+    setNotice(`${count} ${label} para Finanças do casal.`);
+    closeTransfer();
+  }
+
+  function dismissReviewPrompt() {
+    if (!currentUser.data?.id || !selectedHousehold) return;
+    window.localStorage.setItem(
+      `vinance:personal-transfer-review:${currentUser.data.id}:${selectedHousehold.id}`,
+      'dismissed',
+    );
+    setReviewPromptDismissed(true);
   }
 
   async function remove(resource: FinancialResource, item: FinancialResourceItem) {
@@ -381,7 +461,13 @@ export function FinancialDataPage() {
     setNotice('Perfil financeiro atualizado.');
   }
 
-  if (households.isLoading || defaultHousehold.isLoading || currentUser.isLoading) return <LoadingState label="Carregando seus dados financeiros..." />;
+  const transferTarget = financialContext.sharedHouseholds.find((household) => household.id === transferTargetId) ?? null;
+  const hasReviewableExpenses = selectedHousehold?.household_type === 'PERSONAL'
+    && (expenses.data ?? []).some(
+      (item) => item.ownership_scope === 'PERSONAL' && item.user_id === currentUser.data?.id,
+    );
+
+  if (financialContext.isLoading || currentUser.isLoading) return <LoadingState label="Carregando seus dados financeiros..." />;
 
   return (
     <section className="vn-page">
@@ -390,22 +476,50 @@ export function FinancialDataPage() {
       {actionError && <Card><ErrorState title="A alteração não foi salva" description={errorMessage(actionError)} /></Card>}
       {notice && <Toast message={notice} />}
 
-      <Card title="Contexto" description="Dados pessoais são visíveis só para você; dados compartilhados aparecem aos membros ativos.">
-        <SelectField
-          label="Casa"
-          value={selectedId ?? ''}
-          disabled={pendingMutation}
-          onChange={(event) => requestSwitch(Number(event.target.value))}
-          options={(households.data ?? []).map((item) => ({ value: String(item.id), label: `${item.name} · ${item.household_type === 'PERSONAL' ? 'Pessoal' : 'Compartilhado'}` }))}
-        />
-      </Card>
+      {!reviewPromptDismissed && hasReviewableExpenses && financialContext.sharedHouseholds.length > 0 && (
+        <aside className="vn-context-guidance vn-context-guidance--review" aria-label="Revisão de despesas pessoais">
+          <div>
+            <strong>Registrou alguma despesa da casa em Minhas finanças?</strong>
+            <p>Revise apenas os lançamentos que deseja compartilhar. Nada será movido automaticamente.</p>
+          </div>
+          <div className="vn-inline-actions">
+            <Button
+              variant="secondary"
+              onClick={() => document.querySelector('[data-financial-resource="expenses"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              Revisar lançamentos
+            </Button>
+            <Button variant="ghost" onClick={dismissReviewPrompt}>Dispensar</Button>
+          </div>
+        </aside>
+      )}
+
+      {selectedHousehold?.household_type === 'PERSONAL' && financialContext.sharedHouseholds.length > 1 && (
+        <div className="vn-transfer-target">
+          <SelectField
+            label="Destino das transferências"
+            value={transferTargetId ?? ''}
+            onChange={(event) => setTransferTargetId(Number(event.target.value))}
+            options={[
+              { value: '', label: 'Selecione as Finanças do casal' },
+              ...financialContext.sharedHouseholds.map((household) => ({ value: String(household.id), label: household.name })),
+            ]}
+            helper="Escolha explicitamente qual conta compartilhada receberá os lançamentos."
+          />
+        </div>
+      )}
 
       <div className="vn-grid vn-grid--two">
         {resources.map((resource) => {
           const query = queryByResource[resource];
-          const items = (query.data ?? []) as FinancialResourceItem[];
+          const items = ((query.data ?? []) as FinancialResourceItem[]).filter(
+            (item) => item.ownership_scope === 'HOUSEHOLD' || item.user_id === currentUser.data?.id,
+          );
+          const transferKind = resource === 'incomes' || resource === 'expenses' ? resource : null;
+          const selectedIds = transferKind ? selectedTransferIds[transferKind] : [];
           return (
-            <Card key={resource} title={labels[resource].plural} description={`${labels[resource].description} ${groupedCounts[resource]} cadastrado(s).`} action={<Button onClick={() => openCreate(resource)}>Adicionar</Button>}>
+            <div key={resource} data-financial-resource={resource}>
+            <Card title={labels[resource].plural} description={`${labels[resource].description} ${groupedCounts[resource]} cadastrado(s).`} action={<Button onClick={() => openCreate(resource)}>Adicionar</Button>}>
               {query.isLoading ? <LoadingState label={`Carregando ${labels[resource].plural.toLowerCase()}...`} /> : items.length === 0 ? (
                 <EmptyState title={resourceEmptyTitle(resource)} description="Você pode adicionar agora ou voltar depois se ainda não souber a informação." action={<Button variant="secondary" onClick={() => openCreate(resource)}>Adicionar {labels[resource].singular}</Button>} />
               ) : (
@@ -413,14 +527,41 @@ export function FinancialDataPage() {
                   {items.map((item) => {
                     const canMutate = item.user_id === currentUser.data?.id
                       || (item.ownership_scope === 'HOUSEHOLD' && currentMembership?.role === 'OWNER');
+                    const canTransfer = Boolean(
+                      transferKind
+                      && selectedHousehold?.household_type === 'PERSONAL'
+                      && financialContext.sharedHouseholds.length > 0
+                      && item.ownership_scope === 'PERSONAL'
+                      && item.user_id === currentUser.data?.id,
+                    );
                     return (
                     <div key={item.id}>
                       <div>
+                        {canTransfer && transferKind && (
+                          <label className="vn-transfer-select">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(item.id)}
+                              onChange={() => toggleTransferSelection(transferKind, item.id)}
+                              aria-label={`Selecionar ${itemTitle(resource, item)} para transferência`}
+                            />
+                            <span className="vn-sr-only">Selecionar para transferência</span>
+                          </label>
+                        )}
                         <strong>{itemTitle(resource, item)}</strong>
                         <p>{money(itemAmount(resource, item))} · {itemScope(item) === 'PERSONAL' ? 'Só eu' : `Compartilhado com ${selectedHousehold?.name ?? 'a casa'}`}</p>
                       </div>
                       <div className="vn-inline-actions">
                         <Badge tone={itemScope(item) === 'PERSONAL' ? 'warning' : 'success'}>{itemScope(item) === 'PERSONAL' ? 'Pessoal' : 'Compartilhado'}</Badge>
+                        {canTransfer && transferKind && (
+                          <Button
+                            variant="secondary"
+                            disabled={transferTarget === null}
+                            onClick={() => openTransfer(transferKind, [item.id])}
+                          >
+                            Mover para Finanças do casal
+                          </Button>
+                        )}
                         {canMutate && <Button variant="secondary" onClick={() => openEdit(resource, item)}>Editar</Button>}
                         {canMutate && <Button variant="ghost" disabled={pendingMutation} onClick={() => remove(resource, item)}>Excluir</Button>}
                       </div>
@@ -429,7 +570,16 @@ export function FinancialDataPage() {
                   })}
                 </div>
               )}
+              {transferKind && selectedIds.length > 0 && (
+                <div className="vn-transfer-batch">
+                  <span>{selectedIds.length} {selectedIds.length === 1 ? 'lançamento selecionado' : 'lançamentos selecionados'}</span>
+                  <Button disabled={transferTarget === null} onClick={() => openTransfer(transferKind, selectedIds)}>
+                    Transferir seleção
+                  </Button>
+                </div>
+              )}
             </Card>
+            </div>
           );
         })}
       </div>
@@ -459,7 +609,30 @@ export function FinancialDataPage() {
       <Modal open={editor !== null} title={editor ? `${editor.mode === 'create' ? 'Adicionar' : 'Editar'} ${labels[editor.resource].singular}` : 'Dados financeiros'} onClose={() => { if (!editor?.dirty || window.confirm('Descartar alterações não salvas?')) setEditor(null); }}>
         {editor && (
           <form className="vn-form" onSubmit={submitEditor}>
-            <SelectField label="Quem pode ver este dado?" value={editor.draft.scope} disabled={editor.mode === 'edit' && editor.ownerUserId !== currentUser.data?.id} onChange={(event) => changeDraft({ scope: event.target.value as OwnershipScope })} options={[{ value: 'PERSONAL', label: 'Só eu' }, { value: 'HOUSEHOLD', label: `Compartilhado com ${selectedHousehold?.name ?? 'a casa'}` }]} helper={editor.mode === 'edit' && editor.ownerUserId !== currentUser.data?.id ? 'Somente quem criou o registro pode alterar seu compartilhamento.' : 'Novos registros começam como pessoais. Compartilhar exige sua escolha explícita.'} />
+            {editor.mode === 'create' && (editor.resource === 'incomes' || editor.resource === 'expenses') && (
+              <OwnershipDestinationField
+                name={`financial-data-${editor.resource}-destination`}
+                households={financialContext.households}
+                value={editor.draft.destinationHouseholdId}
+                suggestedHouseholdId={selectedId}
+                onChange={(destinationHouseholdId) => changeDraft({ destinationHouseholdId })}
+              />
+            )}
+            {(editor.resource === 'debts' || editor.resource === 'assets' || editor.resource === 'goals') && (
+              <SelectField
+                label="Quem pode ver este dado?"
+                value={editor.draft.scope}
+                disabled={editor.mode === 'edit' && editor.ownerUserId !== currentUser.data?.id}
+                onChange={(event) => changeDraft({ scope: event.target.value as OwnershipScope })}
+                options={[
+                  { value: 'PERSONAL', label: 'Só eu' },
+                  { value: 'HOUSEHOLD', label: `Compartilhado com ${selectedHousehold?.name ?? 'a casa'}` },
+                ]}
+                helper={editor.mode === 'edit' && editor.ownerUserId !== currentUser.data?.id
+                  ? 'Somente quem criou o registro pode alterar seu compartilhamento.'
+                  : 'Compartilhar exige sua escolha explícita.'}
+              />
+            )}
             <Input label={editor.resource === 'incomes' || editor.resource === 'expenses' ? 'Descrição' : 'Nome'} value={editor.draft.description} onChange={(event) => changeDraft({ description: event.target.value })} required={editor.resource !== 'assets' || editor.draft.assetCatalogId === null} />
             {editor.resource === 'incomes' && <>
               <MoneyInput label="Valor" value={editor.draft.amount} onChange={(event) => changeDraft({ amount: event.target.value })} required />
@@ -506,10 +679,14 @@ export function FinancialDataPage() {
         )}
       </Modal>
 
-      <Modal open={pendingSwitchId !== null} title="Alterações não salvas" onClose={() => setPendingSwitchId(null)}>
-        <p>Trocar de casa descartará o formulário atual. Nenhum dado será movido para outra casa.</p>
-        <div className="vn-inline-actions"><Button variant="secondary" onClick={() => setPendingSwitchId(null)}>Cancelar</Button><Button onClick={discardAndSwitch}>Descartar e trocar</Button></div>
-      </Modal>
+      <TransferFinancialRecordsDialog
+        open={transferResource !== null && transferRecordIds.length > 0}
+        resource={transferResource ?? 'expenses'}
+        recordIds={transferRecordIds}
+        targetHousehold={transferTarget}
+        onClose={closeTransfer}
+        onTransferred={transferred}
+      />
     </section>
   );
 }
