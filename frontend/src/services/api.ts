@@ -110,7 +110,10 @@ api.interceptors.request.use((config) => {
 type RetryableRequest = InternalAxiosRequestConfig & { _sessionRetry?: boolean };
 
 function isSessionEndpoint(url?: string) {
-  return Boolean(url && /\/(?:login|register|refresh|logout)(?:\?|$)/.test(url));
+  return Boolean(url && (
+    /\/(?:login|register|refresh|logout)(?:\?|$)/.test(url)
+    || /\/access\/(?:bootstrap|invitations\/accept|password-recovery\/(?:request|complete))(?:\?|$)/.test(url)
+  ));
 }
 
 export async function refreshSession() {

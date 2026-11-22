@@ -15,7 +15,14 @@ async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def create_user(session: AsyncSession, payload: UserCreate) -> User:
+async def create_user_in_transaction(session: AsyncSession, payload: UserCreate) -> User:
+    """Create an isolated user and PERSONAL household without committing.
+
+    Platform bootstrap and invitation acceptance compose this primitive into a
+    larger atomic transaction. The public ``create_user`` wrapper retains the
+    original commit behavior for existing callers.
+    """
+
     user = User(
         email=normalize_email(str(payload.email)),
         full_name=payload.full_name,
@@ -47,6 +54,11 @@ async def create_user(session: AsyncSession, payload: UserCreate) -> User:
         household_id=household.id,
         category="HOUSEHOLD",
     )
+    return user
+
+
+async def create_user(session: AsyncSession, payload: UserCreate) -> User:
+    user = await create_user_in_transaction(session, payload)
     await session.commit()
     await session.refresh(user)
     return user

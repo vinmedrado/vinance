@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Brain, FlaskConical, House, KeyRound, Landmark, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, ShieldCheck, SunMoon, WalletCards, TrendingUp, X } from 'lucide-react';
+import { BarChart3, Brain, FlaskConical, House, KeyRound, Landmark, LayoutDashboard, ListChecks, LogOut, Menu, MessageCircle, Settings, ShieldCheck, SunMoon, Users, WalletCards, TrendingUp, X } from 'lucide-react';
 import { Button } from '../components';
 import { useLogout, useCurrentUser } from '../features/auth/hooks/useAuth';
 import { useThemeMode } from '../hooks/useThemeMode';
 import { FinancialContextSwitcher } from '../features/household/components/FinancialContextSwitcher';
 import { SharedFinanceIntro } from '../features/household/components/SharedFinanceIntro';
+import { usePlatformAccessProfile } from '../features/platform-access/hooks/usePlatformAccess';
 
 type NavigationItem = {
   label: string;
@@ -28,6 +29,7 @@ const secondaryNavItems: NavigationItem[] = [
   { label: 'Análises', path: '/intelligence', icon: Brain },
   { label: 'Trading', desktopLabel: 'Trading simulado', path: '/trading', icon: FlaskConical },
   { label: 'Segurança', path: '/account/security', icon: KeyRound },
+  { label: 'Configurações', path: '/account/settings', icon: Settings },
 ];
 
 function NavigationLinks({ items, compact = false }: { items: NavigationItem[]; compact?: boolean }) {
@@ -48,6 +50,7 @@ export function AppLayout() {
   const signOut = useLogout();
   const { data: user } = useCurrentUser();
   const { mode, setMode } = useThemeMode();
+  const { isPlatformAdmin } = usePlatformAccessProfile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuPanelRef = useRef<HTMLElement>(null);
@@ -122,7 +125,7 @@ export function AppLayout() {
           <span className="vn-nav__label">Principal</span>
           <NavigationLinks items={primaryNavItems} />
           <span className="vn-nav__label">Gestão e conta</span>
-          <NavigationLinks items={secondaryNavItems} />
+          <NavigationLinks items={isPlatformAdmin ? [...secondaryNavItems, { label: 'Pessoas e acesso', path: '/admin/access', icon: Users }] : secondaryNavItems} />
         </nav>
         <div className="vn-sidebar__note">
           <ShieldCheck size={18} />
@@ -169,7 +172,7 @@ export function AppLayout() {
               <button ref={mobileMenuCloseButtonRef} type="button" aria-label="Fechar menu" onClick={() => closeMobileMenu()}><X size={21} /></button>
             </header>
             <nav className="vn-mobile-secondary-nav" aria-label="Gestão e configurações">
-              <NavigationLinks items={secondaryNavItems} />
+              <NavigationLinks items={isPlatformAdmin ? [...secondaryNavItems, { label: 'Pessoas e acesso', path: '/admin/access', icon: Users }] : secondaryNavItems} />
             </nav>
             <div className="vn-mobile-menu__actions">
               <Button variant="ghost" onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}><SunMoon size={17} /> {mode === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}</Button>

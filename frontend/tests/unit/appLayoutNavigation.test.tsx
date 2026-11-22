@@ -37,6 +37,10 @@ vi.mock('../../src/hooks/useThemeMode', () => ({
   useThemeMode: () => ({ mode: 'dark', setMode: vi.fn() }),
 }));
 
+vi.mock('../../src/features/platform-access/hooks/usePlatformAccess', () => ({
+  usePlatformAccessProfile: () => ({ isPlatformAdmin: true, isLoading: false }),
+}));
+
 function renderLayout() {
   return render(
     <MemoryRouter initialEntries={['/dashboard']}>
@@ -70,6 +74,8 @@ describe('navegação do produto', () => {
     expect(screen.getAllByRole('link', { name: /Assistente/ })).toHaveLength(2);
     expect(screen.getByRole('link', { name: /Dados financeiros/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Trading simulado/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Configurações/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Pessoas e acesso/ })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Navegação principal no celular' })?.textContent).not.toContain('Trading');
     expect(screen.queryByText('Advisor IA')).not.toBeInTheDocument();
   });

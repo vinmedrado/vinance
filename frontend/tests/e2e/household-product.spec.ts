@@ -16,8 +16,9 @@ async function reply(route: Route, body: unknown, status = 200) {
   return route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
-test('two accounts create, invite and consent to a shared household', async ({ browser }) => {
-  // This scenario intentionally exercises the complete two-account lifecycle.
+test('two invited accounts create and consent to a shared household', async ({ browser }) => {
+  // Platform provisioning is covered by access-pwa.spec. This scenario starts
+  // with two already invited accounts and exercises the household lifecycle.
   test.setTimeout(120_000);
   const users = {
     'a@example.com': { id: 1, email: 'a@example.com', full_name: 'Vinicius', is_active: true },
@@ -40,9 +41,9 @@ test('two accounts create, invite and consent to a shared household', async ({ b
       const request = route.request();
       const path = new URL(request.url()).pathname.replace('/api/v1', '');
       const user = users[email];
-      if (path === '/register' && request.method() === 'POST') {
+      if (path === '/login' && request.method() === 'POST') {
         sessionActive = true;
-        return reply(route, { access_token: accessToken, token_type: 'bearer', user }, 201);
+        return reply(route, { access_token: accessToken, token_type: 'bearer', user });
       }
       if (path === '/refresh' && request.method() === 'POST') {
         return sessionActive
@@ -131,11 +132,9 @@ test('two accounts create, invite and consent to a shared household', async ({ b
       return reply(route, { detail: `Unhandled ${request.method()} ${path}` }, 404);
     });
     await page.goto('/login');
-    await page.getByRole('button', { name: 'Criar nova conta' }).click();
-    await page.getByLabel('Nome').fill(users[email].full_name);
     await page.getByLabel('E-mail').fill(email);
     await page.getByLabel('Senha').fill('phase-b-password');
-    await page.getByRole('button', { name: 'Registrar e entrar' }).click();
+    await page.getByRole('button', { name: 'Entrar', exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
     await page.goto('/household');
     return page;

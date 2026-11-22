@@ -1,0 +1,19 @@
+import { useEffect, useState } from 'react';
+import { Button, Card, SectionHeader } from '../components';
+import { useInstallVinance } from '../features/pwa/hooks/useInstallVinance';
+import { activateWaitingServiceWorker, subscribeToPwaUpdate } from '../features/pwa/services/pwa.service';
+import {
+  disablePushForCurrentInstallation,
+  enablePushForCurrentInstallation,
+  getNotificationPreferences,
+  isPushEnabledForCurrentInstallation,
+  sendTestNotification,
+} from '../features/notifications/services/notifications.service';
+import { normalizeApiError } from '../services/api';
+
+export function AccountSettingsPage() {
+  const install = useInstallVinance(); const [pushEnabled, setPushEnabled] = useState(false); const [permission, setPermission] = useState(() => typeof Notification === 'undefined' ? 'indisponível' : Notification.permission); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [waiting, setWaiting] = useState<ServiceWorkerRegistration | null>(null);
+  useEffect(() => { Promise.all([getNotificationPreferences(), isPushEnabledForCurrentInstallation()]).then(([preferences, currentInstallation]) => setPushEnabled(preferences.push_enabled && currentInstallation)).catch(() => undefined); return subscribeToPwaUpdate(setWaiting); }, []);
+  async function action(work: () => Promise<unknown>, success: string) { setError(''); setMessage(''); try { await work(); setMessage(success); if (typeof Notification !== 'undefined') setPermission(Notification.permission); } catch (cause) { setError(normalizeApiError(cause).message); } }
+  return <div className="vn-page"><SectionHeader eyebrow="Conta" title="Configurações" description="Instalação do aplicativo e notificações deste dispositivo." />{message && <p className="vn-session-notice" role="status">{message}</p>}{error && <p className="vn-error" role="alert">{error}</p>}<Card title="Aplicativo Vinance" description={install.standalone ? 'O Vinance está aberto como aplicativo.' : 'Instale para acessar com uma experiência própria, mantendo os dados sempre online e atualizados.'}>{install.canInstall && <Button onClick={() => action(install.install, 'Instalação iniciada.')}>Instalar Vinance</Button>}{install.ios && !install.standalone && <p>No iPhone, abra Compartilhar e escolha “Adicionar à Tela de Início”. A instalação não pode ser iniciada automaticamente pelo navegador.</p>}{!install.canInstall && !install.ios && !install.standalone && <p>A instalação aparecerá quando este navegador considerar o aplicativo elegível.</p>}{waiting && <div className="vn-update-ready"><p>Há uma versão nova pronta. Salve qualquer formulário antes de atualizar.</p><Button variant="secondary" onClick={() => activateWaitingServiceWorker(waiting)}>Atualizar agora</Button></div>}</Card><Card title="Notificações" description="A permissão é solicitada somente quando você escolher ativar. Mensagens na tela bloqueada não exibem valores financeiros."><dl className="vn-settings-status"><div><dt>Permissão</dt><dd>{permission}</dd></div><div><dt>Neste dispositivo</dt><dd>{pushEnabled ? 'Ativadas' : 'Desativadas'}</dd></div></dl><div className="vn-inline-actions">{pushEnabled ? <Button variant="secondary" onClick={() => action(async () => { await disablePushForCurrentInstallation(); setPushEnabled(false); }, 'Notificações desativadas neste dispositivo.')}>Desativar notificações</Button> : <Button onClick={() => action(async () => { await enablePushForCurrentInstallation(); setPushEnabled(true); }, 'Notificações ativadas neste dispositivo.')}>Ativar notificações</Button>}<Button variant="ghost" disabled={!pushEnabled} onClick={() => action(sendTestNotification, 'Notificação de teste enfileirada.')}>Enviar notificação de teste</Button></div>{install.ios && !install.standalone && <p>Em iPhone, notificações Web Push exigem o Vinance adicionado à Tela de Início em uma versão compatível do iOS.</p>}</Card></div>;
+}

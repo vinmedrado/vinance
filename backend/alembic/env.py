@@ -9,6 +9,18 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from backend.app.auth.models import AuthSession, User  # noqa: F401
+from backend.app.notifications.models import (  # noqa: F401
+    UserNotificationPreference,
+    WebPushDelivery,
+    WebPushSubscription,
+)
+from backend.app.platform_access.models import (  # noqa: F401
+    PasswordResetToken,
+    PlatformAccessAuditEvent,
+    PlatformAccessInvitation,
+    PlatformAdmin,
+    PlatformBootstrapState,
+)
 from backend.app.capital_allocation.models import CapitalAllocationDecision  # noqa: F401
 from backend.app.investment_orchestrator.models import (  # noqa: F401
     InvestmentOrchestrationDecision,

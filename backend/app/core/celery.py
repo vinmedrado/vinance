@@ -38,6 +38,7 @@ celery_app = Celery(
         "backend.app.investment_performance.tasks",
         "backend.app.investment_alerts.tasks",
         "backend.app.continuous_autopilot.tasks",
+        "backend.app.notifications.tasks",
     ],
 )
 
@@ -78,6 +79,8 @@ celery_app.conf.update(
         "investment_performance.evaluate_due": {"queue": "intelligence"},
         "investment_alerts.evaluate_subscriptions": {"queue": "intelligence"},
         "continuous_autopilot.evaluate_due": {"queue": "intelligence"},
+        "notifications.send_web_push": {"queue": "default"},
+        "notifications.queue_safe_event": {"queue": "default"},
     },
     beat_schedule={
         "market-sync-macro-daily": {

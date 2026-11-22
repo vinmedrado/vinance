@@ -529,6 +529,26 @@ async def evaluate_subscription(
         state.cooldown_suppressed_count += cooldown_suppressed
         state.duplicates_prevented_count += duplicates
         await coordination_session.commit()
+        if created:
+            try:
+                from backend.app.notifications.tasks import queue_safe_notification
+
+                queue_safe_notification.delay(
+                    user_id=subscription.user_id,
+                    event_type="FINANCIAL_ALERT",
+                    dedupe_key=f"investment-alert:{evaluation_key}"[:64],
+                    title="Vinance",
+                    body="Existe um alerta financeiro relevante para você revisar.",
+                    route="/investir",
+                )
+            except Exception:
+                logger.warning(
+                    "investment_alert.push_queue_unavailable",
+                    extra={
+                        "event": "investment_alert.push_queue_unavailable",
+                        "subscription_id": subscription.id,
+                    },
+                )
         return {
             "status": "SUCCESS",
             "subscription_id": subscription.id,

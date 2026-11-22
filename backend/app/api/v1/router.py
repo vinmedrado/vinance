@@ -20,6 +20,8 @@ from backend.app.investment_decisions.router import router as investment_decisio
 from backend.app.investment_performance.router import router as investment_performance_router
 from backend.app.investment_alerts.router import router as investment_alerts_router
 from backend.app.trading.router import router as trading_router
+from backend.app.platform_access.router import router as platform_access_router
+from backend.app.notifications.router import router as notifications_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
@@ -38,3 +40,5 @@ api_router.include_router(investment_decisions_router)
 api_router.include_router(investment_performance_router)
 api_router.include_router(investment_alerts_router)
 api_router.include_router(trading_router)
+api_router.include_router(platform_access_router)
+api_router.include_router(notifications_router)

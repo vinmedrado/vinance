@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from decimal import Decimal
@@ -7,6 +8,9 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
 from pydantic import ValidationError
 
 from backend.app.auth.schemas import UserCreate, UserLogin
@@ -109,6 +113,8 @@ def test_production_settings_accept_explicit_secure_values() -> None:
         secret_key="5f98b98df53b425d8f7436d5ac21cbfdc886829c4f88b9bb",
         cors_origins="https://vinance.example.com",
         trusted_hosts="vinance.example.com",
+        registration_enabled=False,
+        bootstrap_token_hash="a" * 64,
     )
 
     assert settings.is_production is True
@@ -123,10 +129,84 @@ def test_production_settings_allow_loopback_only_as_operational_supplement() -> 
         secret_key="5f98b98df53b425d8f7436d5ac21cbfdc886829c4f88b9bb",
         cors_origins="http://127.0.0.1:18080,https://vinance.example.com",
         trusted_hosts="127.0.0.1,localhost,vinance.example.com",
+        registration_enabled=False,
+        bootstrap_token_hash="a" * 64,
     )
 
     assert settings.is_production is True
     assert settings.refresh_cookie_secure is True
+
+
+def test_production_settings_keep_legacy_registration_closed() -> None:
+    with pytest.raises(ValidationError, match="REGISTRATION_ENABLED"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            database_url="postgresql+asyncpg://app:strong-password@db.internal:5432/vinance",
+            redis_url="redis://app:strong-password@redis.internal:6379/0",
+            secret_key="5f98b98df53b425d8f7436d5ac21cbfdc886829c4f88b9bb",
+            cors_origins="https://vinance.example.com",
+            trusted_hosts="vinance.example.com",
+            bootstrap_token_hash="a" * 64,
+            registration_enabled=True,
+        )
+
+
+@pytest.mark.parametrize(
+    "unsafe_flag",
+    ("email_delivery_enabled", "cloudflare_access_automation_enabled"),
+)
+def test_unimplemented_delivery_automation_fails_closed(unsafe_flag: str) -> None:
+    with pytest.raises(ValidationError, match="cannot be enabled"):
+        Settings(_env_file=None, **{unsafe_flag: True})
+
+
+def test_production_web_push_accepts_only_valid_fernet_and_p256_material() -> None:
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    public_numbers = private_key.public_key().public_numbers()
+    public_bytes = b"\x04" + public_numbers.x.to_bytes(32, "big") + public_numbers.y.to_bytes(32, "big")
+    private_bytes = private_key.private_bytes(
+        Encoding.DER,
+        PrivateFormat.TraditionalOpenSSL,
+        NoEncryption(),
+    )
+    encode = lambda value: base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+
+    settings = Settings(
+        _env_file=None,
+        environment="production",
+        database_url="postgresql+asyncpg://app:strong-password@db.internal:5432/vinance",
+        redis_url="redis://app:strong-password@redis.internal:6379/0",
+        secret_key="5f98b98df53b425d8f7436d5ac21cbfdc886829c4f88b9bb",
+        cors_origins="https://vinance.example.com",
+        trusted_hosts="vinance.example.com",
+        registration_enabled=False,
+        bootstrap_token_hash="a" * 64,
+        web_push_enabled=True,
+        push_subscription_encryption_key=Fernet.generate_key().decode("ascii"),
+        vapid_public_key=encode(public_bytes),
+        vapid_private_key=encode(private_bytes),
+        vapid_subject="mailto:operator@example.com",
+    )
+    assert settings.web_push_enabled is True
+
+    with pytest.raises(ValidationError, match="VAPID_PRIVATE_KEY"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            database_url=settings.database_url,
+            redis_url=settings.redis_url,
+            secret_key=settings.secret_key,
+            cors_origins=settings.cors_origins,
+            trusted_hosts=settings.trusted_hosts,
+            registration_enabled=False,
+            bootstrap_token_hash="a" * 64,
+            web_push_enabled=True,
+            push_subscription_encryption_key=settings.push_subscription_encryption_key,
+            vapid_public_key=settings.vapid_public_key,
+            vapid_private_key="not-a-private-key",
+            vapid_subject=settings.vapid_subject,
+        )
 
 
 def test_production_settings_reject_loopback_as_only_origin_and_host() -> None:

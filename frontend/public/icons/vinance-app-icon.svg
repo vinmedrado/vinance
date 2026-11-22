@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Vinance">
+  <rect width="512" height="512" rx="112" fill="#0c100e"/>
+  <path d="M112 176h58l86 154 86-154h58L286 378h-60L112 176z" fill="#38b978"/>
+  <path d="M284 134h36v94h-36zM338 102h36v126h-36zM392 70h36v158h-36z" fill="#f1f5f2"/>
+</svg>

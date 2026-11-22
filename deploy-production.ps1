@@ -21,6 +21,7 @@ $ComposeBase = @(
 )
 $PublicOrigin = "https://vinance.vinmedrado.com"
 $PublicHost = "vinance.vinmedrado.com"
+$RuntimeRoleScript = Join-Path $RepositoryRoot "deploy/postgres/prepare-runtime-role.ps1"
 
 function Write-Step {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -85,6 +86,9 @@ function Assert-Prerequisites {
     if (-not (Test-Path -LiteralPath $ComposeFile -PathType Leaf)) {
         throw "docker-compose.production.yml nao foi encontrado."
     }
+    if (-not (Test-Path -LiteralPath $RuntimeRoleScript -PathType Leaf)) {
+        throw "prepare-runtime-role.ps1 nao foi encontrado."
+    }
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw "Docker nao esta disponivel no PATH."
     }
@@ -97,6 +101,58 @@ function Assert-Prerequisites {
     $registrationEnabled = (Get-DotEnvValue -Name "REGISTRATION_ENABLED").Trim().ToLowerInvariant()
     if ($registrationEnabled -ne "false") {
         throw "REGISTRATION_ENABLED deve permanecer false em producao."
+    }
+
+    $accessMode = (Get-DotEnvValue -Name "ACCESS_MODE").Trim().ToUpperInvariant()
+    if ($accessMode -ne "INVITE_ONLY") {
+        throw "ACCESS_MODE deve permanecer INVITE_ONLY em producao."
+    }
+
+    $bootstrapTokenHash = (Get-DotEnvValue -Name "BOOTSTRAP_TOKEN_HASH").Trim()
+    if ($bootstrapTokenHash -notmatch '^[0-9a-fA-F]{64}$') {
+        throw "BOOTSTRAP_TOKEN_HASH precisa ser um digest SHA-256 valido."
+    }
+
+    $pushEncryptionKey = (Get-DotEnvValue -Name "PUSH_SUBSCRIPTION_ENCRYPTION_KEY").Trim()
+    if ($pushEncryptionKey -notmatch '^[A-Za-z0-9_-]{43}=$') {
+        throw "PUSH_SUBSCRIPTION_ENCRYPTION_KEY precisa ser uma chave Fernet valida."
+    }
+
+    $vapidPublicKey = (Get-DotEnvValue -Name "VAPID_PUBLIC_KEY").Trim()
+    $vapidPrivateKey = (Get-DotEnvValue -Name "VAPID_PRIVATE_KEY").Trim()
+    if ($vapidPublicKey.Length -lt 80 -or $vapidPublicKey -notmatch '^[A-Za-z0-9_-]+$') {
+        throw "VAPID_PUBLIC_KEY possui formato invalido."
+    }
+    if ($vapidPrivateKey.Length -lt 80 -or $vapidPrivateKey -notmatch '^[A-Za-z0-9_=-]+$') {
+        throw "VAPID_PRIVATE_KEY possui formato invalido."
+    }
+
+    $vapidSubject = (Get-DotEnvValue -Name "VAPID_SUBJECT").Trim()
+    if ($vapidSubject -notmatch '^(mailto:[^\s@]+@[^\s@]+|https://[^\s]+)$') {
+        throw "VAPID_SUBJECT precisa usar mailto: ou https://."
+    }
+
+    $webPushEnabled = (Get-DotEnvValue -Name "WEB_PUSH_ENABLED").Trim().ToLowerInvariant()
+    if ($webPushEnabled -ne "true") {
+        throw "WEB_PUSH_ENABLED deve permanecer true para esta release."
+    }
+
+    $runtimeDatabaseUser = (Get-DotEnvValue -Name "RUNTIME_DB_USER").Trim()
+    $migrationDatabaseUser = (Get-DotEnvValue -Name "POSTGRES_USER").Trim()
+    if (-not $runtimeDatabaseUser -or $runtimeDatabaseUser -eq $migrationDatabaseUser) {
+        throw "RUNTIME_DB_USER deve ser diferente do papel de migration."
+    }
+
+    $runtimeDatabaseUrl = (Get-DotEnvValue -Name "RUNTIME_DATABASE_URL").Trim()
+    try {
+        $runtimeUri = [System.Uri]$runtimeDatabaseUrl
+        $runtimeUrlUser = [System.Uri]::UnescapeDataString(($runtimeUri.UserInfo -split ":", 2)[0])
+    }
+    catch {
+        throw "RUNTIME_DATABASE_URL possui formato invalido."
+    }
+    if (-not $runtimeUrlUser -or $runtimeUrlUser -ne $runtimeDatabaseUser) {
+        throw "RUNTIME_DATABASE_URL nao utiliza o RUNTIME_DB_USER declarado."
     }
 
     $corsOrigins = @((Get-DotEnvValue -Name "CORS_ORIGINS").Split(",") | ForEach-Object { $_.Trim() })
@@ -113,6 +169,11 @@ function Assert-Prerequisites {
     & docker compose @ComposeBase config --quiet *> $null
     if ($LASTEXITCODE -ne 0) {
         throw "docker compose config --quiet falhou. O deploy nao foi iniciado."
+    }
+
+    & $RuntimeRoleScript -EnvFile $EnvFile -ProjectName $ProjectName -ValidateOnly
+    if ($LASTEXITCODE -ne 0) {
+        throw "O papel PostgreSQL de runtime nao passou na validacao de privilegios."
     }
 }
 

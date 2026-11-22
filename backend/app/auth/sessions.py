@@ -55,15 +55,25 @@ async def rotate_session(session: AsyncSession, refresh_token: str) -> tuple[Use
     return user, create_access_token(user.email, session_id=record.id), replacement
 
 
-async def revoke_by_refresh_token(session: AsyncSession, refresh_token: str | None) -> None:
+async def revoke_by_refresh_token(session: AsyncSession, refresh_token: str | None) -> int | None:
     if not refresh_token:
-        return
-    await session.execute(
-        update(AuthSession)
-        .where(AuthSession.refresh_token_hash == hash_refresh_token(refresh_token), AuthSession.revoked_at.is_(None))
-        .values(revoked_at=utcnow())
-    )
+        return None
+    record = (
+        await session.execute(
+            select(AuthSession)
+            .where(
+                AuthSession.refresh_token_hash == hash_refresh_token(refresh_token),
+                AuthSession.revoked_at.is_(None),
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        return None
+    record.revoked_at = utcnow()
+    user_id = record.user_id
     await session.commit()
+    return user_id
 
 
 async def revoke_all_user_sessions(session: AsyncSession, user_id: int) -> None:

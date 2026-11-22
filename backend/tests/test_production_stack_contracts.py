@@ -21,6 +21,69 @@ def test_production_compose_has_complete_runtime_and_single_public_edge() -> Non
     assert "./storage:/app/storage" not in compose
 
 
+def test_production_compose_separates_runtime_and_migration_database_credentials() -> None:
+    compose = (ROOT / "docker-compose.production.yml").read_text(encoding="utf-8")
+
+    assert "DATABASE_URL: ${RUNTIME_DATABASE_URL:?RUNTIME_DATABASE_URL is required}" in compose
+    assert "MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?MIGRATION_DATABASE_URL is required}" in compose
+    migrate_block = compose.split("  migrate:", 1)[1].split("  backend:", 1)[0]
+    assert "DATABASE_URL: ${MIGRATION_DATABASE_URL:?MIGRATION_DATABASE_URL is required}" in migrate_block
+    assert "prepare-runtime-role.ps1" in (ROOT / "deploy-production.ps1").read_text(encoding="utf-8")
+
+
+def test_production_template_declares_access_push_secrets_without_values() -> None:
+    env = (ROOT / ".env.production.example").read_text(encoding="utf-8")
+
+    for variable in (
+        "ACCESS_MODE=INVITE_ONLY",
+        "BOOTSTRAP_TOKEN_HASH=replace-with",
+        "RUNTIME_DATABASE_URL=postgresql+asyncpg://",
+        "MIGRATION_DATABASE_URL=postgresql+asyncpg://",
+        "PUSH_SUBSCRIPTION_ENCRYPTION_KEY=replace-with",
+        "VAPID_PUBLIC_KEY=replace-with",
+        "VAPID_PRIVATE_KEY=replace-with",
+        "VAPID_SUBJECT=mailto:",
+    ):
+        assert variable in env
+
+
+def test_production_services_receive_only_server_side_access_push_configuration() -> None:
+    compose = (ROOT / "docker-compose.production.yml").read_text(encoding="utf-8")
+
+    for variable in (
+        "ACCESS_MODE",
+        "BOOTSTRAP_TOKEN_HASH",
+        "PUSH_SUBSCRIPTION_ENCRYPTION_KEY",
+        "VAPID_PUBLIC_KEY",
+        "VAPID_PRIVATE_KEY",
+        "VAPID_SUBJECT",
+        "WEB_PUSH_ENABLED",
+    ):
+        assert f"  {variable}:" in compose
+    frontend_block = compose.split("  frontend:", 1)[1].split("  backup:", 1)[0]
+    assert "VAPID_PRIVATE_KEY" not in frontend_block
+    assert "PUSH_SUBSCRIPTION_ENCRYPTION_KEY" not in frontend_block
+
+
+def test_deploy_gate_rejects_open_signup_and_incomplete_access_push_secrets() -> None:
+    deploy = (ROOT / "deploy-production.ps1").read_text(encoding="utf-8")
+
+    for contract in (
+        'Get-DotEnvValue -Name "ACCESS_MODE"',
+        'Get-DotEnvValue -Name "BOOTSTRAP_TOKEN_HASH"',
+        'Get-DotEnvValue -Name "PUSH_SUBSCRIPTION_ENCRYPTION_KEY"',
+        'Get-DotEnvValue -Name "VAPID_PUBLIC_KEY"',
+        'Get-DotEnvValue -Name "VAPID_PRIVATE_KEY"',
+        'Get-DotEnvValue -Name "VAPID_SUBJECT"',
+        'Get-DotEnvValue -Name "WEB_PUSH_ENABLED"',
+        'Get-DotEnvValue -Name "RUNTIME_DB_USER"',
+        'Get-DotEnvValue -Name "POSTGRES_USER"',
+    ):
+        assert contract in deploy
+    assert "ACCESS_MODE deve permanecer INVITE_ONLY" in deploy
+    assert "WEB_PUSH_ENABLED deve permanecer true" in deploy
+
+
 def test_nginx_is_same_origin_and_keeps_safe_frontend_cache_policy() -> None:
     nginx = (ROOT / "frontend" / "nginx.conf").read_text(encoding="utf-8")
     assert "listen 8080" in nginx

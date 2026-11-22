@@ -9,7 +9,7 @@ x-app-environment: &app-environment
   APP_VERSION: ${APP_VERSION:-2.0.0}
   APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
-  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+  DATABASE_URL: ${RUNTIME_DATABASE_URL:?RUNTIME_DATABASE_URL is required}
   REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
   CELERY_BROKER_URL: ${CELERY_BROKER_URL:?CELERY_BROKER_URL is required}
   CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:?CELERY_RESULT_BACKEND is required}
@@ -24,6 +24,14 @@ x-app-environment: &app-environment
   TRUSTED_HOSTS: ${TRUSTED_HOSTS:?TRUSTED_HOSTS is required}
   FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
   REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
+  ACCESS_MODE: ${ACCESS_MODE:-INVITE_ONLY}
+  BOOTSTRAP_TOKEN_HASH: ${BOOTSTRAP_TOKEN_HASH:?BOOTSTRAP_TOKEN_HASH is required}
+  CLOUDFLARE_ACCESS_TEAM_DOMAIN: ${CLOUDFLARE_ACCESS_TEAM_DOMAIN:-}
+  CLOUDFLARE_ACCESS_AUDIENCE: ${CLOUDFLARE_ACCESS_AUDIENCE:-}
+  CLOUDFLARE_ACCESS_ISSUER: ${CLOUDFLARE_ACCESS_ISSUER:-}
+  CLOUDFLARE_ACCESS_ADMIN_EMAIL: ${CLOUDFLARE_ACCESS_ADMIN_EMAIL:-}
+  CLOUDFLARE_ACCESS_AUTOMATION_ENABLED: "false"
+  EMAIL_DELIVERY_ENABLED: "false"
   RATE_LIMITING_ENABLED: ${RATE_LIMITING_ENABLED:-true}
   AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
   LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10}
@@ -88,7 +96,12 @@ services:
     # version histories, but one production gate upgrades both exactly once
     # before any web/worker process is allowed to start.
     command: ["sh", "-c", "alembic upgrade head && python -m backend.trading.storage.migrate upgrade"]
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      # Migrations run with a dedicated owner role. Runtime services receive
+      # only RUNTIME_DATABASE_URL and never inherit this privileged URL.
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:?MIGRATION_DATABASE_URL is required}
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?MIGRATION_DATABASE_URL is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -99,7 +112,13 @@ services:
     build: *app-build
     restart: unless-stopped
     command: ["gunicorn", "backend.app.main:app", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "${WEB_CONCURRENCY:-2}", "--timeout", "${WEB_TIMEOUT_SECONDS:-120}", "--graceful-timeout", "${WEB_GRACEFUL_TIMEOUT_SECONDS:-30}", "--access-logfile", "-", "--error-logfile", "-"]
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      WEB_PUSH_ENABLED: ${WEB_PUSH_ENABLED:-false}
+      PUSH_SUBSCRIPTION_ENCRYPTION_KEY: ${PUSH_SUBSCRIPTION_ENCRYPTION_KEY:?PUSH_SUBSCRIPTION_ENCRYPTION_KEY is required}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?VAPID_PUBLIC_KEY is required}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?VAPID_PRIVATE_KEY is required}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:?VAPID_SUBJECT is required}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -131,7 +150,13 @@ services:
     build: *app-build
     restart: unless-stopped
     command: ["celery", "-A", "backend.app.core.celery.celery_app", "worker", "--loglevel=info", "-Q", "default,market,intelligence", "--concurrency", "${CELERY_WORKER_CONCURRENCY:-2}"]
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      WEB_PUSH_ENABLED: ${WEB_PUSH_ENABLED:-false}
+      PUSH_SUBSCRIPTION_ENCRYPTION_KEY: ${PUSH_SUBSCRIPTION_ENCRYPTION_KEY:?PUSH_SUBSCRIPTION_ENCRYPTION_KEY is required}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?VAPID_PUBLIC_KEY is required}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?VAPID_PRIVATE_KEY is required}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:?VAPID_SUBJECT is required}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -211,7 +236,7 @@ services:
       BACKUP_DAILY_KEEP: ${BACKUP_DAILY_KEEP:-7}
       BACKUP_WEEKLY_KEEP: ${BACKUP_WEEKLY_KEEP:-4}
       BACKUP_MONTHLY_KEEP: ${BACKUP_MONTHLY_KEEP:-3}
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${BACKUP_DATABASE_URL:?BACKUP_DATABASE_URL is required}
       CANONICAL_DATABASE_NAME: ${POSTGRES_DB:?POSTGRES_DB is required}
     volumes:
       - backup_staging:/backups

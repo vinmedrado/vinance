@@ -1,43 +1,47 @@
-import { FormEvent, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { FormEvent, useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Landmark } from 'lucide-react';
 import { Button, Card, Input } from '../components';
-import { useLogin, useRegister } from '../features/auth/hooks/useAuth';
+import { useLogin } from '../features/auth/hooks/useAuth';
+import { getAccessCapabilities } from '../features/platform-access/services/access.service';
+import type { AccessCapabilities } from '../features/platform-access/types/access.types';
 import type { ApiErrorShape } from '../services/api';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const login = useLogin();
-  const register = useRegister();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [capabilities, setCapabilities] = useState<AccessCapabilities | null>(null);
   const routeState = location.state as { from?: string; reason?: 'required' | 'expired' | 'invalid' | 'password-changed' } | null;
   const requestedPath = routeState?.from;
   const redirectTo = requestedPath?.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/dashboard';
-  const error = (login.error || register.error) as ApiErrorShape | null;
-  const isPending = login.isPending || register.isPending;
-  const registrationEnabled = import.meta.env.VITE_REGISTRATION_ENABLED !== 'false';
+  const error = login.error as ApiErrorShape | null;
+
+  useEffect(() => {
+    let active = true;
+    getAccessCapabilities().then((value) => { if (active) setCapabilities(value); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
   const sessionNotice = routeState?.reason === 'password-changed'
     ? 'Senha alterada. Entre novamente com sua nova senha.'
     : routeState?.reason === 'expired'
-    ? 'Sua sessão expirou. Entre novamente para continuar.'
-    : routeState?.reason === 'invalid'
-      ? 'Sua sessão não é mais válida. Entre novamente para continuar.'
-      : routeState?.reason === 'required'
-        ? 'Entre para acessar a central de decisão.'
-        : null;
+      ? 'Sua sessão expirou. Entre novamente para continuar.'
+      : routeState?.reason === 'invalid'
+        ? 'Sua sessão não é mais válida. Entre novamente para continuar.'
+        : routeState?.reason === 'required'
+          ? 'Entre para acessar a central de decisão.'
+          : null;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     try {
-      if (mode === 'login') await login.mutateAsync({ email, password });
-      else await register.mutateAsync({ email, password, full_name: fullName || undefined });
+      await login.mutateAsync({ email, password });
       navigate(redirectTo, { replace: true });
     } catch {
-      // O estado da mutation apresenta o erro normalizado no próprio formulário.
+      // A mutation apresenta o erro normalizado no próprio formulário.
     }
   }
 
@@ -48,20 +52,19 @@ export function LoginPage() {
         <h1>Suas finanças, prioridades e próximos passos em um só lugar.</h1>
         <p>Entre para acompanhar sua situação financeira, seus investimentos e as decisões preparadas pelo Vinance.</p>
       </section>
-      <Card className="vn-auth__card" title={mode === 'login' ? 'Entrar' : 'Criar conta'} description="Sessão protegida: credencial renovável em cookie HttpOnly e acesso mantido somente em memória.">
+      <Card className="vn-auth__card" title="Entrar" description="Acesso privado com sessão protegida e renovável.">
         <form className="vn-form" onSubmit={handleSubmit}>
           {sessionNotice && <p className="vn-session-notice" role="status">{sessionNotice}</p>}
-          {mode === 'register' && <Input label="Nome" placeholder="Nome completo" value={fullName} onChange={(event) => setFullName(event.target.value)} />}
           <Input label="E-mail" placeholder="voce@email.com" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-          <Input label="Senha" placeholder="••••••••" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required />
+          <Input label="Senha" placeholder="••••••••" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
           {error && <p className="vn-error" role="alert">{error.message}</p>}
-          <Button type="submit" disabled={isPending}>{isPending ? 'Conectando...' : mode === 'login' ? 'Entrar' : 'Registrar e entrar'}</Button>
-          {registrationEnabled && (
-            <Button type="button" variant="ghost" onClick={() => { login.reset(); register.reset(); setMode(mode === 'login' ? 'register' : 'login'); }}>
-              {mode === 'login' ? 'Criar nova conta' : 'Já tenho conta'}
-            </Button>
-          )}
-          <p className="vn-disclaimer">O acesso é privado e protegido. Nenhuma movimentação financeira é executada automaticamente.</p>
+          <Button type="submit" disabled={login.isPending}>{login.isPending ? 'Entrando…' : 'Entrar'}</Button>
+          <nav className="vn-auth-links" aria-label="Acesso à conta">
+            <Link to="/access/invitation">Tenho um convite</Link>
+            <Link to="/access/recover">Recuperar acesso</Link>
+            {capabilities?.bootstrap_available && <Link to="/access/bootstrap">Configurar primeira conta</Link>}
+          </nav>
+          <p className="vn-disclaimer">Novas contas são criadas somente por convite autorizado.</p>
         </form>
       </Card>
     </main>

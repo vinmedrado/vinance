@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import base64
 from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _decode_base64url(value: str) -> bytes:
+    padding = "=" * ((4 - len(value) % 4) % 4)
+    return base64.urlsafe_b64decode(value + padding)
 
 
 class Settings(BaseSettings):
@@ -58,6 +64,27 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "vinance_refresh"
     refresh_cookie_path: str = "/api/v1"
     registration_enabled: bool = True
+    access_mode: Literal["INVITE_ONLY", "PUBLIC_VERIFIED"] = "INVITE_ONLY"
+    bootstrap_token_hash: str = ""
+    platform_invite_expire_hours: int = Field(default=72, ge=1, le=720)
+    password_reset_expire_minutes: int = Field(default=30, ge=5, le=1440)
+    platform_access_rate_limit: int = Field(default=10, ge=1, le=1000)
+    email_delivery_enabled: bool = False
+    cloudflare_access_automation_enabled: bool = False
+    cloudflare_access_team_domain: str = ""
+    cloudflare_access_audience: str = ""
+    cloudflare_access_issuer: str = ""
+    cloudflare_access_admin_email: str = ""
+    cloudflare_account_id: str = ""
+    cloudflare_access_policy_id: str = ""
+    cloudflare_api_token: str = ""
+
+    # PWA / WEB PUSH (server-side only; only the public key is returned by API)
+    web_push_enabled: bool = False
+    push_subscription_encryption_key: str = ""
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = ""
     auth_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)
     rate_limiting_enabled: bool | None = None
     login_rate_limit: int = Field(default=10, ge=1, le=1000)
@@ -104,6 +131,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_security(self):
+        if self.email_delivery_enabled:
+            raise ValueError(
+                "EMAIL_DELIVERY_ENABLED cannot be enabled before a delivery provider is implemented"
+            )
+        if self.cloudflare_access_automation_enabled:
+            raise ValueError(
+                "CLOUDFLARE_ACCESS_AUTOMATION_ENABLED cannot be enabled before the integration is implemented"
+            )
+
         origins = self.cors_origin_list
         if "*" in origins:
             raise ValueError("CORS_ORIGINS cannot use wildcard while credentialed requests are enabled")
@@ -192,6 +228,49 @@ class Settings(BaseSettings):
 
             if missing:
                 raise ValueError(f"Missing or insecure required production settings: {', '.join(missing)}")
+
+            if self.access_mode != "INVITE_ONLY":
+                raise ValueError("ACCESS_MODE must remain INVITE_ONLY in production")
+            if self.registration_enabled:
+                raise ValueError("REGISTRATION_ENABLED must remain false in production")
+            bootstrap_hash = (self.bootstrap_token_hash or "").strip().lower()
+            if len(bootstrap_hash) != 64 or any(char not in "0123456789abcdef" for char in bootstrap_hash):
+                raise ValueError("BOOTSTRAP_TOKEN_HASH must be a SHA-256 hex digest in production")
+            if self.web_push_enabled:
+                push_missing = []
+                try:
+                    from cryptography.fernet import Fernet
+
+                    Fernet(self.push_subscription_encryption_key.encode("ascii"))
+                except (ValueError, TypeError, UnicodeEncodeError):
+                    push_missing.append("PUSH_SUBSCRIPTION_ENCRYPTION_KEY")
+                try:
+                    public_key = _decode_base64url(self.vapid_public_key)
+                    if len(public_key) != 65 or public_key[0] != 4:
+                        raise ValueError("invalid uncompressed P-256 public key")
+                except (ValueError, TypeError, base64.binascii.Error):
+                    push_missing.append("VAPID_PUBLIC_KEY")
+                try:
+                    from cryptography.hazmat.primitives.asymmetric import ec
+                    from cryptography.hazmat.primitives.serialization import load_der_private_key
+
+                    private_key = load_der_private_key(
+                        _decode_base64url(self.vapid_private_key),
+                        password=None,
+                    )
+                    if (
+                        not isinstance(private_key, ec.EllipticCurvePrivateKey)
+                        or not isinstance(private_key.curve, ec.SECP256R1)
+                    ):
+                        raise ValueError("invalid P-256 private key")
+                except (ValueError, TypeError, base64.binascii.Error):
+                    push_missing.append("VAPID_PRIVATE_KEY")
+                if not self.vapid_subject.startswith(("mailto:", "https://")):
+                    push_missing.append("VAPID_SUBJECT")
+                if push_missing:
+                    raise ValueError(
+                        "Missing required production Web Push settings: " + ", ".join(push_missing)
+                    )
         return self
 
     @computed_field

@@ -10,6 +10,7 @@ from backend.app.auth.models import User
 from backend.app.auth.rate_limit import enforce_auth_rate_limit
 from backend.app.core.config import settings
 from backend.app.core.database import get_session
+from backend.app.core.logging import get_logger
 from backend.app.financial.models import Expense, Income
 from backend.app.financial_state import service, transfers
 from backend.app.financial_state.models import FinancialGoal, FinancialLiability, OwnedAsset
@@ -44,6 +45,8 @@ from backend.app.financial_state.schemas import (
     LiabilityRead,
     LiabilityUpdate,
 )
+
+logger = get_logger(__name__)
 
 
 router = APIRouter(prefix="/financial", tags=["household-financial-state"])
@@ -213,13 +216,32 @@ async def household_invitation_create(
         f"user:{current_user.id}:household:{household_id}",
         settings.invitation_rate_limit,
     )
-    return await _domain_call(
+    invitation = await _domain_call(
         service.create_invitation,
         session,
         household_id=household_id,
         user_id=current_user.id,
         payload=payload,
     )
+    invited_user_id = invitation.get("invited_user_id") if isinstance(invitation, dict) else None
+    if invited_user_id:
+        try:
+            from backend.app.notifications.tasks import queue_safe_notification
+
+            queue_safe_notification.delay(
+                user_id=int(invited_user_id),
+                event_type="HOUSEHOLD_INVITATION",
+                dedupe_key=f"household-invitation:{invitation['id']}",
+                title="Vinance",
+                body="Você recebeu um convite para uma conta financeira compartilhada.",
+                route="/household",
+            )
+        except Exception:
+            logger.warning(
+                "household_invitation.push_queue_unavailable",
+                extra={"event": "household_invitation.push_queue_unavailable", "invitation_id": invitation.get("id")},
+            )
+    return invitation
 
 
 @router.get(

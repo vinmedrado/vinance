@@ -59,7 +59,12 @@ export async function restoreSession() {
 }
 
 export async function logout() {
-  await api.post('/logout');
+  const { detachPushBeforeLogout, forgetPushInstallation } = await import('../../notifications/services/notifications.service');
+  const installationId = await detachPushBeforeLogout();
+  await api.post('/logout', undefined, {
+    headers: installationId ? { 'X-Vinance-Installation-ID': installationId } : undefined,
+  });
+  forgetPushInstallation();
   clearSession();
 }
 
